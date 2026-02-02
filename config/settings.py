@@ -49,3 +49,16 @@ MODEL = {
     "validation_split": 0.2,
     "early_stopping_patience": 7,
 }
+
+# ── iCloud integration ───────────────────────────────────────
+COOKIE_DIR = os.path.join(PROJECT_ROOT, "config", "icloud_session")
+
+ICLOUD = {
+    "env_file": os.path.join(PROJECT_ROOT, ".env"),
+    "cookie_directory": COOKIE_DIR,
+    "download_directory": RAW_DIR,
+    "chunk_size": 65536,       # 64KB streaming chunks
+    "video_album": "Videos",
+    "max_retries": 3,
+    "retry_delay": 5,
+}
