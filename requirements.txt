@@ -1,0 +1,9 @@
+mediapipe==0.10.18
+tensorflow-macos
+tensorflow-metal
+opencv-python
+numpy
+matplotlib
+pyicloud
+ffmpeg-python
+scikit-learn
