@@ -201,25 +201,43 @@ def download_video(asset, dest_dir, chunk_size, max_retries, retry_delay):
             downloaded = 0
 
             with open(part_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total:
-                            pct = downloaded / total * 100
-                            print(
-                                f"\r  Downloading {filename}: "
-                                f"{format_size(downloaded)} / {format_size(total)} "
-                                f"({pct:.1f}%)",
-                                end="",
-                                flush=True,
-                            )
-                        else:
-                            print(
-                                f"\r  Downloading {filename}: {format_size(downloaded)}",
-                                end="",
-                                flush=True,
-                            )
+                # Handle both bytes (pyicloud >=2.3) and Response objects (pyicloud <2.3)
+                if isinstance(response, bytes):
+                    f.write(response)
+                    downloaded = len(response)
+                    if total:
+                        pct = downloaded / total * 100
+                        print(
+                            f"  Downloading {filename}: "
+                            f"{format_size(downloaded)} / {format_size(total)} "
+                            f"({pct:.1f}%)",
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            f"  Downloading {filename}: {format_size(downloaded)}",
+                            flush=True,
+                        )
+                else:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total:
+                                pct = downloaded / total * 100
+                                print(
+                                    f"\r  Downloading {filename}: "
+                                    f"{format_size(downloaded)} / {format_size(total)} "
+                                    f"({pct:.1f}%)",
+                                    end="",
+                                    flush=True,
+                                )
+                            else:
+                                print(
+                                    f"\r  Downloading {filename}: {format_size(downloaded)}",
+                                    end="",
+                                    flush=True,
+                                )
 
             print()  # newline after progress
 

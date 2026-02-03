@@ -6,28 +6,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tennis video analysis pipeline that processes 240fps iPhone footage to auto-detect shot types (forehand, backhand, serve, neutral), extract clips, and compile highlight reels. Uses MediaPipe pose estimation feeding into a GRU neural network for temporal shot classification.
 
+## Two-Machine Setup
+
+- **Mac (M4)**: iCloud downloads, manual labeling (visual_label.py GUI), lightweight tasks
+- **Windows PC (RTX 5080, CUDA 13.0, Python 3.11)**: All GPU-heavy work via `ssh windows`
+  - Video preprocessing (NVENC via `preprocess_nvenc.py`)
+  - Pose extraction (MediaPipe)
+  - Model training (TensorFlow)
+  - Shot detection (inference)
+  - Clip extraction & highlight compilation (FFmpeg h264_nvenc)
+- Connected via **Tailscale SSH** (`ssh windows`), file transfer with `scp`
+- Both machines mirror the project at `~/tennis_analysis` (Mac) and `C:\Users\amass\tennis_analysis` (Windows)
+
+**Rule: Always run matching, editing, and encoding on the GPU (Windows). It is significantly faster.**
+
 ## Technology Stack
 
-- **Python 3.9.6** with virtual environment
-- **MediaPipe**: Pose estimation (33 keypoints per frame)
-- **TensorFlow/Keras**: GRU/LSTM neural network for shot classification
-- **FFmpeg**: Video preprocessing (VFR→CFR conversion, clip extraction, highlight compilation)
+- **Python 3.9.6** (Mac) / **Python 3.11** (Windows) with virtual environments
+- **MediaPipe 0.10.18**: Pose estimation (33 keypoints per frame). Note: must use 0.10.18 for `solutions` API compatibility
+- **TensorFlow/Keras**: GRU neural network for shot classification (2.16 Mac, 2.20 Windows)
+- **FFmpeg**: Video preprocessing (VFR->CFR), clip extraction, highlight compilation. Uses **NVENC (h264_nvenc)** on Windows for GPU-accelerated encoding
 - **iCloud**: Video download from iPhone (240fps @ 1080p or 4K @ 120fps)
-- **GPU**: NVIDIA Founders Edition for training/inference
+- **GPU**: NVIDIA RTX 5080 (16GB VRAM) for training, inference, and video encoding
 
 ## Pipeline Architecture
 
 ```
 iPhone (240fps VFR .mov)
-  → iCloud Download → raw/
-  → VFR→CFR conversion (60fps) → preprocessed/
-  → MediaPipe pose extraction → poses/ (.json, 33 keypoints/frame)
-  → Manual labeling → training_data/{forehand,backhand,serve,neutral}/
-  → GRU model training → models/shot_classifier.h5
-  → Shot detection → shots_detected.json
-  → FFmpeg clip extraction → clips/{forehand,backhand,serve}_*.mp4
-  → Highlight compilation → highlights/{type}_highlights.mp4
-  → Upload to YouTube (unlisted) + iCloud Drive
+  -> iCloud Download (Mac) -> raw/
+  -> scp raw files to Windows
+  -> VFR->CFR conversion (NVENC, 60fps) -> preprocessed/      [GPU]
+  -> MediaPipe pose extraction -> poses/ (.json, 33 kp/frame)  [GPU]
+  -> scp poses back to Mac
+  -> Manual labeling (Mac GUI) -> {video}_labels.csv
+  -> Auto-fill neutral gaps -> updated CSV
+  -> label_clips.py -> training_data/{forehand,backhand,serve,neutral}/
+  -> GRU model training -> models/shot_classifier.h5           [GPU]
+  -> Shot detection (inference) -> shots_detected.json          [GPU]
+  -> Clip extraction (NVENC) -> clips/{type}/*.mp4              [GPU]
+  -> Highlight compilation (NVENC) -> highlights/*_highlights.mp4 [GPU]
+  -> scp highlights back to Mac
+  -> Upload to YouTube (unlisted) + iCloud Drive
 ```
 
 ## Project Structure
@@ -37,15 +56,29 @@ tennis_analysis/
 ├── raw/                  # Original .mov files from iCloud
 ├── preprocessed/         # CFR-converted .mp4 at 60fps
 ├── poses/                # Per-frame pose JSON (33 keypoints)
-├── training_data/        # Labeled clips for model training
+├── training_data/        # Labeled sliding-window clips for training
 │   ├── forehand/
 │   ├── backhand/
 │   ├── serve/
 │   └── neutral/
-├── models/               # Trained model files (.h5)
-├── clips/                # Extracted per-shot clips
+├── models/               # Trained model files (.h5 + _meta.json)
+├── clips/                # Extracted per-shot clips by type
+│   ├── forehand/
+│   ├── backhand/
+│   └── serve/
 ├── highlights/           # Compiled highlight reels by shot type
-└── shots_detected.json   # Detection output (timestamps + types)
+├── scripts/
+│   ├── icloud_download.py
+│   ├── preprocess_videos.py    # Mac (libx264)
+│   ├── extract_poses.py        # --visualize for skeleton overlay
+│   ├── visual_label.py         # GUI labeler (Mac only, needs display)
+│   ├── label_clips.py          # CSV + poses -> training clips
+│   ├── train_model.py          # GRU training pipeline
+│   ├── detect_shots.py         # Run model on full video poses
+│   └── extract_clips.py        # Clip extraction + highlights (NVENC-aware)
+├── preprocess_nvenc.py         # Windows NVENC preprocessing
+├── {video}_labels.csv          # Per-video manual + auto labels
+└── shots_detected*.json        # Detection output per video
 ```
 
 ## Key Design Decisions
@@ -53,8 +86,35 @@ tennis_analysis/
 - **60fps CFR** for ML processing (downsampled from 240fps; balances speed and quality)
 - **MediaPipe** over alternatives (fast, accurate, free, 33-keypoint model)
 - **GRU** over simple classifiers (captures temporal motion patterns in pose sequences)
+- **NVENC** for all video encoding (h264_nvenc on RTX 5080, falls back to libx264 on Mac)
 - **iCloud integration** for native iPhone camera workflow
+- **Neutral auto-labeling**: gaps between labeled shots auto-filled as neutral (min 30 frames / 0.5s)
 - Custom solution (not SwingVision) for complete control over pipeline
+
+## Current Model Performance
+
+- **Val accuracy: 93.6%** (exceeds 85% target)
+- Trained on 1 video (IMG_6665): 2045 clips (164 forehand, 69 backhand, 372 serve, 1818 neutral)
+- Per-class F1: forehand 0.78, backhand 0.72, serve 0.95, neutral 0.96
+- Weakest: backhand precision (0.59), forehand precision (0.71)
+- **To improve**: label more videos and retrain
+
+## Iterative Workflow
+
+1. **Record** practice on iPhone (240fps)
+2. **Download** via iCloud to Mac (`scripts/icloud_download.py`)
+3. **Transfer** raw files to Windows (`scp`)
+4. **Preprocess** on GPU (`preprocess_nvenc.py` -- NVENC, 60fps CFR)
+5. **Extract poses** on GPU (`scripts/extract_poses.py`)
+6. **Transfer** poses back to Mac (`scp`)
+7. **Label** on Mac (`scripts/visual_label.py` with skeleton video)
+8. **Auto-fill neutrals** from label gaps
+9. **Generate training clips** (`scripts/label_clips.py --csv`)
+10. **Train model** on GPU (`scripts/train_model.py`)
+11. **Detect shots** on GPU (`scripts/detect_shots.py`)
+12. **Extract clips + highlights** on GPU (`scripts/extract_clips.py --highlights`)
+13. **Transfer** highlights to Mac (`scp`)
+14. **Review** and iterate (label more videos, retrain if needed)
 
 ## Target Metrics
 
@@ -62,12 +122,10 @@ tennis_analysis/
 - Shot classification accuracy: >85% on validation set
 - Processing time: <1 hour per 15min practice video
 
-## Development Phases
+## Known Issues
 
-1. **Environment Setup**: Project structure, venv, dependencies, GPU/FFmpeg verification
-2. **iCloud Integration**: 2FA auth, video listing, original-quality download
-3. **Video Preprocessing**: VFR detection, CFR conversion at 60fps
-4. **Pose Estimation**: MediaPipe keypoint extraction, >90% detection verification, skeleton overlay visualization
-5. **Shot Classification**: Label 50+ clips per category, build/train GRU, achieve >85% accuracy
-6. **Clip Extraction & Compilation**: Run model on full videos, extract 1-2s clips, compile highlights
-7. **Upload & Distribution**: YouTube (unlisted) + iCloud Drive archival
+- **mediapipe version**: Must use 0.10.18 (0.10.32+ dropped `solutions` API)
+- **protobuf**: Windows needs protobuf==5.28.3 despite mediapipe wanting <5
+- **opencv**: Use opencv-contrib-python only (conflicts with opencv-python)
+- **Windows encoding**: Avoid Unicode arrows/special chars in print statements (cp1252)
+- **visual_label.py**: Must run from interactive terminal with display, not subprocess
