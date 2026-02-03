@@ -33,6 +33,22 @@ build/
 # Pose data (regenerable, large)
 poses/*.json
 
-# iCloud credentials & session
+# Generated outputs (regenerable, large)
+clips/
+highlights/
+training_data/
+shots_detected*.json
+*_labels.csv
+
+# Model metadata
+models/
+
+# Skeleton videos
+poses/*.mp4
+
+# Credentials & secrets
 .env
+.env.save
 config/icloud_session/
+config/client_secrets.json
+config/youtube_credentials.json

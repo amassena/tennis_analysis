@@ -243,7 +243,32 @@ def download_video(asset, dest_dir, chunk_size, max_retries, retry_delay):
 # ── Main ─────────────────────────────────────────────────────
 
 
+def parse_selection(choice, videos):
+    """Parse a selection string like '1,3,5' or '1-3' or 'all'."""
+    choice = choice.strip().lower()
+    if choice == "all":
+        return list(videos)
+    selected = []
+    for part in choice.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = part.split("-", 1)
+            for idx in range(int(start), int(end) + 1):
+                selected.append(videos[idx - 1])
+        else:
+            selected.append(videos[int(part) - 1])
+    return selected
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Download videos from iCloud Photos")
+    parser.add_argument("--list", action="store_true", dest="list_only",
+                        help="List available videos and exit")
+    parser.add_argument("--select", type=str,
+                        help="Non-interactive selection (e.g. '1', '1,3', '1-3', 'all')")
+    args = parser.parse_args()
+
     api = authenticate()
     videos = list_videos(api)
 
@@ -252,7 +277,18 @@ def main():
         return
 
     display_video_list(videos)
-    selected = select_videos(videos)
+
+    if args.list_only:
+        return
+
+    if args.select:
+        try:
+            selected = parse_selection(args.select, videos)
+        except (ValueError, IndexError):
+            print(f"[ERROR] Invalid selection: {args.select}")
+            sys.exit(1)
+    else:
+        selected = select_videos(videos)
 
     print(f"\nDownloading {len(selected)} video(s) to {ICLOUD['download_directory']}/\n")
 
