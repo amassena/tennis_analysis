@@ -75,8 +75,10 @@ tennis_analysis/
 │   ├── label_clips.py          # CSV + poses -> training clips
 │   ├── train_model.py          # GRU training pipeline
 │   ├── detect_shots.py         # Run model on full video poses
-│   └── extract_clips.py        # Clip extraction + highlights (NVENC-aware)
+│   ├── extract_clips.py        # Clip extraction + highlights (NVENC-aware)
+│   └── auto_pipeline.py        # Automated iCloud -> GPU -> YouTube daemon
 ├── preprocess_nvenc.py         # Windows NVENC preprocessing
+├── pipeline_state.json         # Tracks processed videos and YouTube URLs
 ├── {video}_labels.csv          # Per-video manual + auto labels
 └── shots_detected*.json        # Detection output per video
 ```
@@ -98,6 +100,32 @@ tennis_analysis/
 - Per-class F1: forehand 0.78, backhand 0.72, serve 0.95, neutral 0.96
 - Weakest: backhand precision (0.59), forehand precision (0.71)
 - **To improve**: label more videos and retrain
+
+## Automated Pipeline
+
+Fully automated mode: tag an iPhone video caption with "tennis_training", and the pipeline downloads, processes, and uploads highlights to YouTube with no manual intervention.
+
+```
+iPhone -> caption "tennis_training" -> iCloud sync
+  -> Mac polls iCloud (5 min interval)
+  -> Downloads new videos to raw/
+  -> SCP raw .mov to Windows
+  -> SSH Windows: preprocess (NVENC 60fps) -> extract poses -> detect shots -> extract clips
+  -> SSH Windows: compile combined video (normal speed + 0.25x slow-mo from raw 240fps)
+  -> SCP combined video to Mac
+  -> Upload to YouTube: "Training session (YYYY-MM-DD) video N" (unlisted)
+```
+
+**Running:**
+- Daemon mode: `python scripts/auto_pipeline.py` (polls every 5 minutes)
+- Single pass: `python scripts/auto_pipeline.py --once`
+- Debug (dumps iCloud field names): `python scripts/auto_pipeline.py --debug`
+
+**State tracking:** `pipeline_state.json` records processed asset IDs, YouTube URLs, and daily video counts.
+
+**Combined video format:** The output highlight has two sections:
+1. Normal-speed highlights (all shots concatenated from 60fps preprocessed video)
+2. 0.25x slow-motion highlights (same shots extracted from original 240fps, using `setpts=4.0*PTS`)
 
 ## Iterative Workflow
 

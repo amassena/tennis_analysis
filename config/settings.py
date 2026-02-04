@@ -62,3 +62,14 @@ ICLOUD = {
     "max_retries": 3,
     "retry_delay": 5,
 }
+
+# ── Automated pipeline ──────────────────────────────────────
+AUTO_PIPELINE = {
+    "keyword": "tennis_training",
+    "poll_interval": 300,        # seconds between iCloud checks
+    "state_file": os.path.join(PROJECT_ROOT, "pipeline_state.json"),
+    "slowmo_factor": 4.0,       # setpts multiplier (4.0 = 0.25x speed)
+    "slowmo_output_fps": 60,    # output framerate for slow-mo clips
+    "youtube_title_format": "Training session ({date}) video {n}",
+    "windows_project": "C:/Users/amass/tennis_analysis",
+}

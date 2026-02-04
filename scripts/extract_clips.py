@@ -108,6 +108,102 @@ def compile_highlights(clip_paths, output_path):
     return result.returncode == 0
 
 
+def compile_slowmo_highlights(raw_video_path, segments, output_path,
+                              slowmo_factor=4.0, output_fps=60):
+    """Extract non-neutral segments from 240fps raw video at slow-mo speed.
+
+    Each segment is extracted with setpts=N*PTS to stretch timestamps,
+    producing smooth slow-motion at the specified output fps.
+    """
+    non_neutral = [s for s in segments if s["shot_type"] != "neutral"]
+    if not non_neutral:
+        print("  No non-neutral segments for slow-mo.")
+        return False
+
+    if get_nvenc():
+        codec_args = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20"]
+    else:
+        codec_args = ["-c:v", "libx264", "-crf", "20", "-preset", "fast"]
+
+    temp_clips = []
+    temp_dir = os.path.dirname(output_path)
+
+    for i, seg in enumerate(non_neutral):
+        start = seg["start_time"]
+        duration = seg["end_time"] - seg["start_time"]
+        # Add padding
+        padded_start = max(0, start - 0.5)
+        padded_duration = duration + 1.0
+
+        temp_path = os.path.join(temp_dir, f"_slowmo_temp_{i:04d}.mp4")
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{padded_start:.3f}",
+            "-i", raw_video_path,
+            "-t", f"{padded_duration:.3f}",
+            "-vf", f"fps=240,setpts={slowmo_factor}*PTS",
+            "-r", str(output_fps),
+            *codec_args,
+            "-an", "-pix_fmt", "yuv420p",
+            temp_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0 and os.path.exists(temp_path):
+            temp_clips.append(temp_path)
+        else:
+            print(f"  [WARN] Slow-mo clip {i} failed: {seg['shot_type']} "
+                  f"{start:.1f}-{seg['end_time']:.1f}s")
+
+    if not temp_clips:
+        return False
+
+    # Concatenate all slow-mo clips
+    success = compile_highlights(temp_clips, output_path)
+
+    # Clean up temp clips
+    for p in temp_clips:
+        if os.path.exists(p):
+            os.remove(p)
+
+    return success
+
+
+def compile_combined_video(normal_path, slowmo_path, output_path):
+    """Concatenate normal-speed and slow-mo highlights into one video."""
+    if not os.path.exists(normal_path):
+        print(f"  [ERROR] Normal highlights not found: {normal_path}")
+        return False
+    if not os.path.exists(slowmo_path):
+        print(f"  [ERROR] Slow-mo highlights not found: {slowmo_path}")
+        return False
+
+    if get_nvenc():
+        codec_args = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "18"]
+    else:
+        codec_args = ["-c:v", "libx264", "-crf", "18", "-preset", "medium"]
+
+    concat_file = output_path + ".txt"
+    with open(concat_file, "w") as f:
+        f.write(f"file '{os.path.abspath(normal_path)}'\n")
+        f.write(f"file '{os.path.abspath(slowmo_path)}'\n")
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", concat_file,
+        *codec_args,
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if os.path.exists(concat_file):
+        os.remove(concat_file)
+    return result.returncode == 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract shot clips and compile highlights")
     parser.add_argument("-i", "--input", help="Detection JSON (default: shots_detected.json)")

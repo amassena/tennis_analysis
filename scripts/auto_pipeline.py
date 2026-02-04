@@ -1,0 +1,559 @@
+#!/usr/bin/env python3
+"""Automated tennis pipeline: poll iCloud -> GPU processing -> YouTube upload.
+
+Downloads iPhone videos captioned "tennis_training", processes them on the
+Windows GPU (preprocess, pose extraction, shot detection, clip extraction),
+compiles combined normal + 0.25x slow-mo highlights, and uploads to YouTube.
+
+Usage:
+    python scripts/auto_pipeline.py          # daemon mode (polls every 5 min)
+    python scripts/auto_pipeline.py --once   # single pass then exit
+"""
+
+import argparse
+import base64
+import json
+import logging
+import os
+import subprocess
+import sys
+import time
+from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.settings import (
+    RAW_DIR, HIGHLIGHTS_DIR, ICLOUD, AUTO_PIPELINE, PROJECT_ROOT,
+)
+
+# ── Logging ─────────────────────────────────────────────────
+
+log = logging.getLogger("auto_pipeline")
+
+def setup_logging():
+    log.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
+                            datefmt="%Y-%m-%d %H:%M:%S")
+    # Console
+    ch = logging.StreamHandler()
+    ch.setFormatter(fmt)
+    log.addHandler(ch)
+    # File
+    fh = logging.FileHandler(os.path.join(PROJECT_ROOT, "pipeline.log"))
+    fh.setFormatter(fmt)
+    log.addHandler(fh)
+
+
+# ── State Management ────────────────────────────────────────
+
+def load_state():
+    path = AUTO_PIPELINE["state_file"]
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return {"processed": {}, "daily_counts": {}}
+
+
+def save_state(state):
+    path = AUTO_PIPELINE["state_file"]
+    with open(path, "w") as f:
+        json.dump(state, f, indent=2)
+
+
+# ── iCloud Authentication ──────────────────────────────────
+
+def _load_dotenv(path):
+    if not os.path.exists(path):
+        log.error(".env file not found: %s", path)
+        sys.exit(1)
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ[key.strip()] = value.strip()
+
+
+def authenticate():
+    from pyicloud import PyiCloudService
+
+    _load_dotenv(ICLOUD["env_file"])
+    username = os.environ.get("ICLOUD_USERNAME")
+    password = os.environ.get("ICLOUD_PASSWORD")
+    if not username or not password:
+        log.error("ICLOUD_USERNAME and ICLOUD_PASSWORD must be set in .env")
+        sys.exit(1)
+
+    cookie_dir = ICLOUD["cookie_directory"]
+    os.makedirs(cookie_dir, exist_ok=True)
+
+    log.info("Authenticating to iCloud as %s...", username)
+    api = PyiCloudService(username, password, cookie_directory=cookie_dir)
+
+    if api.requires_2fa:
+        log.info("Two-factor authentication required.")
+        for attempt in range(1, 4):
+            code = input(f"  Enter 2FA code (attempt {attempt}/3): ").strip()
+            if api.validate_2fa_code(code):
+                log.info("2FA verified.")
+                break
+            elif attempt == 3:
+                log.error("Failed 2FA after 3 attempts.")
+                sys.exit(1)
+        if not api.is_trusted_session:
+            api.trust_session()
+
+    log.info("iCloud authentication successful.")
+    return api
+
+
+# ── Caption Detection ──────────────────────────────────────
+
+def _get_caption(asset):
+    """Try to extract caption/description from an iCloud photo asset.
+
+    pyicloud doesn't expose caption as a first-class property, so we
+    check several known field locations.
+    """
+    record = getattr(asset, "_asset_record", None)
+    if record is None:
+        return ""
+
+    fields = record.get("fields", {})
+
+    # Try captionEnc (base64-encoded caption)
+    caption_enc = fields.get("captionEnc", {}).get("value")
+    if caption_enc:
+        try:
+            return base64.b64decode(caption_enc).decode("utf-8", errors="replace")
+        except Exception:
+            pass
+
+    # Try description field
+    desc = fields.get("description", {}).get("value")
+    if desc:
+        return str(desc)
+
+    # Try other common caption fields
+    for key in ("caption", "descriptionEnc"):
+        val = fields.get(key, {}).get("value")
+        if val:
+            if key.endswith("Enc"):
+                try:
+                    return base64.b64decode(val).decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+            else:
+                return str(val)
+
+    return ""
+
+
+def _dump_asset_fields(asset, label=""):
+    """Log all field keys from an asset record for debugging."""
+    record = getattr(asset, "_asset_record", None)
+    if record is None:
+        log.debug("%s: no _asset_record", label)
+        return
+
+    fields = record.get("fields", {})
+    master = getattr(asset, "_master_record", None)
+    master_fields = master.get("fields", {}) if master else {}
+
+    log.debug("%s asset fields: %s", label, sorted(fields.keys()))
+    if master_fields:
+        log.debug("%s master fields: %s", label, sorted(master_fields.keys()))
+
+
+# ── Poll iCloud ────────────────────────────────────────────
+
+_fields_dumped = False
+
+def poll_icloud(api, keyword, state):
+    """Check iCloud for new videos matching the keyword caption."""
+    global _fields_dumped
+
+    album_name = ICLOUD["video_album"]
+    try:
+        album = api.photos.albums[album_name]
+    except KeyError:
+        log.error("Album '%s' not found. Available: %s",
+                  album_name, list(api.photos.albums.keys()))
+        return []
+
+    new_videos = []
+    for asset in album:
+        if asset.item_type != "movie":
+            continue
+
+        # On first video, dump field names for debugging
+        if not _fields_dumped:
+            _dump_asset_fields(asset, "first-video")
+            _fields_dumped = True
+
+        # Skip already processed
+        asset_id = str(asset.id)
+        if asset_id in state.get("processed", {}):
+            continue
+
+        caption = _get_caption(asset)
+        if keyword.lower() in caption.lower():
+            log.info("Found new video: %s (caption: %s)", asset.filename, caption)
+            new_videos.append(asset)
+
+    return new_videos
+
+
+# ── Download ───────────────────────────────────────────────
+
+def format_size(num_bytes):
+    for unit in ("B", "KB", "MB", "GB"):
+        if abs(num_bytes) < 1024:
+            return f"{num_bytes:.1f} {unit}"
+        num_bytes /= 1024
+    return f"{num_bytes:.1f} TB"
+
+
+def download_video(asset, raw_dir):
+    """Download original-quality video from iCloud to raw_dir."""
+    filename = asset.filename
+    dest_path = os.path.join(raw_dir, filename)
+
+    expected_size = asset.versions.get("original", {}).get("size") or asset.size
+    if os.path.exists(dest_path) and expected_size:
+        if os.path.getsize(dest_path) == expected_size:
+            log.info("Skip download (exists): %s", filename)
+            return dest_path
+
+    os.makedirs(raw_dir, exist_ok=True)
+    part_path = dest_path + ".part"
+
+    for attempt in range(1, ICLOUD["max_retries"] + 1):
+        try:
+            response = asset.download("original")
+            if response is None:
+                log.error("No download URL for %s", filename)
+                return None
+
+            downloaded = 0
+            with open(part_path, "wb") as f:
+                if isinstance(response, bytes):
+                    f.write(response)
+                    downloaded = len(response)
+                else:
+                    for chunk in response.iter_content(chunk_size=ICLOUD["chunk_size"]):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+
+            os.replace(part_path, dest_path)
+            log.info("Downloaded %s (%s)", filename, format_size(downloaded))
+            return dest_path
+
+        except Exception as e:
+            log.warning("Download attempt %d/%d failed for %s: %s",
+                        attempt, ICLOUD["max_retries"], filename, e)
+            if os.path.exists(part_path):
+                os.remove(part_path)
+            if attempt < ICLOUD["max_retries"]:
+                time.sleep(ICLOUD["retry_delay"])
+
+    log.error("Download failed after %d attempts: %s", ICLOUD["max_retries"], filename)
+    return None
+
+
+# ── SSH/SCP Helpers ────────────────────────────────────────
+
+def _run_ssh(cmd, timeout=3600):
+    """Run a command on Windows via SSH. Returns (success, stdout)."""
+    full_cmd = ["ssh", "windows", cmd]
+    log.info("SSH: %s", cmd)
+    result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        log.error("SSH command failed (rc=%d): %s", result.returncode, result.stderr.strip())
+        return False, result.stderr
+    return True, result.stdout
+
+
+def _scp_to_windows(local_path, remote_relative):
+    """Copy a file to Windows via SCP."""
+    win_root = AUTO_PIPELINE["windows_project"]
+    remote_path = f"windows:{win_root}/{remote_relative}"
+    log.info("SCP to Windows: %s -> %s", os.path.basename(local_path), remote_relative)
+    result = subprocess.run(
+        ["scp", local_path, remote_path],
+        capture_output=True, text=True, timeout=600,
+    )
+    return result.returncode == 0
+
+
+def _scp_from_windows(remote_relative, local_path):
+    """Copy a file from Windows via SCP."""
+    win_root = AUTO_PIPELINE["windows_project"]
+    remote_path = f"windows:{win_root}/{remote_relative}"
+    log.info("SCP from Windows: %s -> %s", remote_relative, os.path.basename(local_path))
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    result = subprocess.run(
+        ["scp", remote_path, local_path],
+        capture_output=True, text=True, timeout=600,
+    )
+    return result.returncode == 0
+
+
+# ── GPU Processing ─────────────────────────────────────────
+
+def process_on_gpu(filename):
+    """Run the full pipeline on Windows via SSH: preprocess, poses, detect, clips."""
+    base = os.path.splitext(filename)[0]
+    win_root = AUTO_PIPELINE["windows_project"]
+
+    # 1. Transfer raw video to Windows
+    local_raw = os.path.join(RAW_DIR, filename)
+    if not _scp_to_windows(local_raw, f"raw/{filename}"):
+        log.error("Failed to transfer %s to Windows", filename)
+        return False
+
+    # 2. Preprocess (NVENC, 60fps CFR)
+    ok, _ = _run_ssh(
+        f"cd {win_root} && python preprocess_nvenc.py {filename}",
+        timeout=1800,
+    )
+    if not ok:
+        log.error("Preprocess failed for %s", filename)
+        return False
+
+    # 3. Extract poses
+    ok, _ = _run_ssh(
+        f"cd {win_root} && python scripts/extract_poses.py preprocessed/{base}.mp4",
+        timeout=3600,
+    )
+    if not ok:
+        log.error("Pose extraction failed for %s", filename)
+        return False
+
+    # 4. Detect shots
+    shots_file = f"shots_detected_{base}.json"
+    ok, _ = _run_ssh(
+        f"cd {win_root} && python scripts/detect_shots.py poses/{base}.json -o {shots_file}",
+        timeout=1800,
+    )
+    if not ok:
+        log.error("Shot detection failed for %s", filename)
+        return False
+
+    # 5. Extract clips + highlights
+    ok, _ = _run_ssh(
+        f"cd {win_root} && python scripts/extract_clips.py -i {shots_file} --highlights",
+        timeout=3600,
+    )
+    if not ok:
+        log.error("Clip extraction failed for %s", filename)
+        return False
+
+    return True
+
+
+# ── Combined Video (Normal + Slow-Mo) ─────────────────────
+
+def compile_combined_on_gpu(filename):
+    """Compile the combined normal + slow-mo highlight on Windows.
+
+    Runs the slow-mo extraction from the raw 240fps source, then
+    concatenates with the normal-speed highlights already produced.
+    """
+    base = os.path.splitext(filename)[0]
+    win_root = AUTO_PIPELINE["windows_project"]
+    slowmo_factor = AUTO_PIPELINE["slowmo_factor"]
+    slowmo_fps = AUTO_PIPELINE["slowmo_output_fps"]
+    shots_file = f"shots_detected_{base}.json"
+
+    # Build and run a Python one-liner on Windows that calls the new functions
+    # in extract_clips.py to produce slow-mo + combined video
+    script = (
+        "import json, sys; "
+        "sys.path.insert(0, '.'); "
+        "from scripts.extract_clips import compile_slowmo_highlights, compile_combined_video; "
+        "from config.settings import HIGHLIGHTS_DIR, RAW_DIR; "
+        "import os; "
+        f"data = json.load(open('{shots_file}')); "
+        f"raw_path = os.path.join(RAW_DIR, '{filename}'); "
+        f"slowmo_path = os.path.join(HIGHLIGHTS_DIR, '{base}_slowmo_highlights.mp4'); "
+        f"normal_path = os.path.join(HIGHLIGHTS_DIR, '{base}_all_highlights.mp4'); "
+        f"combined_path = os.path.join(HIGHLIGHTS_DIR, '{base}_combined.mp4'); "
+        f"ok1 = compile_slowmo_highlights(raw_path, data['segments'], slowmo_path, {slowmo_factor}, {slowmo_fps}); "
+        "print('Slow-mo:', ok1); "
+        "ok2 = compile_combined_video(normal_path, slowmo_path, combined_path) if ok1 else False; "
+        "print('Combined:', ok2); "
+        "sys.exit(0 if ok2 else 1)"
+    )
+
+    ok, output = _run_ssh(
+        f'cd {win_root} && python -c "{script}"',
+        timeout=3600,
+    )
+    if not ok:
+        # Fall back: if slow-mo fails, just use the normal highlights
+        log.warning("Combined video failed, will use normal highlights only for %s", base)
+        return False
+
+    log.info("Combined video compiled for %s", base)
+    return True
+
+
+def transfer_combined_to_mac(filename):
+    """Transfer the combined (or fallback normal) highlight from Windows to Mac."""
+    base = os.path.splitext(filename)[0]
+    combined_name = f"{base}_combined.mp4"
+    normal_name = f"{base}_all_highlights.mp4"
+
+    local_combined = os.path.join(HIGHLIGHTS_DIR, combined_name)
+    os.makedirs(HIGHLIGHTS_DIR, exist_ok=True)
+
+    # Try combined first, fall back to normal highlights
+    if _scp_from_windows(f"highlights/{combined_name}", local_combined):
+        return local_combined
+
+    log.warning("Combined not found, trying normal highlights for %s", base)
+    local_normal = os.path.join(HIGHLIGHTS_DIR, normal_name)
+    if _scp_from_windows(f"highlights/{normal_name}", local_normal):
+        return local_normal
+
+    log.error("No highlight video found on Windows for %s", base)
+    return None
+
+
+# ── YouTube Upload ─────────────────────────────────────────
+
+def upload_to_youtube(video_path, creation_date, video_number):
+    """Upload the highlight video to YouTube with formatted title."""
+    from scripts.upload import upload_to_youtube as _yt_upload
+
+    date_str = creation_date.strftime("%Y-%m-%d") if creation_date else "unknown"
+    title = AUTO_PIPELINE["youtube_title_format"].format(
+        date=date_str, n=video_number,
+    )
+    description = (
+        f"Tennis training session highlights - {date_str}\n"
+        f"Normal speed + 0.25x slow motion\n\n"
+        f"Auto-generated by tennis_analysis pipeline"
+    )
+
+    log.info("Uploading to YouTube: %s", title)
+    url = _yt_upload(video_path, title=title, description=description)
+    if url:
+        log.info("YouTube upload complete: %s", url)
+    else:
+        log.error("YouTube upload failed for %s", video_path)
+    return url
+
+
+# ── Main Loop ──────────────────────────────────────────────
+
+def process_single_video(asset, state):
+    """Process one video through the full pipeline. Returns youtube URL or None."""
+    filename = asset.filename
+    base = os.path.splitext(filename)[0]
+    asset_id = str(asset.id)
+
+    log.info("=" * 60)
+    log.info("Processing: %s", filename)
+    log.info("=" * 60)
+
+    # 1. Download from iCloud
+    local_path = download_video(asset, RAW_DIR)
+    if not local_path:
+        return None
+
+    # 2. GPU pipeline: preprocess -> poses -> detect -> clips
+    if not process_on_gpu(filename):
+        return None
+
+    # 3. Compile combined normal + slow-mo highlight on GPU
+    compile_combined_on_gpu(filename)
+
+    # 4. Transfer highlight back to Mac
+    highlight_path = transfer_combined_to_mac(filename)
+    if not highlight_path:
+        return None
+
+    # 5. Upload to YouTube
+    creation_date = asset.asset_date if hasattr(asset, "asset_date") else asset.created
+    date_str = creation_date.strftime("%Y-%m-%d") if creation_date else "unknown"
+    daily_counts = state.get("daily_counts", {})
+    count = daily_counts.get(date_str, 0) + 1
+
+    youtube_url = upload_to_youtube(highlight_path, creation_date, count)
+
+    # 6. Update state
+    state.setdefault("processed", {})[asset_id] = {
+        "filename": filename,
+        "date": date_str,
+        "youtube_url": youtube_url,
+        "processed_at": datetime.now().isoformat(),
+    }
+    state.setdefault("daily_counts", {})[date_str] = count
+    save_state(state)
+
+    log.info("Finished processing %s", filename)
+    return youtube_url
+
+
+def main_loop(once=False):
+    """Main daemon loop: poll iCloud, process new videos, upload."""
+    setup_logging()
+    keyword = AUTO_PIPELINE["keyword"]
+    poll_interval = AUTO_PIPELINE["poll_interval"]
+
+    log.info("Auto pipeline started (keyword=%s, poll=%ds, once=%s)",
+             keyword, poll_interval, once)
+
+    api = authenticate()
+    state = load_state()
+
+    while True:
+        try:
+            new_videos = poll_icloud(api, keyword, state)
+
+            if new_videos:
+                log.info("Found %d new video(s) to process", len(new_videos))
+                for asset in new_videos:
+                    try:
+                        process_single_video(asset, state)
+                    except Exception as e:
+                        log.error("Failed to process %s: %s", asset.filename, e,
+                                  exc_info=True)
+            else:
+                log.info("No new videos found.")
+
+        except Exception as e:
+            log.error("Poll cycle error: %s", e, exc_info=True)
+
+        if once:
+            log.info("Single pass complete, exiting.")
+            break
+
+        log.info("Sleeping %d seconds until next poll...", poll_interval)
+        time.sleep(poll_interval)
+
+
+# ── CLI ────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Automated tennis pipeline: iCloud -> GPU -> YouTube",
+    )
+    parser.add_argument("--once", action="store_true",
+                        help="Single pass: process any new videos and exit")
+    parser.add_argument("--debug", action="store_true",
+                        help="Enable debug logging (dumps iCloud field names)")
+    args = parser.parse_args()
+
+    if args.debug:
+        logging.getLogger("auto_pipeline").setLevel(logging.DEBUG)
+
+    main_loop(once=args.once)
+
+
+if __name__ == "__main__":
+    main()
