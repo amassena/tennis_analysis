@@ -103,11 +103,11 @@ tennis_analysis/
 
 ## Automated Pipeline
 
-Fully automated mode: tag an iPhone video caption with "tennis_training", and the pipeline downloads, processes, and uploads highlights to YouTube with no manual intervention.
+Fully automated mode: add videos to a "tennis_training" album on iPhone, and the pipeline downloads, processes, and uploads highlights to YouTube with no manual intervention.
 
 ```
-iPhone -> caption "tennis_training" -> iCloud sync
-  -> Mac polls iCloud (5 min interval)
+iPhone -> add video to "tennis_training" album -> iCloud sync
+  -> Mac polls iCloud album (5 min interval)
   -> Downloads new videos to raw/
   -> SCP raw .mov to Windows
   -> SSH Windows: preprocess (NVENC 60fps) -> extract poses -> detect shots -> extract clips

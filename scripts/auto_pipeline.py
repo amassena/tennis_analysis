@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Automated tennis pipeline: poll iCloud -> GPU processing -> YouTube upload.
 
-Downloads iPhone videos captioned "tennis_training", processes them on the
-Windows GPU (preprocess, pose extraction, shot detection, clip extraction),
-compiles combined normal + 0.25x slow-mo highlights, and uploads to YouTube.
+Downloads iPhone videos from the "tennis_training" iCloud album, processes
+them on the Windows GPU (preprocess, pose extraction, shot detection, clip
+extraction), compiles combined normal + 0.25x slow-mo highlights, and
+uploads to YouTube.
 
 Usage:
     python scripts/auto_pipeline.py          # daemon mode (polls every 5 min)
@@ -11,7 +12,6 @@ Usage:
 """
 
 import argparse
-import base64
 import json
 import logging
 import os
@@ -30,8 +30,8 @@ from config.settings import (
 
 log = logging.getLogger("auto_pipeline")
 
-def setup_logging():
-    log.setLevel(logging.INFO)
+def setup_logging(debug=False):
+    log.setLevel(logging.DEBUG if debug else logging.INFO)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
                             datefmt="%Y-%m-%d %H:%M:%S")
     # Console
@@ -108,78 +108,18 @@ def authenticate():
     return api
 
 
-# ── Caption Detection ──────────────────────────────────────
-
-def _get_caption(asset):
-    """Try to extract caption/description from an iCloud photo asset.
-
-    pyicloud doesn't expose caption as a first-class property, so we
-    check several known field locations.
-    """
-    record = getattr(asset, "_asset_record", None)
-    if record is None:
-        return ""
-
-    fields = record.get("fields", {})
-
-    # Try captionEnc (base64-encoded caption)
-    caption_enc = fields.get("captionEnc", {}).get("value")
-    if caption_enc:
-        try:
-            return base64.b64decode(caption_enc).decode("utf-8", errors="replace")
-        except Exception:
-            pass
-
-    # Try description field
-    desc = fields.get("description", {}).get("value")
-    if desc:
-        return str(desc)
-
-    # Try other common caption fields
-    for key in ("caption", "descriptionEnc"):
-        val = fields.get(key, {}).get("value")
-        if val:
-            if key.endswith("Enc"):
-                try:
-                    return base64.b64decode(val).decode("utf-8", errors="replace")
-                except Exception:
-                    pass
-            else:
-                return str(val)
-
-    return ""
-
-
-def _dump_asset_fields(asset, label=""):
-    """Log all field keys from an asset record for debugging."""
-    record = getattr(asset, "_asset_record", None)
-    if record is None:
-        log.debug("%s: no _asset_record", label)
-        return
-
-    fields = record.get("fields", {})
-    master = getattr(asset, "_master_record", None)
-    master_fields = master.get("fields", {}) if master else {}
-
-    log.debug("%s asset fields: %s", label, sorted(fields.keys()))
-    if master_fields:
-        log.debug("%s master fields: %s", label, sorted(master_fields.keys()))
-
-
 # ── Poll iCloud ────────────────────────────────────────────
 
-_fields_dumped = False
-
-def poll_icloud(api, keyword, state):
-    """Check iCloud for new videos matching the keyword caption."""
-    global _fields_dumped
-
-    album_name = ICLOUD["video_album"]
+def poll_icloud(api, album_name, state):
+    """Check the specified iCloud album for new unprocessed videos."""
     try:
         album = api.photos.albums[album_name]
     except KeyError:
-        log.error("Album '%s' not found. Available: %s",
-                  album_name, list(api.photos.albums.keys()))
+        try:
+            available = list(api.photos.albums)
+        except Exception:
+            available = "(unable to list)"
+        log.error("Album '%s' not found. Available: %s", album_name, available)
         return []
 
     new_videos = []
@@ -187,20 +127,12 @@ def poll_icloud(api, keyword, state):
         if asset.item_type != "movie":
             continue
 
-        # On first video, dump field names for debugging
-        if not _fields_dumped:
-            _dump_asset_fields(asset, "first-video")
-            _fields_dumped = True
-
-        # Skip already processed
         asset_id = str(asset.id)
         if asset_id in state.get("processed", {}):
             continue
 
-        caption = _get_caption(asset)
-        if keyword.lower() in caption.lower():
-            log.info("Found new video: %s (caption: %s)", asset.filename, caption)
-            new_videos.append(asset)
+        log.info("Found new video: %s", asset.filename)
+        new_videos.append(asset)
 
     return new_videos
 
@@ -499,21 +431,21 @@ def process_single_video(asset, state):
     return youtube_url
 
 
-def main_loop(once=False):
+def main_loop(once=False, debug=False):
     """Main daemon loop: poll iCloud, process new videos, upload."""
-    setup_logging()
-    keyword = AUTO_PIPELINE["keyword"]
+    setup_logging(debug=debug)
+    album_name = AUTO_PIPELINE["album"]
     poll_interval = AUTO_PIPELINE["poll_interval"]
 
-    log.info("Auto pipeline started (keyword=%s, poll=%ds, once=%s)",
-             keyword, poll_interval, once)
+    log.info("Auto pipeline started (album=%s, poll=%ds, once=%s)",
+             album_name, poll_interval, once)
 
     api = authenticate()
     state = load_state()
 
     while True:
         try:
-            new_videos = poll_icloud(api, keyword, state)
+            new_videos = poll_icloud(api, album_name, state)
 
             if new_videos:
                 log.info("Found %d new video(s) to process", len(new_videos))
@@ -549,10 +481,7 @@ def main():
                         help="Enable debug logging (dumps iCloud field names)")
     args = parser.parse_args()
 
-    if args.debug:
-        logging.getLogger("auto_pipeline").setLevel(logging.DEBUG)
-
-    main_loop(once=args.once)
+    main_loop(once=args.once, debug=args.debug)
 
 
 if __name__ == "__main__":
