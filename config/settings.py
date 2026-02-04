@@ -76,3 +76,22 @@ AUTO_PIPELINE = {
         {"host": "tmassena", "project": "C:/Users/amass/tennis_analysis"},
     ],
 }
+
+# ── Notifications ────────────────────────────────────────
+# Add phone numbers / email addresses here to get notified
+# when highlight videos are processed and uploaded.
+NOTIFICATIONS = {
+    "imessage": [
+        "+12068527753",
+    ],
+    "email": {
+        "recipients": [
+            # "friend@example.com",
+            # "coach@example.com",
+        ],
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "sender": os.environ.get("GMAIL_SENDER", ""),
+        "app_password": os.environ.get("GMAIL_APP_PASSWORD", ""),
+    },
+}

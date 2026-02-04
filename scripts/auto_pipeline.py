@@ -23,8 +23,18 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load .env before importing settings (so env-based config values work)
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
 from config.settings import (
-    RAW_DIR, HIGHLIGHTS_DIR, ICLOUD, AUTO_PIPELINE, PROJECT_ROOT,
+    RAW_DIR, HIGHLIGHTS_DIR, ICLOUD, AUTO_PIPELINE, NOTIFICATIONS, PROJECT_ROOT,
 )
 
 # ── Logging ─────────────────────────────────────────────────
@@ -93,6 +103,10 @@ def authenticate():
     api = PyiCloudService(username, password, cookie_directory=cookie_dir)
 
     if api.requires_2fa:
+        if not sys.stdin.isatty():
+            log.error("2FA required but running non-interactively. "
+                      "Run once from a terminal to refresh the session.")
+            return None
         log.info("Two-factor authentication required.")
         for attempt in range(1, 4):
             code = input(f"  Enter 2FA code (attempt {attempt}/3): ").strip()
@@ -239,6 +253,7 @@ def process_on_gpu(filename, machine):
     base = os.path.splitext(filename)[0]
     host = machine["host"]
     project = machine["project"]
+    py = f"{project}/venv/Scripts/python.exe"
 
     # 1. Transfer raw video
     local_raw = os.path.join(RAW_DIR, filename)
@@ -249,18 +264,18 @@ def process_on_gpu(filename, machine):
     # 2. Preprocess (NVENC, 60fps CFR)
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && python preprocess_nvenc.py {filename}",
+        f"cd {project} && {py} preprocess_nvenc.py {filename}",
         timeout=1800,
     )
     if not ok:
         log.error("Preprocess failed for %s on %s", filename, host)
         return False
 
-    # 3. Extract poses
+    # 3. Extract poses (large videos can take 90+ min at ~34fps)
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && python scripts/extract_poses.py preprocessed/{base}.mp4",
-        timeout=3600,
+        f"cd {project} && {py} scripts/extract_poses.py preprocessed/{base}.mp4",
+        timeout=10800,
     )
     if not ok:
         log.error("Pose extraction failed for %s on %s", filename, host)
@@ -270,7 +285,7 @@ def process_on_gpu(filename, machine):
     shots_file = f"shots_detected_{base}.json"
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && python scripts/detect_shots.py poses/{base}.json -o {shots_file}",
+        f"cd {project} && {py} scripts/detect_shots.py poses/{base}.json -o {shots_file}",
         timeout=1800,
     )
     if not ok:
@@ -280,7 +295,7 @@ def process_on_gpu(filename, machine):
     # 5. Extract clips + highlights
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && python scripts/extract_clips.py -i {shots_file} --highlights",
+        f"cd {project} && {py} scripts/extract_clips.py -i {shots_file} --highlights",
         timeout=3600,
     )
     if not ok:
@@ -325,9 +340,10 @@ def compile_combined_on_gpu(filename, machine):
         "sys.exit(0 if ok2 else 1)"
     )
 
+    py = f"{project}/venv/Scripts/python.exe"
     ok, output = _run_ssh(
         host,
-        f'cd {project} && python -c "{script}"',
+        f'cd {project} && {py} -c "{script}"',
         timeout=3600,
     )
     if not ok:
@@ -386,6 +402,332 @@ def upload_to_youtube(video_path, creation_date, video_number):
     else:
         log.error("YouTube upload failed for %s", video_path)
     return url
+
+
+# ── iMessage Notification ─────────────────────────────────
+
+def send_imessage(recipient, message):
+    """Send an iMessage notification via macOS Messages app."""
+    try:
+        escaped = message.replace('"', '\\"')
+        subprocess.run(
+            ["osascript", "-e",
+             f'tell application "Messages" to send "{escaped}" to buddy "{recipient}"'],
+            capture_output=True, text=True, timeout=15,
+        )
+        log.info("iMessage sent to %s", recipient)
+    except Exception as e:
+        log.warning("Failed to send iMessage: %s", e)
+
+
+def send_email(recipients, subject, body):
+    """Send an email notification via SMTP (e.g. Gmail)."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    cfg = NOTIFICATIONS.get("email", {})
+    sender = cfg.get("sender", "")
+    password = cfg.get("app_password", "")
+    if not sender or not password or not recipients:
+        return
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
+
+    try:
+        with smtplib.SMTP(cfg.get("smtp_server", "smtp.gmail.com"),
+                          cfg.get("smtp_port", 587)) as server:
+            server.starttls()
+            server.login(sender, password)
+            server.sendmail(sender, recipients, msg.as_string())
+        log.info("Email sent to %s", recipients)
+    except Exception as e:
+        log.warning("Failed to send email: %s", e)
+
+
+def notify_complete(results):
+    """Send notifications (iMessage + email) after processing a batch."""
+    lines = ["Tennis highlights ready:"]
+    for filename, url in results:
+        if url:
+            lines.append(f"  {filename} -> {url}")
+        else:
+            lines.append(f"  {filename} -> FAILED")
+    summary = "\n".join(lines)
+
+    # iMessage
+    for phone in NOTIFICATIONS.get("imessage", []):
+        send_imessage(phone, summary)
+
+    # Email
+    email_cfg = NOTIFICATIONS.get("email", {})
+    recipients = email_cfg.get("recipients", [])
+    if recipients:
+        send_email(recipients, "Tennis highlights ready", summary)
+
+
+# ── Preflight Checks ──────────────────────────────────────
+
+def preflight():
+    """Run all pre-flight checks before starting the pipeline.
+
+    Returns True if all critical checks pass, False otherwise.
+    Prints a report of all checks with PASS/FAIL/WARN status.
+    """
+    setup_logging()
+    checks = []  # (name, status, detail)  status: "PASS", "FAIL", "WARN"
+
+    machines = AUTO_PIPELINE.get("gpu_machines", [])
+
+    # ── 1. Config validation ──────────────────────────────
+    if not machines:
+        checks.append(("Config: gpu_machines", "FAIL", "No GPU machines configured"))
+    else:
+        hosts = [m["host"] for m in machines]
+        checks.append(("Config: gpu_machines", "PASS", f"{len(machines)} machine(s): {hosts}"))
+
+    if not AUTO_PIPELINE.get("album"):
+        checks.append(("Config: album", "FAIL", "No album name configured"))
+    else:
+        checks.append(("Config: album", "PASS", AUTO_PIPELINE["album"]))
+
+    # ── 2. iCloud credentials ─────────────────────────────
+    env_file = ICLOUD.get("env_file", "")
+    if not os.path.exists(env_file):
+        checks.append(("iCloud: .env file", "FAIL", f"Not found: {env_file}"))
+    else:
+        _load_dotenv(env_file)
+        user = os.environ.get("ICLOUD_USERNAME")
+        pwd = os.environ.get("ICLOUD_PASSWORD")
+        if user and pwd:
+            checks.append(("iCloud: credentials", "PASS", f"User: {user}"))
+        else:
+            checks.append(("iCloud: credentials", "FAIL",
+                           "ICLOUD_USERNAME or ICLOUD_PASSWORD missing in .env"))
+
+    # ── 3. iCloud authentication ──────────────────────────
+    try:
+        api = authenticate()
+        if api is None:
+            checks.append(("iCloud: auth", "FAIL", "Authentication returned None (2FA needed?)"))
+        else:
+            checks.append(("iCloud: auth", "PASS", "Authenticated"))
+            # Check album exists
+            try:
+                album = api.photos.albums[AUTO_PIPELINE["album"]]
+                count = sum(1 for a in album if a.item_type == "movie")
+                checks.append(("iCloud: album", "PASS",
+                               f"'{AUTO_PIPELINE['album']}' found ({count} video(s))"))
+            except KeyError:
+                available = list(api.photos.albums)[:10]
+                checks.append(("iCloud: album", "FAIL",
+                               f"'{AUTO_PIPELINE['album']}' not found. Available: {available}"))
+    except Exception as e:
+        checks.append(("iCloud: auth", "FAIL", str(e)))
+
+    # ── 4. SSH connectivity to each GPU machine ───────────
+    for machine in machines:
+        host = machine["host"]
+        project = machine["project"]
+        try:
+            result = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+                 host, "echo ok"],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0:
+                checks.append((f"SSH: {host}", "PASS", "Connected"))
+            else:
+                checks.append((f"SSH: {host}", "FAIL",
+                               f"rc={result.returncode}: {result.stderr.strip()}"))
+                continue  # skip further checks on this machine
+        except subprocess.TimeoutExpired:
+            checks.append((f"SSH: {host}", "FAIL", "Connection timed out"))
+            continue
+        except Exception as e:
+            checks.append((f"SSH: {host}", "FAIL", str(e)))
+            continue
+
+        py = f"{project}/venv/Scripts/python.exe"
+
+        # ── 4a. Python + venv ─────────────────────────────
+        result = subprocess.run(
+            ["ssh", host, f"{py} --version"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            checks.append((f"  {host}: python venv", "PASS",
+                           result.stdout.strip()))
+        else:
+            checks.append((f"  {host}: python venv", "FAIL",
+                           f"venv python not found at {py}"))
+
+        # ── 4b. FFmpeg ────────────────────────────────────
+        result = subprocess.run(
+            ["ssh", host, "ffmpeg -version"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            ver = result.stdout.split("\n")[0] if result.stdout else "unknown"
+            checks.append((f"  {host}: ffmpeg", "PASS", ver))
+        else:
+            checks.append((f"  {host}: ffmpeg", "FAIL", "ffmpeg not found"))
+
+        # ── 4c. Key Python packages ──────────────────────
+        result = subprocess.run(
+            ["ssh", host,
+             f'{py} -c "import mediapipe, tensorflow; '
+             f'print(mediapipe.__version__, tensorflow.__version__)"'],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            checks.append((f"  {host}: mediapipe+tf", "PASS",
+                           result.stdout.strip()))
+        else:
+            checks.append((f"  {host}: mediapipe+tf", "FAIL",
+                           result.stderr.strip()[:100]))
+
+        # ── 4d. Model file ───────────────────────────────
+        result = subprocess.run(
+            ["ssh", host,
+             f'cd {project} && {py} -c "'
+             f'import os; '
+             f'h5 = [f for f in os.listdir(\\"models\\") if f.endswith(\\".h5\\")]; '
+             f'print(\\", \\".join(h5) if h5 else \\"NONE\\")"'],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            models = result.stdout.strip()
+            if models and models != "NONE":
+                checks.append((f"  {host}: model files", "PASS", models))
+            else:
+                checks.append((f"  {host}: model files", "FAIL",
+                               "No .h5 model files in models/"))
+        else:
+            checks.append((f"  {host}: model files", "FAIL",
+                           "Could not check models/ dir"))
+
+        # ── 4e. Disk space ───────────────────────────────
+        result = subprocess.run(
+            ["ssh", host,
+             f'{py} -c "'
+             f'import shutil; u = shutil.disk_usage(\\"C:/\\"); '
+             f'free_gb = u.free / (1024**3); '
+             f'print(f\\"{{free_gb:.1f}} GB free\\")"'],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            info = result.stdout.strip()
+            try:
+                free_gb = float(info.split()[0])
+                status = "PASS" if free_gb > 20 else "WARN" if free_gb > 5 else "FAIL"
+            except (ValueError, IndexError):
+                status, free_gb = "WARN", 0
+            checks.append((f"  {host}: disk space", status, info))
+        else:
+            checks.append((f"  {host}: disk space", "WARN", "Could not check"))
+
+        # ── 4f. NVENC ────────────────────────────────────
+        result = subprocess.run(
+            ["ssh", host,
+             'ffmpeg -hide_banner -y -f lavfi -i nullsrc=s=64x64:d=0.1 '
+             '-c:v h264_nvenc -f null -'],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            checks.append((f"  {host}: NVENC", "PASS", "h264_nvenc working"))
+        else:
+            checks.append((f"  {host}: NVENC", "WARN",
+                           "h264_nvenc failed (will use libx264 fallback)"))
+
+    # ── 5. Mac disk space ─────────────────────────────────
+    import shutil
+    usage = shutil.disk_usage(PROJECT_ROOT)
+    free_gb = usage.free / (1024**3)
+    status = "PASS" if free_gb > 50 else "WARN" if free_gb > 10 else "FAIL"
+    checks.append(("Mac: disk space", status, f"{free_gb:.1f} GB free"))
+
+    # ── 6. YouTube credentials ────────────────────────────
+    secrets_path = os.path.join(PROJECT_ROOT, "config", "client_secrets.json")
+    creds_path = os.path.join(PROJECT_ROOT, "config", "youtube_credentials.json")
+
+    if not os.path.exists(secrets_path):
+        checks.append(("YouTube: client_secrets.json", "FAIL", "Not found"))
+    else:
+        checks.append(("YouTube: client_secrets.json", "PASS", "Found"))
+
+    if not os.path.exists(creds_path):
+        checks.append(("YouTube: credentials", "FAIL",
+                       "youtube_credentials.json not found (run upload.py once manually)"))
+    else:
+        try:
+            import google.oauth2.credentials
+            with open(creds_path) as f:
+                cred_data = json.load(f)
+            if cred_data.get("token") and cred_data.get("refresh_token"):
+                checks.append(("YouTube: credentials", "PASS",
+                               "Token + refresh token present"))
+            else:
+                checks.append(("YouTube: credentials", "WARN",
+                               "Credentials file exists but may be incomplete"))
+        except Exception as e:
+            checks.append(("YouTube: credentials", "WARN", f"Could not validate: {e}"))
+
+    # ── 7. Notifications ──────────────────────────────────
+    imessage_phones = NOTIFICATIONS.get("imessage", [])
+    if imessage_phones:
+        checks.append(("Notify: iMessage", "PASS",
+                       f"{len(imessage_phones)} recipient(s)"))
+    else:
+        checks.append(("Notify: iMessage", "WARN", "No recipients configured"))
+
+    email_cfg = NOTIFICATIONS.get("email", {})
+    email_recipients = email_cfg.get("recipients", [])
+    email_sender = email_cfg.get("sender", "")
+    email_password = email_cfg.get("app_password", "")
+    if email_recipients and email_sender and email_password:
+        # Try SMTP login
+        try:
+            import smtplib
+            with smtplib.SMTP(email_cfg.get("smtp_server", "smtp.gmail.com"),
+                              email_cfg.get("smtp_port", 587), timeout=10) as server:
+                server.starttls()
+                server.login(email_sender, email_password)
+            checks.append(("Notify: email SMTP", "PASS",
+                           f"Login OK as {email_sender} -> {email_recipients}"))
+        except Exception as e:
+            checks.append(("Notify: email SMTP", "FAIL", f"Login failed: {e}"))
+    elif email_sender and email_password:
+        checks.append(("Notify: email", "WARN",
+                       "SMTP configured but no recipients"))
+    else:
+        checks.append(("Notify: email", "WARN",
+                       "Not configured (sender/app_password empty)"))
+
+    # ── Print report ──────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("  PREFLIGHT CHECK REPORT")
+    print("=" * 60)
+
+    pass_count = sum(1 for _, s, _ in checks if s == "PASS")
+    warn_count = sum(1 for _, s, _ in checks if s == "WARN")
+    fail_count = sum(1 for _, s, _ in checks if s == "FAIL")
+
+    for name, status, detail in checks:
+        icon = {"PASS": "+", "FAIL": "X", "WARN": "!"}[status]
+        print(f"  [{icon}] {name}: {detail}")
+
+    print("=" * 60)
+    print(f"  {pass_count} passed, {warn_count} warnings, {fail_count} failed")
+    if fail_count == 0:
+        print("  Pipeline is ready to run.")
+    else:
+        print("  Fix FAIL items before running the pipeline.")
+    print("=" * 60 + "\n")
+
+    return fail_count == 0
 
 
 # ── Main Loop ──────────────────────────────────────────────
@@ -463,6 +805,8 @@ def main_loop(once=False, debug=False):
                 log.info("Found %d new video(s) to process across %d machine(s)",
                          len(new_videos), len(machines))
 
+                results = []  # (filename, url_or_None)
+
                 if len(new_videos) > 1 and len(machines) > 1:
                     # Parallel: distribute videos across machines
                     log.info("Dispatching %d videos in parallel", len(new_videos))
@@ -476,10 +820,12 @@ def main_loop(once=False, debug=False):
                             asset, machine = futures[fut]
                             try:
                                 url = fut.result()
+                                results.append((asset.filename, url))
                                 if url:
                                     log.info("Completed %s on %s -> %s",
                                              asset.filename, machine["host"], url)
                             except Exception as e:
+                                results.append((asset.filename, None))
                                 log.error("Failed to process %s on %s: %s",
                                           asset.filename, machine["host"], e,
                                           exc_info=True)
@@ -488,11 +834,15 @@ def main_loop(once=False, debug=False):
                     for i, asset in enumerate(new_videos):
                         machine = machines[i % len(machines)]
                         try:
-                            process_single_video(asset, state, machine)
+                            url = process_single_video(asset, state, machine)
+                            results.append((asset.filename, url))
                         except Exception as e:
+                            results.append((asset.filename, None))
                             log.error("Failed to process %s on %s: %s",
                                       asset.filename, machine["host"], e,
                                       exc_info=True)
+
+                notify_complete(results)
             else:
                 log.info("No new videos found.")
 
@@ -517,7 +867,13 @@ def main():
                         help="Single pass: process any new videos and exit")
     parser.add_argument("--debug", action="store_true",
                         help="Enable debug logging (dumps iCloud field names)")
+    parser.add_argument("--preflight", action="store_true",
+                        help="Run pre-flight checks and exit (no processing)")
     args = parser.parse_args()
+
+    if args.preflight:
+        ok = preflight()
+        sys.exit(0 if ok else 1)
 
     main_loop(once=args.once, debug=args.debug)
 
