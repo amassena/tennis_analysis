@@ -65,7 +65,7 @@ ICLOUD = {
 
 # ── Automated pipeline ──────────────────────────────────────
 AUTO_PIPELINE = {
-    "album": "tennis_training",  # iCloud Photos album to watch for new videos
+    "album": "Tennis Videos",  # iCloud Photos album to watch for new videos
     "poll_interval": 300,        # seconds between iCloud checks
     "state_file": os.path.join(PROJECT_ROOT, "pipeline_state.json"),
     "slowmo_factor": 4.0,       # setpts multiplier (4.0 = 0.25x speed)

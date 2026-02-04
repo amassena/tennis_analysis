@@ -29,13 +29,16 @@ def find_video(video_name):
 
 
 def has_nvenc():
-    """Check if NVENC hardware encoder is available."""
+    """Check if NVENC hardware encoder is actually usable (not just listed)."""
     try:
+        # Test real encoding — catches driver version mismatches
         result = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-encoders"],
-            capture_output=True, text=True
+            ["ffmpeg", "-hide_banner", "-y",
+             "-f", "lavfi", "-i", "nullsrc=s=64x64:d=0.1",
+             "-c:v", "h264_nvenc", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=10
         )
-        return "h264_nvenc" in result.stdout
+        return result.returncode == 0
     except Exception:
         return False
 
