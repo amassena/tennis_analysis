@@ -52,3 +52,7 @@ poses/*.mp4
 config/icloud_session/
 config/client_secrets.json
 config/youtube_credentials.json
+
+# Pipeline runtime
+pipeline.log
+pipeline_state.json
