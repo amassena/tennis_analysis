@@ -71,5 +71,8 @@ AUTO_PIPELINE = {
     "slowmo_factor": 4.0,       # setpts multiplier (4.0 = 0.25x speed)
     "slowmo_output_fps": 60,    # output framerate for slow-mo clips
     "youtube_title_format": "Training session ({date}) video {n}",
-    "windows_project": "C:/Users/amass/tennis_analysis",
+    "gpu_machines": [
+        {"host": "windows", "project": "C:/Users/amass/tennis_analysis"},
+        {"host": "tmassena", "project": "C:/Users/amass/tennis_analysis"},
+    ],
 }

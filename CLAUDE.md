@@ -6,28 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tennis video analysis pipeline that processes 240fps iPhone footage to auto-detect shot types (forehand, backhand, serve, neutral), extract clips, and compile highlight reels. Uses MediaPipe pose estimation feeding into a GRU neural network for temporal shot classification.
 
-## Two-Machine Setup
+## Three-Machine Setup
 
-- **Mac (M4)**: iCloud downloads, manual labeling (visual_label.py GUI), lightweight tasks
-- **Windows PC (RTX 5080, CUDA 13.0, Python 3.11)**: All GPU-heavy work via `ssh windows`
+- **Mac (M4)**: iCloud downloads, manual labeling (visual_label.py GUI), lightweight tasks, pipeline orchestration
+- **Windows PC "windows" (RTX 5080, CUDA 12.6, Python 3.11)**: Primary GPU worker via `ssh windows`
+- **Windows PC "tmassena" (RTX 4080, CUDA 12.6, Python 3.11)**: Secondary GPU worker via `ssh tmassena`
+- Both GPU machines run:
   - Video preprocessing (NVENC via `preprocess_nvenc.py`)
   - Pose extraction (MediaPipe)
   - Model training (TensorFlow)
   - Shot detection (inference)
   - Clip extraction & highlight compilation (FFmpeg h264_nvenc)
-- Connected via **Tailscale SSH** (`ssh windows`), file transfer with `scp`
-- Both machines mirror the project at `~/tennis_analysis` (Mac) and `C:\Users\amass\tennis_analysis` (Windows)
+- Connected via **Tailscale SSH**, file transfer with `scp`
+- All GPU machines mirror the project at `C:\Users\amass\tennis_analysis`
+- When multiple videos are queued, `auto_pipeline.py` dispatches them in parallel across both GPU machines
 
-**Rule: Always run matching, editing, and encoding on the GPU (Windows). It is significantly faster.**
+**Rule: Always run matching, editing, and encoding on the GPUs (windows/tmassena). It is significantly faster.**
 
 ## Technology Stack
 
-- **Python 3.9.6** (Mac) / **Python 3.11** (Windows) with virtual environments
+- **Python 3.9.6** (Mac) / **Python 3.11** (Windows PCs) with virtual environments
 - **MediaPipe 0.10.18**: Pose estimation (33 keypoints per frame). Note: must use 0.10.18 for `solutions` API compatibility
 - **TensorFlow/Keras**: GRU neural network for shot classification (2.16 Mac, 2.20 Windows)
 - **FFmpeg**: Video preprocessing (VFR->CFR), clip extraction, highlight compilation. Uses **NVENC (h264_nvenc)** on Windows for GPU-accelerated encoding
 - **iCloud**: Video download from iPhone (240fps @ 1080p or 4K @ 120fps)
-- **GPU**: NVIDIA RTX 5080 (16GB VRAM) for training, inference, and video encoding
+- **GPUs**: NVIDIA RTX 5080 (16GB, "windows") + RTX 4080 (16GB, "tmassena") for training, inference, and video encoding
 
 ## Pipeline Architecture
 
@@ -109,11 +112,13 @@ Fully automated mode: add videos to a "tennis_training" album on iPhone, and the
 iPhone -> add video to "tennis_training" album -> iCloud sync
   -> Mac polls iCloud album (5 min interval)
   -> Downloads new videos to raw/
-  -> SCP raw .mov to Windows
-  -> SSH Windows: preprocess (NVENC 60fps) -> extract poses -> detect shots -> extract clips
-  -> SSH Windows: compile combined video (normal speed + 0.25x slow-mo from raw 240fps)
+  -> Assigns each video to a GPU machine (round-robin across windows/tmassena)
+  -> SCP raw .mov to assigned GPU machine
+  -> SSH GPU: preprocess (NVENC 60fps) -> extract poses -> detect shots -> extract clips
+  -> SSH GPU: compile combined video (normal speed + 0.25x slow-mo from raw 240fps)
   -> SCP combined video to Mac
   -> Upload to YouTube: "Training session (YYYY-MM-DD) video N" (unlisted)
+  -> When 2+ videos found: processes in parallel across both GPU machines
 ```
 
 **Running:**

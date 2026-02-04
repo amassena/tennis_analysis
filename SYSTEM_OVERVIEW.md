@@ -26,13 +26,14 @@ All machines connected via **Tailscale** mesh VPN — accessible from anywhere (
 | Machine | Tailscale IP | Role | Specs |
 |---------|-------------|------|-------|
 | MacBook Air | `100.115.41.118` | Development, orchestration, uploads | Apple Silicon, Python 3.9 |
-| Windows PC | `100.81.64.103` | GPU processing, NVENC encoding | RTX 5080 16GB, CUDA 12.6, Python 3.11, Windows 11 |
+| Windows PC (windows) | `100.81.64.103` | Primary GPU processing, NVENC encoding | RTX 5080 16GB, CUDA 12.6, Python 3.11, Windows 11 |
+| Windows PC (tmassena) | `100.98.226.93` | Secondary GPU processing, NVENC encoding | RTX 4080 16GB, CUDA 12.6, Python 3.11, Windows 11 |
 | iPhone 16 Pro Max | `100.73.29.124` | Recording, remote SSH access | iOS, Tailscale app |
-| Windows PC #2 | Not yet configured | Available for parallel processing | — |
 
 **SSH access:**
 - Mac: `ssh andrewhome@100.115.41.118`
-- PC: `ssh amass@100.81.64.103` (also aliased as `ssh windows` from Mac)
+- PC #1: `ssh amass@100.81.64.103` (aliased as `ssh windows` from Mac)
+- PC #2: `ssh amass@100.98.226.93` (aliased as `ssh tmassena` from Mac)
 
 ### Cloud Services
 | Service | Purpose | Auth |
@@ -82,8 +83,11 @@ iPhone 240fps .MOV
 - YouTube upload confirmed: https://youtu.be/0Y2w9579i9s
 - iCloud Drive upload confirmed: `Tennis/` folder
 
+### What's Working End-to-End (continued)
+- **Multi-machine parallel dispatch** — auto_pipeline.py distributes across windows + tmassena when 2+ videos queued
+
 ### What's Remaining
 - **Forehand/backhand labeling** — 0 clips for each (need 50+)
 - **4-class model retraining** — currently serve/neutral only
-- **Second Windows PC** — not yet set up for parallel processing
+- **TensorFlow GPU on tmassena** — CUDA 13.1 too new for TF 2.19; inference runs on CPU (NVENC encoding still uses GPU)
 - **Batch automation** — no script yet to run full pipeline on all 7 videos unattended

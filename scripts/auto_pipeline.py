@@ -2,9 +2,9 @@
 """Automated tennis pipeline: poll iCloud -> GPU processing -> YouTube upload.
 
 Downloads iPhone videos from the "tennis_training" iCloud album, processes
-them on the Windows GPU (preprocess, pose extraction, shot detection, clip
+them on GPU machines (preprocess, pose extraction, shot detection, clip
 extraction), compiles combined normal + 0.25x slow-mo highlights, and
-uploads to YouTube.
+uploads to YouTube.  Supports multiple GPU machines with parallel dispatch.
 
 Usage:
     python scripts/auto_pipeline.py          # daemon mode (polls every 5 min)
@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -197,22 +198,21 @@ def download_video(asset, raw_dir):
 
 # ── SSH/SCP Helpers ────────────────────────────────────────
 
-def _run_ssh(cmd, timeout=3600):
-    """Run a command on Windows via SSH. Returns (success, stdout)."""
-    full_cmd = ["ssh", "windows", cmd]
-    log.info("SSH: %s", cmd)
+def _run_ssh(host, cmd, timeout=3600):
+    """Run a command on a remote machine via SSH. Returns (success, stdout)."""
+    full_cmd = ["ssh", host, cmd]
+    log.info("SSH [%s]: %s", host, cmd)
     result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
     if result.returncode != 0:
-        log.error("SSH command failed (rc=%d): %s", result.returncode, result.stderr.strip())
+        log.error("SSH [%s] failed (rc=%d): %s", host, result.returncode, result.stderr.strip())
         return False, result.stderr
     return True, result.stdout
 
 
-def _scp_to_windows(local_path, remote_relative):
-    """Copy a file to Windows via SCP."""
-    win_root = AUTO_PIPELINE["windows_project"]
-    remote_path = f"windows:{win_root}/{remote_relative}"
-    log.info("SCP to Windows: %s -> %s", os.path.basename(local_path), remote_relative)
+def _scp_to(host, project, local_path, remote_relative):
+    """Copy a file to a remote machine via SCP."""
+    remote_path = f"{host}:{project}/{remote_relative}"
+    log.info("SCP to %s: %s -> %s", host, os.path.basename(local_path), remote_relative)
     result = subprocess.run(
         ["scp", local_path, remote_path],
         capture_output=True, text=True, timeout=600,
@@ -220,11 +220,10 @@ def _scp_to_windows(local_path, remote_relative):
     return result.returncode == 0
 
 
-def _scp_from_windows(remote_relative, local_path):
-    """Copy a file from Windows via SCP."""
-    win_root = AUTO_PIPELINE["windows_project"]
-    remote_path = f"windows:{win_root}/{remote_relative}"
-    log.info("SCP from Windows: %s -> %s", remote_relative, os.path.basename(local_path))
+def _scp_from(host, project, remote_relative, local_path):
+    """Copy a file from a remote machine via SCP."""
+    remote_path = f"{host}:{project}/{remote_relative}"
+    log.info("SCP from %s: %s -> %s", host, remote_relative, os.path.basename(local_path))
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     result = subprocess.run(
         ["scp", remote_path, local_path],
@@ -235,52 +234,57 @@ def _scp_from_windows(remote_relative, local_path):
 
 # ── GPU Processing ─────────────────────────────────────────
 
-def process_on_gpu(filename):
-    """Run the full pipeline on Windows via SSH: preprocess, poses, detect, clips."""
+def process_on_gpu(filename, machine):
+    """Run the full pipeline on a GPU machine via SSH: preprocess, poses, detect, clips."""
     base = os.path.splitext(filename)[0]
-    win_root = AUTO_PIPELINE["windows_project"]
+    host = machine["host"]
+    project = machine["project"]
 
-    # 1. Transfer raw video to Windows
+    # 1. Transfer raw video
     local_raw = os.path.join(RAW_DIR, filename)
-    if not _scp_to_windows(local_raw, f"raw/{filename}"):
-        log.error("Failed to transfer %s to Windows", filename)
+    if not _scp_to(host, project, local_raw, f"raw/{filename}"):
+        log.error("Failed to transfer %s to %s", filename, host)
         return False
 
     # 2. Preprocess (NVENC, 60fps CFR)
     ok, _ = _run_ssh(
-        f"cd {win_root} && python preprocess_nvenc.py {filename}",
+        host,
+        f"cd {project} && python preprocess_nvenc.py {filename}",
         timeout=1800,
     )
     if not ok:
-        log.error("Preprocess failed for %s", filename)
+        log.error("Preprocess failed for %s on %s", filename, host)
         return False
 
     # 3. Extract poses
     ok, _ = _run_ssh(
-        f"cd {win_root} && python scripts/extract_poses.py preprocessed/{base}.mp4",
+        host,
+        f"cd {project} && python scripts/extract_poses.py preprocessed/{base}.mp4",
         timeout=3600,
     )
     if not ok:
-        log.error("Pose extraction failed for %s", filename)
+        log.error("Pose extraction failed for %s on %s", filename, host)
         return False
 
     # 4. Detect shots
     shots_file = f"shots_detected_{base}.json"
     ok, _ = _run_ssh(
-        f"cd {win_root} && python scripts/detect_shots.py poses/{base}.json -o {shots_file}",
+        host,
+        f"cd {project} && python scripts/detect_shots.py poses/{base}.json -o {shots_file}",
         timeout=1800,
     )
     if not ok:
-        log.error("Shot detection failed for %s", filename)
+        log.error("Shot detection failed for %s on %s", filename, host)
         return False
 
     # 5. Extract clips + highlights
     ok, _ = _run_ssh(
-        f"cd {win_root} && python scripts/extract_clips.py -i {shots_file} --highlights",
+        host,
+        f"cd {project} && python scripts/extract_clips.py -i {shots_file} --highlights",
         timeout=3600,
     )
     if not ok:
-        log.error("Clip extraction failed for %s", filename)
+        log.error("Clip extraction failed for %s on %s", filename, host)
         return False
 
     return True
@@ -288,19 +292,20 @@ def process_on_gpu(filename):
 
 # ── Combined Video (Normal + Slow-Mo) ─────────────────────
 
-def compile_combined_on_gpu(filename):
-    """Compile the combined normal + slow-mo highlight on Windows.
+def compile_combined_on_gpu(filename, machine):
+    """Compile the combined normal + slow-mo highlight on a GPU machine.
 
     Runs the slow-mo extraction from the raw 240fps source, then
     concatenates with the normal-speed highlights already produced.
     """
     base = os.path.splitext(filename)[0]
-    win_root = AUTO_PIPELINE["windows_project"]
+    host = machine["host"]
+    project = machine["project"]
     slowmo_factor = AUTO_PIPELINE["slowmo_factor"]
     slowmo_fps = AUTO_PIPELINE["slowmo_output_fps"]
     shots_file = f"shots_detected_{base}.json"
 
-    # Build and run a Python one-liner on Windows that calls the new functions
+    # Build and run a Python one-liner that calls the functions
     # in extract_clips.py to produce slow-mo + combined video
     script = (
         "import json, sys; "
@@ -321,21 +326,24 @@ def compile_combined_on_gpu(filename):
     )
 
     ok, output = _run_ssh(
-        f'cd {win_root} && python -c "{script}"',
+        host,
+        f'cd {project} && python -c "{script}"',
         timeout=3600,
     )
     if not ok:
         # Fall back: if slow-mo fails, just use the normal highlights
-        log.warning("Combined video failed, will use normal highlights only for %s", base)
+        log.warning("Combined video failed on %s, will use normal highlights only for %s", host, base)
         return False
 
-    log.info("Combined video compiled for %s", base)
+    log.info("Combined video compiled for %s on %s", base, host)
     return True
 
 
-def transfer_combined_to_mac(filename):
-    """Transfer the combined (or fallback normal) highlight from Windows to Mac."""
+def transfer_to_mac(filename, machine):
+    """Transfer the combined (or fallback normal) highlight from a GPU machine to Mac."""
     base = os.path.splitext(filename)[0]
+    host = machine["host"]
+    project = machine["project"]
     combined_name = f"{base}_combined.mp4"
     normal_name = f"{base}_all_highlights.mp4"
 
@@ -343,15 +351,15 @@ def transfer_combined_to_mac(filename):
     os.makedirs(HIGHLIGHTS_DIR, exist_ok=True)
 
     # Try combined first, fall back to normal highlights
-    if _scp_from_windows(f"highlights/{combined_name}", local_combined):
+    if _scp_from(host, project, f"highlights/{combined_name}", local_combined):
         return local_combined
 
-    log.warning("Combined not found, trying normal highlights for %s", base)
+    log.warning("Combined not found on %s, trying normal highlights for %s", host, base)
     local_normal = os.path.join(HIGHLIGHTS_DIR, normal_name)
-    if _scp_from_windows(f"highlights/{normal_name}", local_normal):
+    if _scp_from(host, project, f"highlights/{normal_name}", local_normal):
         return local_normal
 
-    log.error("No highlight video found on Windows for %s", base)
+    log.error("No highlight video found on %s for %s", host, base)
     return None
 
 
@@ -382,14 +390,15 @@ def upload_to_youtube(video_path, creation_date, video_number):
 
 # ── Main Loop ──────────────────────────────────────────────
 
-def process_single_video(asset, state):
+def process_single_video(asset, state, machine):
     """Process one video through the full pipeline. Returns youtube URL or None."""
     filename = asset.filename
     base = os.path.splitext(filename)[0]
     asset_id = str(asset.id)
+    host = machine["host"]
 
     log.info("=" * 60)
-    log.info("Processing: %s", filename)
+    log.info("Processing: %s on %s", filename, host)
     log.info("=" * 60)
 
     # 1. Download from iCloud
@@ -398,14 +407,14 @@ def process_single_video(asset, state):
         return None
 
     # 2. GPU pipeline: preprocess -> poses -> detect -> clips
-    if not process_on_gpu(filename):
+    if not process_on_gpu(filename, machine):
         return None
 
     # 3. Compile combined normal + slow-mo highlight on GPU
-    compile_combined_on_gpu(filename)
+    compile_combined_on_gpu(filename, machine)
 
     # 4. Transfer highlight back to Mac
-    highlight_path = transfer_combined_to_mac(filename)
+    highlight_path = transfer_to_mac(filename, machine)
     if not highlight_path:
         return None
 
@@ -423,11 +432,12 @@ def process_single_video(asset, state):
         "date": date_str,
         "youtube_url": youtube_url,
         "processed_at": datetime.now().isoformat(),
+        "machine": host,
     }
     state.setdefault("daily_counts", {})[date_str] = count
     save_state(state)
 
-    log.info("Finished processing %s", filename)
+    log.info("Finished processing %s on %s", filename, host)
     return youtube_url
 
 
@@ -436,9 +446,11 @@ def main_loop(once=False, debug=False):
     setup_logging(debug=debug)
     album_name = AUTO_PIPELINE["album"]
     poll_interval = AUTO_PIPELINE["poll_interval"]
+    machines = AUTO_PIPELINE["gpu_machines"]
 
-    log.info("Auto pipeline started (album=%s, poll=%ds, once=%s)",
-             album_name, poll_interval, once)
+    log.info("Auto pipeline started (album=%s, poll=%ds, once=%s, machines=%s)",
+             album_name, poll_interval, once,
+             [m["host"] for m in machines])
 
     api = authenticate()
     state = load_state()
@@ -448,13 +460,39 @@ def main_loop(once=False, debug=False):
             new_videos = poll_icloud(api, album_name, state)
 
             if new_videos:
-                log.info("Found %d new video(s) to process", len(new_videos))
-                for asset in new_videos:
-                    try:
-                        process_single_video(asset, state)
-                    except Exception as e:
-                        log.error("Failed to process %s: %s", asset.filename, e,
-                                  exc_info=True)
+                log.info("Found %d new video(s) to process across %d machine(s)",
+                         len(new_videos), len(machines))
+
+                if len(new_videos) > 1 and len(machines) > 1:
+                    # Parallel: distribute videos across machines
+                    log.info("Dispatching %d videos in parallel", len(new_videos))
+                    with ThreadPoolExecutor(max_workers=len(machines)) as pool:
+                        futures = {}
+                        for i, asset in enumerate(new_videos):
+                            machine = machines[i % len(machines)]
+                            fut = pool.submit(process_single_video, asset, state, machine)
+                            futures[fut] = (asset, machine)
+                        for fut in as_completed(futures):
+                            asset, machine = futures[fut]
+                            try:
+                                url = fut.result()
+                                if url:
+                                    log.info("Completed %s on %s -> %s",
+                                             asset.filename, machine["host"], url)
+                            except Exception as e:
+                                log.error("Failed to process %s on %s: %s",
+                                          asset.filename, machine["host"], e,
+                                          exc_info=True)
+                else:
+                    # Sequential: single video or single machine
+                    for i, asset in enumerate(new_videos):
+                        machine = machines[i % len(machines)]
+                        try:
+                            process_single_video(asset, state, machine)
+                        except Exception as e:
+                            log.error("Failed to process %s on %s: %s",
+                                      asset.filename, machine["host"], e,
+                                      exc_info=True)
             else:
                 log.info("No new videos found.")
 
