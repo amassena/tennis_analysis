@@ -433,17 +433,46 @@ def upload_to_youtube(video_path, creation_date, video_number):
 # ── iMessage Notification ─────────────────────────────────
 
 def send_imessage(recipient, message):
-    """Send an iMessage notification via macOS Messages app."""
+    """Send an iMessage notification. Tries Shortcuts CLI first (works when
+    screen is locked), falls back to osascript (works when screen is awake)."""
+    # Method 1: Shortcuts CLI — reliable even when screen is locked
     try:
-        escaped = message.replace('"', '\\"')
-        subprocess.run(
-            ["osascript", "-e",
-             f'tell application "Messages" to send "{escaped}" to buddy "{recipient}"'],
-            capture_output=True, text=True, timeout=15,
+        result = subprocess.run(
+            ["shortcuts", "run", "Send Tennis Notification"],
+            input=message,
+            capture_output=True, text=True, timeout=30,
         )
-        log.info("iMessage sent to %s", recipient)
+        if result.returncode == 0:
+            log.info("iMessage sent via Shortcuts to %s", recipient)
+            return
+        log.warning("Shortcuts failed (rc=%d): %s", result.returncode, result.stderr.strip())
+    except subprocess.TimeoutExpired:
+        log.warning("Shortcuts timed out")
     except Exception as e:
-        log.warning("Failed to send iMessage: %s", e)
+        log.warning("Shortcuts error: %s", e)
+
+    # Method 2: osascript with pre-launch (fallback for when screen is awake)
+    try:
+        subprocess.run(["open", "-gj", "-a", "Messages"], timeout=10)
+        time.sleep(3)
+        escaped = message.replace('"', '\\"')
+        script = (
+            'tell application "Messages"\n'
+            '    activate\n'
+            '    delay 2\n'
+            f'    send "{escaped}" to buddy "{recipient}"\n'
+            'end tell'
+        )
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            log.info("iMessage sent via osascript to %s", recipient)
+        else:
+            log.warning("osascript failed (rc=%d): %s", result.returncode, result.stderr.strip())
+    except Exception as e:
+        log.warning("Failed to send iMessage via osascript: %s", e)
 
 
 def notify_imessage(message):
