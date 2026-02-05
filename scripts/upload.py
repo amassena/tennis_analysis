@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.settings import HIGHLIGHTS_DIR, ICLOUD, PROJECT_ROOT
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = ["https://www.googleapis.com/auth/youtube"]
 YOUTUBE_API_SERVICE = "youtube"
 YOUTUBE_API_VERSION = "v3"
 CLIENT_SECRETS_FILE = os.path.join(PROJECT_ROOT, "config", "client_secrets.json")
