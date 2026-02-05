@@ -446,6 +446,12 @@ def send_imessage(recipient, message):
         log.warning("Failed to send iMessage: %s", e)
 
 
+def notify_imessage(message):
+    """Send an iMessage to all configured recipients."""
+    for phone in NOTIFICATIONS.get("imessage", []):
+        send_imessage(phone, message)
+
+
 def send_email(recipients, subject, body):
     """Send an email notification via SMTP (e.g. Gmail)."""
     import smtplib
@@ -775,6 +781,8 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     log.info("Processing: %s on %s (ordering=%s)", filename, host, ordering)
     log.info("=" * 60)
 
+    notify_imessage(f"New tennis video detected: {filename}\nProcessing on {host} ({ordering} order)")
+
     # 1. Download from iCloud
     local_path = download_video(asset, RAW_DIR)
     if not local_path:
@@ -799,6 +807,11 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     count = daily_counts.get(date_str, 0) + 1
 
     youtube_url = upload_to_youtube(highlight_path, creation_date, count)
+
+    if youtube_url:
+        notify_imessage(f"Tennis highlights uploaded: {filename}\n{youtube_url}")
+    else:
+        notify_imessage(f"Tennis highlights upload failed: {filename}")
 
     # 6. Update state
     state.setdefault("processed", {})[asset_id] = {
