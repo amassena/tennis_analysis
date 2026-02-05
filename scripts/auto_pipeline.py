@@ -430,55 +430,25 @@ def upload_to_youtube(video_path, creation_date, video_number):
     return url
 
 
-# ── iMessage Notification ─────────────────────────────────
+# ── Push Notification (ntfy.sh) ───────────────────────────
 
-def send_imessage(recipient, message):
-    """Send an iMessage notification. Tries Shortcuts CLI first (works when
-    screen is locked), falls back to osascript (works when screen is awake)."""
-    # Method 1: Shortcuts CLI — reliable even when screen is locked
+def notify_push(message, title=None):
+    """Send a push notification via ntfy.sh."""
+    topic = NOTIFICATIONS.get("ntfy_topic")
+    if not topic:
+        log.warning("No ntfy_topic configured, skipping push notification")
+        return
     try:
-        result = subprocess.run(
-            ["shortcuts", "run", "Send Tennis Notification"],
-            input=message,
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode == 0:
-            log.info("iMessage sent via Shortcuts to %s", recipient)
-            return
-        log.warning("Shortcuts failed (rc=%d): %s", result.returncode, result.stderr.strip())
-    except subprocess.TimeoutExpired:
-        log.warning("Shortcuts timed out")
+        import urllib.request
+        url = f"https://ntfy.sh/{topic}"
+        data = message.encode("utf-8")
+        req = urllib.request.Request(url, data=data, method="POST")
+        if title:
+            req.add_header("Title", title)
+        urllib.request.urlopen(req, timeout=10)
+        log.info("Push notification sent to ntfy.sh/%s", topic)
     except Exception as e:
-        log.warning("Shortcuts error: %s", e)
-
-    # Method 2: osascript with pre-launch (fallback for when screen is awake)
-    try:
-        subprocess.run(["open", "-gj", "-a", "Messages"], timeout=10)
-        time.sleep(3)
-        escaped = message.replace('"', '\\"')
-        script = (
-            'tell application "Messages"\n'
-            '    activate\n'
-            '    delay 2\n'
-            f'    send "{escaped}" to buddy "{recipient}"\n'
-            'end tell'
-        )
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode == 0:
-            log.info("iMessage sent via osascript to %s", recipient)
-        else:
-            log.warning("osascript failed (rc=%d): %s", result.returncode, result.stderr.strip())
-    except Exception as e:
-        log.warning("Failed to send iMessage via osascript: %s", e)
-
-
-def notify_imessage(message):
-    """Send an iMessage to all configured recipients."""
-    for phone in NOTIFICATIONS.get("imessage", []):
-        send_imessage(phone, message)
+        log.warning("Failed to send push notification: %s", e)
 
 
 def send_email(recipients, subject, body):
@@ -518,9 +488,8 @@ def notify_complete(results):
             lines.append(f"  {filename} -> FAILED")
     summary = "\n".join(lines)
 
-    # iMessage
-    for phone in NOTIFICATIONS.get("imessage", []):
-        send_imessage(phone, summary)
+    # Push notification
+    notify_push(summary, title="Tennis highlights ready")
 
     # Email
     email_cfg = NOTIFICATIONS.get("email", {})
@@ -810,7 +779,7 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     log.info("Processing: %s on %s (ordering=%s)", filename, host, ordering)
     log.info("=" * 60)
 
-    notify_imessage(f"New tennis video detected: {filename}\nProcessing on {host} ({ordering} order)")
+    notify_push(f"New tennis video detected: {filename}\nProcessing on {host} ({ordering} order)")
 
     # 1. Download from iCloud
     local_path = download_video(asset, RAW_DIR)
@@ -838,9 +807,9 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     youtube_url = upload_to_youtube(highlight_path, creation_date, count)
 
     if youtube_url:
-        notify_imessage(f"Tennis highlights uploaded: {filename}\n{youtube_url}")
+        notify_push(f"Tennis highlights uploaded: {filename}\n{youtube_url}")
     else:
-        notify_imessage(f"Tennis highlights upload failed: {filename}")
+        notify_push(f"Tennis highlights upload failed: {filename}")
 
     # 6. Update state
     state.setdefault("processed", {})[asset_id] = {
