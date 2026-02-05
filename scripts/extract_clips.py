@@ -19,6 +19,35 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import PREPROCESSED_DIR, CLIPS_DIR, HIGHLIGHTS_DIR, PROJECT_ROOT
 
 
+def merge_close_segments(segments, max_gap=1.0):
+    """Merge segments separated by less than max_gap seconds.
+
+    Prevents padding overlap when clips are concatenated into highlights.
+    The merged segment uses the shot_type of the longest sub-segment.
+    """
+    if not segments:
+        return []
+
+    merged = [segments[0].copy()]
+    for seg in segments[1:]:
+        gap = seg["start_time"] - merged[-1]["end_time"]
+        if gap < max_gap:
+            prev_dur = merged[-1]["end_time"] - merged[-1]["start_time"]
+            curr_dur = seg["end_time"] - seg["start_time"]
+            if curr_dur > prev_dur:
+                merged[-1]["shot_type"] = seg["shot_type"]
+            merged[-1]["end_time"] = seg["end_time"]
+            total_dur = prev_dur + curr_dur
+            merged[-1]["avg_confidence"] = (
+                merged[-1]["avg_confidence"] * prev_dur +
+                seg["avg_confidence"] * curr_dur
+            ) / total_dur
+        else:
+            merged.append(seg.copy())
+
+    return merged
+
+
 def find_video(video_name):
     """Find the preprocessed video file."""
     for ext in [".mp4", ".mov"]:
@@ -112,16 +141,41 @@ def compile_highlights(clip_paths, output_path):
 
 
 def compile_slowmo_highlights(raw_video_path, segments, output_path,
-                              slowmo_factor=4.0, output_fps=60):
+                              slowmo_factor=4.0, output_fps=60,
+                              min_confidence=0.7, min_duration=0.5,
+                              max_duration=10.0, merge_gap=3.0):
     """Extract non-neutral segments from 240fps raw video at slow-mo speed.
 
-    Each segment is extracted with setpts=N*PTS to stretch timestamps,
-    producing smooth slow-motion at the specified output fps.
+    Filters segments by confidence/duration, merges close segments to
+    eliminate duplicates, groups by shot type, then extracts with
+    setpts=N*PTS to produce smooth slow-motion at the specified output fps.
     """
     non_neutral = [s for s in segments if s["shot_type"] != "neutral"]
     if not non_neutral:
         print("  No non-neutral segments for slow-mo.")
         return False
+
+    # Apply same filters as normal highlights
+    filtered = [s for s in non_neutral
+                if s["avg_confidence"] >= min_confidence
+                and min_duration <= (s["end_time"] - s["start_time"]) <= max_duration]
+    if not filtered:
+        print("  No segments passed filters for slow-mo.")
+        return False
+
+    merged = merge_close_segments(filtered, max_gap=merge_gap)
+
+    # Group by type: serve, forehand, backhand
+    by_type = {}
+    for s in merged:
+        by_type.setdefault(s["shot_type"], []).append(s)
+
+    ordered = []
+    for shot_type in ["serve", "forehand", "backhand"]:
+        ordered.extend(by_type.get(shot_type, []))
+
+    print(f"  Slow-mo: {len(non_neutral)} raw -> {len(filtered)} filtered "
+          f"-> {len(ordered)} merged (grouped by type)")
 
     if get_nvenc():
         codec_args = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20"]
@@ -131,7 +185,7 @@ def compile_slowmo_highlights(raw_video_path, segments, output_path,
     temp_clips = []
     temp_dir = os.path.dirname(output_path)
 
-    for i, seg in enumerate(non_neutral):
+    for i, seg in enumerate(ordered):
         start = seg["start_time"]
         duration = seg["end_time"] - seg["start_time"]
         # Add padding
@@ -270,7 +324,13 @@ def main():
             continue
         filtered.append(seg)
 
-    print(f"After filtering: {len(filtered)} clips to extract")
+    # Merge close segments to eliminate near-duplicate clips in highlights
+    pre_merge = len(filtered)
+    filtered = merge_close_segments(filtered, max_gap=3.0)
+    if len(filtered) < pre_merge:
+        print(f"After filtering: {pre_merge} clips, merged to {len(filtered)}")
+    else:
+        print(f"After filtering: {len(filtered)} clips to extract")
 
     # Count by type
     type_counts = {}
