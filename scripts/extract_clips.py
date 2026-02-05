@@ -143,12 +143,16 @@ def compile_highlights(clip_paths, output_path):
 def compile_slowmo_highlights(raw_video_path, segments, output_path,
                               slowmo_factor=4.0, output_fps=60,
                               min_confidence=0.7, min_duration=0.5,
-                              max_duration=10.0, merge_gap=3.0):
+                              max_duration=10.0, merge_gap=3.0,
+                              group_by_type=False):
     """Extract non-neutral segments from 240fps raw video at slow-mo speed.
 
     Filters segments by confidence/duration, merges close segments to
-    eliminate duplicates, groups by shot type, then extracts with
-    setpts=N*PTS to produce smooth slow-motion at the specified output fps.
+    eliminate duplicates, then extracts with setpts=N*PTS to produce
+    smooth slow-motion at the specified output fps.
+
+    When group_by_type=True, orders clips by shot type (serve, forehand,
+    backhand). When False, keeps chronological order.
     """
     non_neutral = [s for s in segments if s["shot_type"] != "neutral"]
     if not non_neutral:
@@ -165,17 +169,22 @@ def compile_slowmo_highlights(raw_video_path, segments, output_path,
 
     merged = merge_close_segments(filtered, max_gap=merge_gap)
 
-    # Group by type: serve, forehand, backhand
-    by_type = {}
-    for s in merged:
-        by_type.setdefault(s["shot_type"], []).append(s)
-
-    ordered = []
-    for shot_type in ["serve", "forehand", "backhand"]:
-        ordered.extend(by_type.get(shot_type, []))
+    if group_by_type:
+        # Group by type: serve, forehand, backhand
+        by_type = {}
+        for s in merged:
+            by_type.setdefault(s["shot_type"], []).append(s)
+        ordered = []
+        for shot_type in ["serve", "forehand", "backhand"]:
+            ordered.extend(by_type.get(shot_type, []))
+        order_label = "grouped by type"
+    else:
+        # Chronological order (already sorted by time from merge)
+        ordered = [s for s in merged if s["shot_type"] != "neutral"]
+        order_label = "chronological"
 
     print(f"  Slow-mo: {len(non_neutral)} raw -> {len(filtered)} filtered "
-          f"-> {len(ordered)} merged (grouped by type)")
+          f"-> {len(ordered)} merged ({order_label})")
 
     if get_nvenc():
         codec_args = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20"]
@@ -279,6 +288,8 @@ def main():
                         help="Include neutral segments")
     parser.add_argument("--highlights", action="store_true",
                         help="Also compile per-type highlight reels")
+    parser.add_argument("--group-by-type", action="store_true",
+                        help="Group clips by shot type instead of chronological order")
     args = parser.parse_args()
 
     if args.include_neutral:
@@ -351,6 +362,7 @@ def main():
 
     # Extract clips
     extracted = {st: [] for st in type_counts}
+    all_extracted_in_order = []  # (shot_type, path) in chronological order
     counters = {st: 0 for st in type_counts}
 
     for i, seg in enumerate(filtered):
@@ -368,6 +380,7 @@ def main():
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
             print(f"  [{size_mb:.1f} MB]")
             extracted[st].append(output_path)
+            all_extracted_in_order.append((st, output_path))
         else:
             print("  [FAILED]")
 
@@ -399,9 +412,15 @@ def main():
                 print("  [FAILED]")
 
         # All shots combined highlight
-        all_clips = []
-        for st in ["serve", "forehand", "backhand"]:
-            all_clips.extend(extracted.get(st, []))
+        if args.group_by_type:
+            # Group by type: serve, forehand, backhand
+            all_clips = []
+            for st in ["serve", "forehand", "backhand"]:
+                all_clips.extend(extracted.get(st, []))
+        else:
+            # Chronological order (already in time order from extraction)
+            all_clips = [p for st, p in all_extracted_in_order
+                         if st != "neutral"]
 
         if all_clips:
             combined_path = os.path.join(HIGHLIGHTS_DIR, f"{video_name}_all_highlights.mp4")

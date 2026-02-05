@@ -106,10 +106,12 @@ tennis_analysis/
 
 ## Automated Pipeline
 
-Fully automated mode: add videos to a "tennis_training" album on iPhone, and the pipeline downloads, processes, and uploads highlights to YouTube with no manual intervention.
+Fully automated mode: add videos to an iCloud album on iPhone, and the pipeline downloads, processes, and uploads highlights to YouTube with no manual intervention. Two albums control clip ordering:
+- **"Tennis Videos"**: chronological order (see flow of play)
+- **"Tennis Videos Group By Shot Type"**: grouped by serve, forehand, backhand
 
 ```
-iPhone -> add video to "tennis_training" album -> iCloud sync
+iPhone -> add video to album -> iCloud sync
   -> Mac polls iCloud album (5 min interval)
   -> Downloads new videos to raw/
   -> Assigns each video to a GPU machine (round-robin across windows/tmassena)
@@ -125,6 +127,12 @@ iPhone -> add video to "tennis_training" album -> iCloud sync
 - Daemon mode: `python scripts/auto_pipeline.py` (polls every 5 minutes)
 - Single pass: `python scripts/auto_pipeline.py --once`
 - Debug (dumps iCloud field names): `python scripts/auto_pipeline.py --debug`
+
+**Launchd service** (auto-starts on login, restarts on crash):
+- Start: `launchctl load ~/Library/LaunchAgents/com.tennis-analysis.auto-pipeline.plist`
+- Stop: `launchctl unload ~/Library/LaunchAgents/com.tennis-analysis.auto-pipeline.plist`
+- Status: `launchctl list | grep tennis`
+- Logs: `pipeline.log` and `pipeline_error.log` in project root
 
 **State tracking:** `pipeline_state.json` records processed asset IDs, YouTube URLs, and daily video counts.
 

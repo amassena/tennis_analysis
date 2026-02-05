@@ -152,6 +152,28 @@ def poll_icloud(api, album_name, state):
     return new_videos
 
 
+def poll_all_albums(api, state):
+    """Poll all configured albums. Returns list of (asset, ordering) tuples."""
+    albums_config = AUTO_PIPELINE.get("albums", {})
+    if not albums_config:
+        # Fall back to single album setting
+        album_name = AUTO_PIPELINE.get("album", "Tennis Videos")
+        albums_config = {album_name: "chronological"}
+
+    all_new = []
+    seen_ids = set()
+    for album_name, ordering in albums_config.items():
+        new_videos = poll_icloud(api, album_name, state)
+        for asset in new_videos:
+            asset_id = str(asset.id)
+            if asset_id not in seen_ids:
+                seen_ids.add(asset_id)
+                all_new.append((asset, ordering))
+                log.info("  Album '%s' -> %s ordering", album_name, ordering)
+
+    return all_new
+
+
 # ── Download ───────────────────────────────────────────────
 
 def format_size(num_bytes):
@@ -248,7 +270,7 @@ def _scp_from(host, project, remote_relative, local_path):
 
 # ── GPU Processing ─────────────────────────────────────────
 
-def process_on_gpu(filename, machine):
+def process_on_gpu(filename, machine, ordering="chronological"):
     """Run the full pipeline on a GPU machine via SSH: preprocess, poses, detect, clips."""
     base = os.path.splitext(filename)[0]
     host = machine["host"]
@@ -293,9 +315,12 @@ def process_on_gpu(filename, machine):
         return False
 
     # 5. Extract clips + highlights
+    extract_cmd = f"cd {project} && {py} scripts/extract_clips.py -i {shots_file} --highlights"
+    if ordering == "type":
+        extract_cmd += " --group-by-type"
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && {py} scripts/extract_clips.py -i {shots_file} --highlights",
+        extract_cmd,
         timeout=3600,
     )
     if not ok:
@@ -307,7 +332,7 @@ def process_on_gpu(filename, machine):
 
 # ── Combined Video (Normal + Slow-Mo) ─────────────────────
 
-def compile_combined_on_gpu(filename, machine):
+def compile_combined_on_gpu(filename, machine, ordering="chronological"):
     """Compile the combined normal + slow-mo highlight on a GPU machine.
 
     Runs the slow-mo extraction from the raw 240fps source, then
@@ -318,6 +343,7 @@ def compile_combined_on_gpu(filename, machine):
     project = machine["project"]
     slowmo_factor = AUTO_PIPELINE["slowmo_factor"]
     slowmo_fps = AUTO_PIPELINE["slowmo_output_fps"]
+    group_by_type = "True" if ordering == "type" else "False"
     shots_file = f"shots_detected_{base}.json"
 
     # Build and run a Python one-liner that calls the functions
@@ -333,7 +359,7 @@ def compile_combined_on_gpu(filename, machine):
         f"slowmo_path = os.path.join(HIGHLIGHTS_DIR, '{base}_slowmo_highlights.mp4'); "
         f"normal_path = os.path.join(HIGHLIGHTS_DIR, '{base}_all_highlights.mp4'); "
         f"combined_path = os.path.join(HIGHLIGHTS_DIR, '{base}_combined.mp4'); "
-        f"ok1 = compile_slowmo_highlights(raw_path, data['segments'], slowmo_path, {slowmo_factor}, {slowmo_fps}); "
+        f"ok1 = compile_slowmo_highlights(raw_path, data['segments'], slowmo_path, {slowmo_factor}, {slowmo_fps}, group_by_type={group_by_type}); "
         "print('Slow-mo:', ok1); "
         "ok2 = compile_combined_video(normal_path, slowmo_path, combined_path) if ok1 else False; "
         "print('Combined:', ok2); "
@@ -488,10 +514,13 @@ def preflight():
         hosts = [m["host"] for m in machines]
         checks.append(("Config: gpu_machines", "PASS", f"{len(machines)} machine(s): {hosts}"))
 
-    if not AUTO_PIPELINE.get("album"):
-        checks.append(("Config: album", "FAIL", "No album name configured"))
+    albums = AUTO_PIPELINE.get("albums", {})
+    if not albums and not AUTO_PIPELINE.get("album"):
+        checks.append(("Config: albums", "FAIL", "No albums configured"))
     else:
-        checks.append(("Config: album", "PASS", AUTO_PIPELINE["album"]))
+        album_names = list(albums.keys()) if albums else [AUTO_PIPELINE["album"]]
+        checks.append(("Config: albums", "PASS",
+                       f"{len(album_names)} album(s): {album_names}"))
 
     # ── 2. iCloud credentials ─────────────────────────────
     env_file = ICLOUD.get("env_file", "")
@@ -514,16 +543,19 @@ def preflight():
             checks.append(("iCloud: auth", "FAIL", "Authentication returned None (2FA needed?)"))
         else:
             checks.append(("iCloud: auth", "PASS", "Authenticated"))
-            # Check album exists
-            try:
-                album = api.photos.albums[AUTO_PIPELINE["album"]]
-                count = sum(1 for a in album if a.item_type == "movie")
-                checks.append(("iCloud: album", "PASS",
-                               f"'{AUTO_PIPELINE['album']}' found ({count} video(s))"))
-            except KeyError:
-                available = list(api.photos.albums)[:10]
-                checks.append(("iCloud: album", "FAIL",
-                               f"'{AUTO_PIPELINE['album']}' not found. Available: {available}"))
+            # Check all configured albums exist
+            album_names = list(albums.keys()) if albums else [AUTO_PIPELINE.get("album", "Tennis Videos")]
+            for aname in album_names:
+                try:
+                    alb = api.photos.albums[aname]
+                    count = sum(1 for a in alb if a.item_type == "movie")
+                    ordering = albums.get(aname, "chronological")
+                    checks.append((f"iCloud: album '{aname}'", "PASS",
+                                   f"{count} video(s), ordering={ordering}"))
+                except KeyError:
+                    available = list(api.photos.albums)[:10]
+                    checks.append((f"iCloud: album '{aname}'", "FAIL",
+                                   f"Not found. Available: {available}"))
     except Exception as e:
         checks.append(("iCloud: auth", "FAIL", str(e)))
 
@@ -732,7 +764,7 @@ def preflight():
 
 # ── Main Loop ──────────────────────────────────────────────
 
-def process_single_video(asset, state, machine):
+def process_single_video(asset, state, machine, ordering="chronological"):
     """Process one video through the full pipeline. Returns youtube URL or None."""
     filename = asset.filename
     base = os.path.splitext(filename)[0]
@@ -740,7 +772,7 @@ def process_single_video(asset, state, machine):
     host = machine["host"]
 
     log.info("=" * 60)
-    log.info("Processing: %s on %s", filename, host)
+    log.info("Processing: %s on %s (ordering=%s)", filename, host, ordering)
     log.info("=" * 60)
 
     # 1. Download from iCloud
@@ -749,11 +781,11 @@ def process_single_video(asset, state, machine):
         return None
 
     # 2. GPU pipeline: preprocess -> poses -> detect -> clips
-    if not process_on_gpu(filename, machine):
+    if not process_on_gpu(filename, machine, ordering=ordering):
         return None
 
     # 3. Compile combined normal + slow-mo highlight on GPU
-    compile_combined_on_gpu(filename, machine)
+    compile_combined_on_gpu(filename, machine, ordering=ordering)
 
     # 4. Transfer highlight back to Mac
     highlight_path = transfer_to_mac(filename, machine)
@@ -786,12 +818,13 @@ def process_single_video(asset, state, machine):
 def main_loop(once=False, debug=False):
     """Main daemon loop: poll iCloud, process new videos, upload."""
     setup_logging(debug=debug)
-    album_name = AUTO_PIPELINE["album"]
+    albums = AUTO_PIPELINE.get("albums", {})
+    album_names = list(albums.keys()) if albums else [AUTO_PIPELINE.get("album", "Tennis Videos")]
     poll_interval = AUTO_PIPELINE["poll_interval"]
     machines = AUTO_PIPELINE["gpu_machines"]
 
-    log.info("Auto pipeline started (album=%s, poll=%ds, once=%s, machines=%s)",
-             album_name, poll_interval, once,
+    log.info("Auto pipeline started (albums=%s, poll=%ds, once=%s, machines=%s)",
+             album_names, poll_interval, once,
              [m["host"] for m in machines])
 
     api = authenticate()
@@ -799,7 +832,7 @@ def main_loop(once=False, debug=False):
 
     while True:
         try:
-            new_videos = poll_icloud(api, album_name, state)
+            new_videos = poll_all_albums(api, state)
 
             if new_videos:
                 log.info("Found %d new video(s) to process across %d machine(s)",
@@ -812,9 +845,10 @@ def main_loop(once=False, debug=False):
                     log.info("Dispatching %d videos in parallel", len(new_videos))
                     with ThreadPoolExecutor(max_workers=len(machines)) as pool:
                         futures = {}
-                        for i, asset in enumerate(new_videos):
+                        for i, (asset, ordering) in enumerate(new_videos):
                             machine = machines[i % len(machines)]
-                            fut = pool.submit(process_single_video, asset, state, machine)
+                            fut = pool.submit(process_single_video, asset, state,
+                                              machine, ordering=ordering)
                             futures[fut] = (asset, machine)
                         for fut in as_completed(futures):
                             asset, machine = futures[fut]
@@ -831,10 +865,11 @@ def main_loop(once=False, debug=False):
                                           exc_info=True)
                 else:
                     # Sequential: single video or single machine
-                    for i, asset in enumerate(new_videos):
+                    for i, (asset, ordering) in enumerate(new_videos):
                         machine = machines[i % len(machines)]
                         try:
-                            url = process_single_video(asset, state, machine)
+                            url = process_single_video(asset, state, machine,
+                                                       ordering=ordering)
                             results.append((asset.filename, url))
                         except Exception as e:
                             results.append((asset.filename, None))

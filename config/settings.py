@@ -65,7 +65,11 @@ ICLOUD = {
 
 # ── Automated pipeline ──────────────────────────────────────
 AUTO_PIPELINE = {
-    "album": "Tennis Videos",  # iCloud Photos album to watch for new videos
+    "album": "Tennis Videos",  # default album (chronological ordering)
+    "albums": {                # album name -> shot ordering
+        "Tennis Videos": "chronological",
+        "Tennis Videos Group By Shot Type": "type",
+    },
     "poll_interval": 300,        # seconds between iCloud checks
     "state_file": os.path.join(PROJECT_ROOT, "pipeline_state.json"),
     "slowmo_factor": 4.0,       # setpts multiplier (4.0 = 0.25x speed)
