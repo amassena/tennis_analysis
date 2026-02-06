@@ -19,6 +19,7 @@ import time
 from typing import List, NamedTuple, Optional
 
 import cv2
+import numpy as np
 
 # Add project root so config is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,9 +31,9 @@ from scripts.video_metadata import load_video_metadata, save_video_metadata
 
 
 class Mark(NamedTuple):
+    """A single-frame mark at ball contact point."""
     shot_type: str
-    start_frame: int
-    end_frame: int
+    frame: int
 
 
 # Shot-type colors (BGR)
@@ -43,33 +44,26 @@ SHOT_COLORS = {
     "neutral": (180, 180, 180),   # gray
 }
 
-SPEED_LEVELS = [0.25, 0.5, 1.0, 2.0, 4.0]
+SPEED_LEVELS = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
 
 HELP_TEXT = [
-    "=== Controls ===",
+    "=== Playback ===",
     "",
-    "Space      Play / Pause",
-    "A          Step back 1 frame",
-    "D          Step forward 1 frame",
-    "Left/Right Jump 5 sec back / forward",
-    "[  /  ]    Jump 5 sec back / forward",
-    "W          Speed up",
-    "E          Slow down",
-    "Click      Click timeline bar to scrub",
+    "Space       Play / Pause",
+    "Up / Down   Speed up / down (while playing)",
+    "Left/Right  Step 1 frame (when paused)",
+    ", / .       Jump 5 sec back / forward",
+    "Click       Scrub timeline",
     "",
-    "F          Start/end forehand mark",
-    "B          Start/end backhand mark",
-    "S          Start/end serve mark",
-    "N          Start/end neutral mark",
-    "Enter      End any active mark",
-    "Escape     Cancel active mark",
-    "U/Ctrl+Z   Undo last mark (repeatable)",
-    "X/Delete   Delete selected mark",
-    "Click seg  Select it, drag edges to resize",
+    "=== Marking ===",
     "",
-    "V          Cycle view angle (camera position)",
-    "H          Toggle this help",
-    "Q          Save CSV and quit",
+    "F / B / S   Create forehand/backhand/serve",
+    "Up / Down   Move mark +/- 1 frame (when paused)",
+    "[ / ]       Jump to prev / next mark",
+    "X           Delete selected mark",
+    "U           Undo last mark",
+    "",
+    "V  View angle   H  Help   Q  Save & quit",
 ]
 
 
@@ -85,16 +79,14 @@ class AppState:
         self.playing = False
         self.speed_idx = 2  # index into SPEED_LEVELS → 1.0x
 
-        # Marking
-        self.marking_type: Optional[str] = None
-        self.marking_start: Optional[int] = None
-
-        # Completed marks
+        # Completed marks (single-frame contact points)
         self.marks: List[Mark] = []
 
-        # Selection and edge-dragging
+        # Selection
         self.selected_mark_idx: Optional[int] = None
-        self.dragging_edge: Optional[str] = None  # 'start', 'end', or None
+
+        # Scrubbing state (for smoother timeline interaction)
+        self.scrubbing = False
 
         # Display
         self.show_help = False
@@ -181,7 +173,7 @@ def draw_text_with_bg(
 
 
 def draw_overlay(frame, state: AppState):
-    """Frame/time info, marking indicator, and per-type mark counts."""
+    """Frame/time info, selection indicator, and per-type mark counts."""
     h, w = frame.shape[:2]
 
     # Top-left: frame info
@@ -197,29 +189,15 @@ def draw_overlay(frame, state: AppState):
     (tw, th), _ = cv2.getTextSize(angle_text, font, 0.55, 1)
     draw_text_with_bg(frame, angle_text, (w - tw - 20, 25), color=(200, 200, 100))
 
-    # Marking indicator
-    if state.marking_type is not None:
-        color = SHOT_COLORS.get(state.marking_type, (255, 255, 255))
-        mark_text = (
-            f"MARKING: {state.marking_type.upper()} from {state.marking_start} "
-            f"({state.timestamp(state.marking_start)})"
-        )
-        draw_text_with_bg(frame, mark_text, (10, 55), color=color)
-
-    # Selection indicator
+    # Selection indicator (single-frame mark)
     if state.selected_mark_idx is not None and state.selected_mark_idx < len(state.marks):
         sel = state.marks[state.selected_mark_idx]
         sel_color = SHOT_COLORS.get(sel.shot_type, (255, 255, 255))
-        if state.dragging_edge:
-            hint = f"dragging {state.dragging_edge}"
-        else:
-            hint = "drag edges to resize, X to delete"
         sel_text = (
-            f"SELECTED: {sel.shot_type.upper()} "
-            f"{sel.start_frame}-{sel.end_frame}  [{hint}]"
+            f"SELECTED: {sel.shot_type.upper()} @ frame {sel.frame} "
+            f"({state.timestamp(sel.frame)})  [arrows to move, F/B/S to retype]"
         )
-        y_pos = 55 if state.marking_type is None else 85
-        draw_text_with_bg(frame, sel_text, (10, y_pos), color=sel_color)
+        draw_text_with_bg(frame, sel_text, (10, 55), color=sel_color)
 
     # Toast message (visible for 2 seconds)
     if state.message and (time.time() - state.message_time) < 2.0:
@@ -238,14 +216,14 @@ def draw_overlay(frame, state: AppState):
         c = counts.get(st, 0)
         stats_parts.append(f"{st[0].upper()}:{c}")
     stats_text = "  ".join(stats_parts) + f"  Total:{len(state.marks)}"
-    draw_text_with_bg(frame, stats_text, (10, h - 50))
+    draw_text_with_bg(frame, stats_text, (10, h - 85))
 
 
 def draw_timeline(frame, state: AppState):
-    """Colored timeline bar with playhead cursor at the bottom 40px."""
+    """Colored timeline bar with marks as vertical ticks and playhead cursor."""
     h, w = frame.shape[:2]
-    bar_y = h - 40
-    bar_h = 30
+    bar_h = 60  # Taller bar for easier clicking
+    bar_y = h - bar_h - 10
     bar_x = 10
     bar_w = w - 20
 
@@ -261,34 +239,22 @@ def draw_timeline(frame, state: AppState):
     if state.total_frames <= 1:
         return
 
-    # Draw marks as colored segments
+    # Draw marks as vertical ticks (single-frame contact points)
     for i, mark in enumerate(state.marks):
-        x1 = bar_x + int(mark.start_frame / (state.total_frames - 1) * bar_w)
-        x2 = bar_x + int(mark.end_frame / (state.total_frames - 1) * bar_w)
-        x2 = max(x2, x1 + 1)
+        mx = bar_x + int(mark.frame / (state.total_frames - 1) * bar_w)
         color = SHOT_COLORS.get(mark.shot_type, (180, 180, 180))
-        cv2.rectangle(frame, (x1, bar_y), (x2, bar_y + bar_h), color, cv2.FILLED)
-        # White outline + edge handles on selected mark
+        thickness = 3 if i == state.selected_mark_idx else 2
+        cv2.line(frame, (mx, bar_y + 2), (mx, bar_y + bar_h - 2), color, thickness)
+        # Highlight selected mark with white outline and triangle
         if i == state.selected_mark_idx:
-            cv2.rectangle(frame, (x1, bar_y), (x2, bar_y + bar_h), (255, 255, 255), 2)
-            # Left handle
-            cv2.rectangle(frame, (x1 - 3, bar_y - 4), (x1 + 3, bar_y + bar_h + 4), (255, 255, 255), cv2.FILLED)
-            # Right handle
-            cv2.rectangle(frame, (x2 - 3, bar_y - 4), (x2 + 3, bar_y + bar_h + 4), (255, 255, 255), cv2.FILLED)
+            # White border around tick
+            cv2.line(frame, (mx, bar_y), (mx, bar_y + bar_h), (255, 255, 255), 5)
+            cv2.line(frame, (mx, bar_y + 2), (mx, bar_y + bar_h - 2), color, 3)
+            # Small triangle above
+            pts = [(mx - 6, bar_y - 8), (mx + 6, bar_y - 8), (mx, bar_y - 2)]
+            cv2.fillPoly(frame, [np.array(pts)], (255, 255, 255))
 
-    # Draw active mark in-progress (blinking style: semi-transparent)
-    if state.marking_type is not None and state.marking_start is not None:
-        x1 = bar_x + int(state.marking_start / (state.total_frames - 1) * bar_w)
-        x2 = bar_x + int(state.current_frame / (state.total_frames - 1) * bar_w)
-        if x2 < x1:
-            x1, x2 = x2, x1
-        x2 = max(x2, x1 + 1)
-        color = SHOT_COLORS.get(state.marking_type, (180, 180, 180))
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (x1, bar_y), (x2, bar_y + bar_h), color, cv2.FILLED)
-        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
-
-    # Playhead cursor
+    # Playhead cursor (thin white line)
     px = bar_x + int(state.current_frame / (state.total_frames - 1) * bar_w)
     cv2.line(frame, (px, bar_y - 2), (px, bar_y + bar_h + 2), (255, 255, 255), 2)
 
@@ -324,53 +290,94 @@ def draw_help_overlay(frame):
 # ── Mark management ──────────────────────────────────────────
 
 
-def start_mark(state: AppState, shot_type: str):
-    """Begin or end marking a segment.
+def set_or_create_mark(state: AppState, shot_type: str):
+    """Set selected mark's type if at same frame, otherwise create new mark.
 
-    If already marking the same type, finalize it.
-    If marking a different type, finalize current and start new.
-    If not marking, start a new mark.
+    If a mark is selected AND we're at its frame, change its shot_type.
+    Otherwise, create a new mark at the current frame.
     """
-    if state.marking_type == shot_type:
-        # Same key pressed again — end the mark
-        end_mark(state)
-    elif state.marking_type is not None:
-        # Different type — end current, start new
-        end_mark(state)
-        state.marking_type = shot_type
-        state.marking_start = state.current_frame
+    # Check if we're at the selected mark's position
+    at_selected = False
+    if state.selected_mark_idx is not None and state.selected_mark_idx < len(state.marks):
+        selected_frame = state.marks[state.selected_mark_idx].frame
+        at_selected = abs(state.current_frame - selected_frame) < 5  # Within 5 frames
+
+    if at_selected:
+        # Change selected mark's type
+        old_mark = state.marks[state.selected_mark_idx]
+        state.marks[state.selected_mark_idx] = Mark(shot_type, old_mark.frame)
+        state.set_message(f"Changed to {shot_type}")
     else:
-        state.marking_type = shot_type
-        state.marking_start = state.current_frame
+        # Create new mark at current frame
+        new_mark = Mark(shot_type, state.current_frame)
+        state.marks.append(new_mark)
+        # Sort marks by frame and select the new one
+        state.marks.sort(key=lambda m: m.frame)
+        state.selected_mark_idx = next(
+            i for i, m in enumerate(state.marks) if m.frame == state.current_frame and m.shot_type == shot_type
+        )
+        state.set_message(f"Created {shot_type} @ {state.current_frame}")
 
 
-def end_mark(state: AppState):
-    """Finalize the active mark and append to marks list."""
-    if state.marking_type is None or state.marking_start is None:
+def move_selected_mark(state: AppState, delta: int):
+    """Move the selected mark by delta frames."""
+    if state.selected_mark_idx is None or state.selected_mark_idx >= len(state.marks):
+        state.set_message("No mark selected")
         return
 
-    start = state.marking_start
-    end = state.current_frame
+    old_mark = state.marks[state.selected_mark_idx]
+    new_frame = max(0, min(state.total_frames - 1, old_mark.frame + delta))
 
-    # Ensure start < end
-    if start > end:
-        start, end = end, start
+    if new_frame == old_mark.frame:
+        return  # No change
 
-    if start == end:
-        # Zero-length mark — discard
-        state.marking_type = None
-        state.marking_start = None
+    state.marks[state.selected_mark_idx] = Mark(old_mark.shot_type, new_frame)
+    # Re-sort marks and update selection index
+    old_type = old_mark.shot_type
+    state.marks.sort(key=lambda m: m.frame)
+    # Find the mark we just moved
+    state.selected_mark_idx = next(
+        i for i, m in enumerate(state.marks) if m.frame == new_frame and m.shot_type == old_type
+    )
+
+
+def jump_to_mark(state: AppState, direction: int, cap):
+    """Jump to the next or previous mark.
+
+    direction: -1 for previous, +1 for next
+    """
+    if not state.marks:
+        state.set_message("No marks")
         return
 
-    state.marks.append(Mark(state.marking_type, start, end))
-    state.marking_type = None
-    state.marking_start = None
-
-
-def cancel_mark(state: AppState):
-    """Discard the in-progress mark."""
-    state.marking_type = None
-    state.marking_start = None
+    if direction > 0:
+        # Find next mark after current frame
+        for i, m in enumerate(state.marks):
+            if m.frame > state.current_frame:
+                state.selected_mark_idx = i
+                state.current_frame = m.frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, m.frame)
+                state.playing = False
+                return
+        # Wrap to first mark
+        state.selected_mark_idx = 0
+        state.current_frame = state.marks[0].frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, state.marks[0].frame)
+        state.playing = False
+    else:
+        # Find previous mark before current frame
+        for i in range(len(state.marks) - 1, -1, -1):
+            if state.marks[i].frame < state.current_frame:
+                state.selected_mark_idx = i
+                state.current_frame = state.marks[i].frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, state.marks[i].frame)
+                state.playing = False
+                return
+        # Wrap to last mark
+        state.selected_mark_idx = len(state.marks) - 1
+        state.current_frame = state.marks[-1].frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, state.marks[-1].frame)
+        state.playing = False
 
 
 def undo_last_mark(state: AppState):
@@ -381,9 +388,7 @@ def undo_last_mark(state: AppState):
         if state.selected_mark_idx is not None:
             if state.selected_mark_idx >= len(state.marks):
                 state.selected_mark_idx = None
-        state.set_message(
-            f"Undid {removed.shot_type} {removed.start_frame}-{removed.end_frame}"
-        )
+        state.set_message(f"Undid {removed.shot_type} @ {removed.frame}")
     else:
         state.set_message("Nothing to undo")
 
@@ -392,10 +397,10 @@ def delete_selected_mark(state: AppState):
     """Delete the currently selected mark."""
     if state.selected_mark_idx is not None and state.selected_mark_idx < len(state.marks):
         removed = state.marks.pop(state.selected_mark_idx)
-        state.set_message(
-            f"Deleted {removed.shot_type} {removed.start_frame}-{removed.end_frame}"
-        )
-        state.selected_mark_idx = None
+        state.set_message(f"Deleted {removed.shot_type} @ {removed.frame}")
+        # Adjust selection
+        if state.selected_mark_idx >= len(state.marks):
+            state.selected_mark_idx = len(state.marks) - 1 if state.marks else None
     else:
         state.set_message("No mark selected")
 
@@ -404,37 +409,51 @@ def delete_selected_mark(state: AppState):
 
 
 def write_csv(marks: List[Mark], output_path: str):
-    """Write marks to CSV compatible with label_clips.py --csv."""
+    """Write marks to CSV (single-frame contact points)."""
     with open(output_path, "w") as f:
-        f.write("# Labels from visual_label.py\n")
-        f.write("# shot_type, start_frame, end_frame\n")
-        for mark in marks:
-            f.write(f"{mark.shot_type},{mark.start_frame},{mark.end_frame}\n")
+        f.write("# Labels from visual_label.py (v2: single-frame contact points)\n")
+        f.write("# shot_type, frame\n")
+        for mark in sorted(marks, key=lambda m: m.frame):
+            f.write(f"{mark.shot_type},{mark.frame}\n")
 
 
 # ── CSV / pose loading ───────────────────────────────────────
 
 
 def load_marks_from_csv(csv_path: str) -> List[Mark]:
-    """Load marks from a CSV file (same format as output)."""
+    """Load marks from a CSV file.
+
+    Supports both formats:
+    - New (v2): shot_type, frame
+    - Old (v1): shot_type, start_frame, end_frame (uses midpoint as contact)
+    """
     marks = []
     with open(csv_path, "r") as f:
         reader = csv.reader(f)
         for row in reader:
             if not row or row[0].strip().startswith("#"):
                 continue
-            if len(row) < 3:
-                continue
             shot_type = row[0].strip().lower()
             if shot_type not in SHOT_TYPES:
                 continue
             try:
-                start = int(row[1].strip())
-                end = int(row[2].strip())
+                if len(row) == 2:
+                    # New v2 format: shot_type, frame
+                    frame = int(row[1].strip())
+                    if frame >= 0:
+                        marks.append(Mark(shot_type, frame))
+                elif len(row) >= 3:
+                    # Old v1 format: shot_type, start_frame, end_frame
+                    # Use midpoint as contact frame
+                    start = int(row[1].strip())
+                    end = int(row[2].strip())
+                    if 0 <= start <= end:
+                        mid = (start + end) // 2
+                        marks.append(Mark(shot_type, mid))
             except ValueError:
                 continue
-            if 0 <= start < end:
-                marks.append(Mark(shot_type, start, end))
+    # Sort by frame
+    marks.sort(key=lambda m: m.frame)
     return marks
 
 
@@ -597,14 +616,10 @@ def detect_shots(pose_path: str, video_path: Optional[str] = None, shot_type: st
             for s, e in clusters
         ]
 
-    # Window each contact: 1 second before, 1 second after
-    # This gives ~2 second segments which comfortably contain a full shot motion
-    buf = int(1 * fps)
+    # Return contact points as single-frame marks
     marks = []
     for peak in contacts:
-        ws = max(0, peak - buf)
-        we = min(total - 1, peak + buf)
-        marks.append(Mark(shot_type, ws, we))
+        marks.append(Mark(shot_type, peak))
 
     return marks
 
@@ -640,12 +655,19 @@ KEY_ENTER = 13
 KEY_ESCAPE = 27
 KEY_LEFT = 63234   # macOS
 KEY_RIGHT = 63235  # macOS
+KEY_UP = 63232     # macOS
+KEY_DOWN = 63233   # macOS
 KEY_LEFT_LIN = 65361
 KEY_RIGHT_LIN = 65363
+KEY_UP_LIN = 65362
+KEY_DOWN_LIN = 65364
 
 
 def handle_key(raw_key: int, state: AppState, cap) -> Optional[str]:
     """Route keypress to action. Returns 'quit' to exit, else None."""
+    # Check for shift modifier
+    shift_held = (raw_key & 0x10000) != 0
+
     # Mask platform-specific high bits
     key = raw_key & 0xFFFF
 
@@ -673,68 +695,100 @@ def handle_key(raw_key: int, state: AppState, cap) -> Optional[str]:
         cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
         return None
 
-    # Arrow left — jump 5 seconds back
-    if key in (KEY_LEFT, KEY_LEFT_LIN):
-        jump = int(5 * state.fps)
-        state.current_frame = max(0, state.current_frame - jump)
+    # Left/Right arrows — step video frame by frame
+    if key in (KEY_LEFT, KEY_LEFT_LIN, 2):
+        state.playing = False
+        state.current_frame = max(0, state.current_frame - 1)
         cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
         return None
 
-    # Arrow right — jump 5 seconds forward
-    if key in (KEY_RIGHT, KEY_RIGHT_LIN):
-        jump = int(5 * state.fps)
-        state.current_frame = min(state.total_frames - 1, state.current_frame + jump)
+    if key in (KEY_RIGHT, KEY_RIGHT_LIN, 3):
+        state.playing = False
+        state.current_frame = min(state.total_frames - 1, state.current_frame + 1)
         cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
         return None
 
-    # Speed up
-    if ch == "w":
+    # Up/Down arrows — speed when playing, move mark when paused
+    if key in (KEY_UP, KEY_UP_LIN, 0):
+        if state.playing:
+            # Speed up
+            if state.speed_idx < len(SPEED_LEVELS) - 1:
+                state.speed_idx += 1
+                state.set_message(f"Speed: {state.speed}x")
+        else:
+            # Move selected mark forward
+            move_selected_mark(state, 1)
+            if state.selected_mark_idx is not None and state.selected_mark_idx < len(state.marks):
+                state.current_frame = state.marks[state.selected_mark_idx].frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
+        return None
+
+    if key in (KEY_DOWN, KEY_DOWN_LIN, 1):
+        if state.playing:
+            # Slow down
+            if state.speed_idx > 0:
+                state.speed_idx -= 1
+                state.set_message(f"Speed: {state.speed}x")
+        else:
+            # Move selected mark backward
+            move_selected_mark(state, -1)
+            if state.selected_mark_idx is not None and state.selected_mark_idx < len(state.marks):
+                state.current_frame = state.marks[state.selected_mark_idx].frame
+                cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
+        return None
+
+    # Speed up (+, =, or w)
+    if ch in ("+", "=", "w"):
         if state.speed_idx < len(SPEED_LEVELS) - 1:
             state.speed_idx += 1
+            state.set_message(f"Speed: {state.speed}x")
         return None
 
-    # Slow down
-    if ch == "e":
+    # Slow down (-, _, or e)
+    if ch in ("-", "_", "e"):
         if state.speed_idx > 0:
             state.speed_idx -= 1
+            state.set_message(f"Speed: {state.speed}x")
         return None
 
-    # Jump 5 seconds back
-    if ch == "[":
+    # Jump 5 seconds back (comma)
+    if ch == ",":
         jump = int(5 * state.fps)
         state.current_frame = max(0, state.current_frame - jump)
         cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
+        state.playing = False
         return None
 
-    # Jump 5 seconds forward
-    if ch == "]":
+    # Jump 5 seconds forward (period)
+    if ch == ".":
         jump = int(5 * state.fps)
         state.current_frame = min(state.total_frames - 1, state.current_frame + jump)
         cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
+        state.playing = False
         return None
 
-    # Shot marking keys
+    # Jump to previous mark
+    if ch == "[":
+        jump_to_mark(state, -1, cap)
+        return None
+
+    # Jump to next mark
+    if ch == "]":
+        jump_to_mark(state, +1, cap)
+        return None
+
+    # Shot type keys — set selected mark's type OR create new mark
     if ch == "f":
-        start_mark(state, "forehand")
+        set_or_create_mark(state, "forehand")
         return None
     if ch == "b":
-        start_mark(state, "backhand")
+        set_or_create_mark(state, "backhand")
         return None
     if ch == "s":
-        start_mark(state, "serve")
+        set_or_create_mark(state, "serve")
         return None
     if ch == "n":
-        start_mark(state, "neutral")
-        return None
-
-    # Enter — end any active mark
-    if key == KEY_ENTER:
-        end_mark(state)
-        return None
-
-    # Escape — cancel active mark
-    if key == KEY_ESCAPE:
-        cancel_mark(state)
+        set_or_create_mark(state, "neutral")
         return None
 
     # Undo (U or Ctrl+Z)
@@ -757,13 +811,19 @@ def handle_key(raw_key: int, state: AppState, cap) -> Optional[str]:
         state.cycle_view_angle()
         return None
 
+    # Escape — deselect mark
+    if key == KEY_ESCAPE:
+        state.selected_mark_idx = None
+        state.set_message("Deselected")
+        return None
+
     return None
 
 
 # ── Mouse handling ───────────────────────────────────────────
 
 
-EDGE_GRAB_PX = 8  # pixel threshold for grabbing a mark edge
+MARK_SELECT_PX = 15  # pixel threshold for selecting a mark by clicking near it
 
 
 def _frame_at_x(state: AppState, x: int) -> int:
@@ -780,117 +840,74 @@ def _x_at_frame(state: AppState, frame: int) -> int:
     return state.tl_x + int(frame / (state.total_frames - 1) * state.tl_w)
 
 
-def _mark_at_x(state: AppState, x: int) -> Optional[int]:
-    """Return the index of the mark under pixel x, or None."""
-    if state.tl_w <= 0 or state.total_frames <= 1:
+def _nearest_mark_at_x(state: AppState, x: int) -> Optional[int]:
+    """Return the index of the nearest mark within threshold, or None."""
+    if state.tl_w <= 0 or state.total_frames <= 1 or not state.marks:
         return None
-    frame = _frame_at_x(state, x)
-    # Search in reverse so later (top-drawn) marks get priority
-    for i in range(len(state.marks) - 1, -1, -1):
-        m = state.marks[i]
-        if m.start_frame <= frame <= m.end_frame:
-            return i
-    return None
 
+    best_idx = None
+    best_dist = MARK_SELECT_PX + 1
 
-def _edge_at_x(state: AppState, x: int) -> Optional[str]:
-    """If there's a selected mark and x is near one of its edges, return 'start' or 'end'."""
-    idx = state.selected_mark_idx
-    if idx is None or idx >= len(state.marks):
-        return None
-    m = state.marks[idx]
-    sx = _x_at_frame(state, m.start_frame)
-    ex = _x_at_frame(state, m.end_frame)
-    # Prefer whichever edge is closer, if within threshold
-    d_start = abs(x - sx)
-    d_end = abs(x - ex)
-    if d_start <= EDGE_GRAB_PX and d_start <= d_end:
-        return "start"
-    if d_end <= EDGE_GRAB_PX:
-        return "end"
-    return None
+    for i, m in enumerate(state.marks):
+        mx = _x_at_frame(state, m.frame)
+        dist = abs(x - mx)
+        if dist < best_dist:
+            best_dist = dist
+            best_idx = i
+
+    return best_idx if best_dist <= MARK_SELECT_PX else None
 
 
 def make_mouse_callback(state: AppState, cap):
-    """Return a mouse callback for timeline scrub, mark selection, and edge resize."""
-    drag_mode = [None]  # 'scrub', 'edge', or None
+    """Return a mouse callback for timeline scrub and mark selection."""
+    drag_mode = [None]  # 'scrub' or None
+    needs_seek = [False]  # Flag to seek on release
 
     def on_mouse(event, x, y, flags, param):
+        # Timeline bar area check - generous hit area
         in_bar = (state.tl_w > 0
-                  and state.tl_x <= x <= state.tl_x + state.tl_w
-                  and state.tl_y - 6 <= y <= state.tl_y + state.tl_h + 6)
+                  and state.tl_x - 20 <= x <= state.tl_x + state.tl_w + 20
+                  and state.tl_y - 30 <= y <= state.tl_y + state.tl_h + 20)
 
         if event == cv2.EVENT_LBUTTONDOWN and in_bar:
-            # First: check if grabbing an edge of the selected mark
-            edge = _edge_at_x(state, x)
-            if edge is not None:
-                state.dragging_edge = edge
-                drag_mode[0] = "edge"
-                return
-
-            # Second: check if clicking on a mark body
-            hit = _mark_at_x(state, x)
+            # Check if clicking near a mark
+            hit = _nearest_mark_at_x(state, x)
             if hit is not None:
-                if state.selected_mark_idx == hit:
-                    state.selected_mark_idx = None
-                else:
-                    state.selected_mark_idx = hit
-                state.dragging_edge = None
+                # Select the mark and jump to its frame
+                state.selected_mark_idx = hit
+                m = state.marks[hit]
+                state.current_frame = m.frame
+                state.playing = False
+                cap.set(cv2.CAP_PROP_POS_FRAMES, m.frame)
                 drag_mode[0] = None
             else:
-                # Scrub to position
+                # Start scrubbing - just update position, don't seek yet
                 state.selected_mark_idx = None
-                state.dragging_edge = None
                 target = _frame_at_x(state, x)
                 state.current_frame = target
                 state.playing = False
-                cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                state.scrubbing = True
                 drag_mode[0] = "scrub"
+                needs_seek[0] = True
 
         elif event == cv2.EVENT_MOUSEMOVE and (flags & cv2.EVENT_FLAG_LBUTTON):
-            if drag_mode[0] == "edge" and state.dragging_edge and in_bar:
-                idx = state.selected_mark_idx
-                if idx is not None and idx < len(state.marks):
-                    m = state.marks[idx]
-                    new_frame = _frame_at_x(state, x)
-                    if state.dragging_edge == "start":
-                        # Don't let start go past end - 1
-                        new_start = min(new_frame, m.end_frame - 1)
-                        new_start = max(0, new_start)
-                        state.marks[idx] = Mark(m.shot_type, new_start, m.end_frame)
-                        # Scrub video to the edge being dragged
-                        state.current_frame = new_start
-                        state.playing = False
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, new_start)
-                    else:
-                        # Don't let end go before start + 1
-                        new_end = max(new_frame, m.start_frame + 1)
-                        new_end = min(state.total_frames - 1, new_end)
-                        state.marks[idx] = Mark(m.shot_type, m.start_frame, new_end)
-                        # Scrub video to the edge being dragged
-                        state.current_frame = new_end
-                        state.playing = False
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, new_end)
-            elif drag_mode[0] == "scrub" and in_bar:
+            if drag_mode[0] == "scrub" and in_bar:
+                # Just update the frame number for visual feedback, don't seek
                 target = _frame_at_x(state, x)
                 state.current_frame = target
-                state.playing = False
-                cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                needs_seek[0] = True
 
         elif event == cv2.EVENT_LBUTTONUP:
-            if drag_mode[0] == "edge" and state.dragging_edge:
-                idx = state.selected_mark_idx
-                if idx is not None and idx < len(state.marks):
-                    m = state.marks[idx]
-                    state.set_message(
-                        f"Resized {m.shot_type} to {m.start_frame}-{m.end_frame}"
-                    )
-                state.dragging_edge = None
+            if drag_mode[0] == "scrub" and needs_seek[0]:
+                # Now actually seek the video
+                state.scrubbing = False
+                cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
+                needs_seek[0] = False
             drag_mode[0] = None
+            state.scrubbing = False
 
         elif event == cv2.EVENT_LBUTTONDOWN and not in_bar:
             state.selected_mark_idx = None
-            state.dragging_edge = None
 
     return on_mouse
 
@@ -913,8 +930,10 @@ def run_labeler(video_path: str, output_csv: str, initial_marks: Optional[List[M
         # Filter marks to valid frame range
         state.marks = [
             m for m in initial_marks
-            if m.start_frame >= 0 and m.end_frame < total_frames
+            if 0 <= m.frame < total_frames
         ]
+        # Sort by frame
+        state.marks.sort(key=lambda m: m.frame)
 
     # Extract video name for metadata (e.g., IMG_6665 from IMG_6665_skeleton.mp4)
     video_basename = os.path.basename(video_path)
@@ -964,7 +983,7 @@ def run_labeler(video_path: str, output_csv: str, initial_marks: Optional[List[M
             raw_key = cv2.waitKeyEx(wait_ms)
         else:
             # Paused — short poll so mouse callbacks fire
-            raw_key = cv2.waitKeyEx(30)
+            raw_key = cv2.waitKeyEx(1)  # Maximum responsiveness for scrubbing
 
         # Check if window was closed
         if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
@@ -978,40 +997,34 @@ def run_labeler(video_path: str, output_csv: str, initial_marks: Optional[List[M
 
         # ── Advance frame if playing ──
         if state.playing:
-            if state.speed >= 2.0:
-                # Frame skipping for high speed
+            # Calculate frames to skip based on speed
+            if state.speed > 1.0:
                 skip = int(state.speed)
-                next_frame = min(state.current_frame + skip, total_frames - 1)
-                if next_frame != state.current_frame:
-                    state.current_frame = next_frame
+            else:
+                skip = 1
+
+            next_frame = min(state.current_frame + skip, total_frames - 1)
+            if next_frame != state.current_frame:
+                state.current_frame = next_frame
+                if skip > 1:
+                    # Must seek for non-sequential reads
                     cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
                     ret, new_frame = cap.read()
-                    if ret:
-                        display_frame = new_frame
-                        last_read_frame = state.current_frame
-                    else:
-                        state.playing = False
-                        state.current_frame = total_frames - 1
+                elif last_read_frame == state.current_frame - 1:
+                    # Sequential read is fastest
+                    ret, new_frame = cap.read()
+                else:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
+                    ret, new_frame = cap.read()
+
+                if ret:
+                    display_frame = new_frame
+                    last_read_frame = state.current_frame
                 else:
                     state.playing = False
+                    state.current_frame = total_frames - 1
             else:
-                next_frame = state.current_frame + 1
-                if next_frame < total_frames:
-                    state.current_frame = next_frame
-                    # Sequential read is fastest when frames are consecutive
-                    if last_read_frame == state.current_frame - 1:
-                        ret, new_frame = cap.read()
-                    else:
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, state.current_frame)
-                        ret, new_frame = cap.read()
-                    if ret:
-                        display_frame = new_frame
-                        last_read_frame = state.current_frame
-                    else:
-                        state.playing = False
-                        state.current_frame = total_frames - 1
-                else:
-                    state.playing = False
+                state.playing = False
         else:
             # Paused — re-read frame if position changed (step keys)
             if state.current_frame != last_read_frame:

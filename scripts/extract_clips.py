@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Extract per-shot clips from preprocessed video using detection results.
 
+Supports two input formats:
+  - JSON from detect_shots.py (segments with start/end times)
+  - CSV from visual_label.py (single-frame contact points)
+
+For CSV input, applies shot-type-specific duration buffers around each contact.
+
 Usage:
-    python scripts/extract_clips.py                           # uses shots_detected.json
-    python scripts/extract_clips.py -i my_detections.json     # custom input
-    python scripts/extract_clips.py --min-confidence 0.8      # filter low confidence
-    python scripts/extract_clips.py --highlights              # also compile highlights
+    python scripts/extract_clips.py -i labels.csv -v video.mp4   # CSV labels
+    python scripts/extract_clips.py -i detections.json           # JSON detections
+    python scripts/extract_clips.py --highlights                 # compile highlights
 """
 
 import argparse
+import csv
 import json
 import os
 import subprocess
@@ -17,6 +23,82 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.settings import PREPROCESSED_DIR, CLIPS_DIR, HIGHLIGHTS_DIR, PROJECT_ROOT
+
+# Duration buffers (seconds) before/after contact point per shot type
+# Format: (before, after)
+SHOT_BUFFERS = {
+    "forehand": (4.5, 3.5),    # 8s total
+    "backhand": (4.5, 3.5),    # 8s total
+    "serve": (5.0, 3.0),       # 8s total, more wind-up
+    "neutral": (4.0, 4.0),     # 8s total
+}
+DEFAULT_BUFFER = (4.5, 3.5)
+
+
+def load_csv_labels(csv_path, fps):
+    """Load single-frame contact points from CSV and convert to segments.
+
+    Returns list of dicts with shot_type, start_time, end_time, avg_confidence.
+    """
+    segments = []
+    with open(csv_path, "r") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if not row or row[0].strip().startswith("#"):
+                continue
+
+            shot_type = row[0].strip().lower()
+            if len(row) == 2:
+                # New v2 format: shot_type, frame
+                try:
+                    frame = int(row[1].strip())
+                except ValueError:
+                    continue
+            elif len(row) >= 3:
+                # Old v1 format: shot_type, start_frame, end_frame - use midpoint
+                try:
+                    start = int(row[1].strip())
+                    end = int(row[2].strip())
+                    frame = (start + end) // 2
+                except ValueError:
+                    continue
+            else:
+                continue
+
+            # Get shot-specific buffer
+            before, after = SHOT_BUFFERS.get(shot_type, DEFAULT_BUFFER)
+
+            contact_time = frame / fps
+            start_time = max(0, contact_time - before)
+            end_time = contact_time + after
+
+            segments.append({
+                "shot_type": shot_type,
+                "start_time": start_time,
+                "end_time": end_time,
+                "start_frame": max(0, int((contact_time - before) * fps)),
+                "end_frame": int((contact_time + after) * fps),
+                "contact_frame": frame,
+                "avg_confidence": 1.0,  # Manual labels are high confidence
+            })
+
+    return segments
+
+
+def get_video_fps(video_path):
+    """Get video FPS using ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=r_frame_rate",
+        "-of", "csv=p=0", video_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    fps_str = result.stdout.strip()
+    if "/" in fps_str:
+        num, den = fps_str.split("/")
+        return float(num) / float(den)
+    return float(fps_str) if fps_str else 60.0
 
 
 def merge_close_segments(segments, max_gap=1.0):
@@ -273,15 +355,16 @@ def compile_combined_video(normal_path, slowmo_path, output_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Extract shot clips and compile highlights")
-    parser.add_argument("-i", "--input", help="Detection JSON (default: shots_detected.json)")
+    parser.add_argument("-i", "--input", help="Detection JSON or labels CSV")
+    parser.add_argument("-v", "--video", help="Video path (required for CSV input)")
     parser.add_argument("--min-confidence", type=float, default=0.7,
                         help="Minimum avg confidence to extract (default: 0.7)")
-    parser.add_argument("--min-duration", type=float, default=0.5,
-                        help="Minimum segment duration in seconds (default: 0.5)")
+    parser.add_argument("--min-duration", type=float, default=0.3,
+                        help="Minimum segment duration in seconds (default: 0.3)")
     parser.add_argument("--max-duration", type=float, default=10.0,
                         help="Maximum segment duration in seconds (default: 10.0)")
-    parser.add_argument("--pad", type=float, default=0.5,
-                        help="Padding before/after each clip in seconds (default: 0.5)")
+    parser.add_argument("--pad", type=float, default=0.3,
+                        help="Extra padding before/after each clip (default: 0.3)")
     parser.add_argument("--skip-neutral", action="store_true", default=True,
                         help="Skip neutral segments (default: True)")
     parser.add_argument("--include-neutral", action="store_true",
@@ -295,24 +378,51 @@ def main():
     if args.include_neutral:
         args.skip_neutral = False
 
-    # Load detection results
+    # Determine input file
     input_path = args.input or os.path.join(PROJECT_ROOT, "shots_detected.json")
     if not os.path.exists(input_path):
-        print(f"[ERROR] Detection file not found: {input_path}")
-        sys.exit(1)
+        # Try looking for a labels CSV
+        csvs = [f for f in os.listdir(PROJECT_ROOT) if f.endswith("_labels.csv")]
+        if csvs:
+            input_path = os.path.join(PROJECT_ROOT, sorted(csvs)[-1])
+            print(f"Auto-selected: {input_path}")
+        else:
+            print(f"[ERROR] No input file found. Specify with -i")
+            sys.exit(1)
 
-    with open(input_path) as f:
-        data = json.load(f)
+    is_csv = input_path.endswith(".csv")
 
-    video_name = data["source_video"]
-    segments = data["segments"]
-    fps = data["fps"]
+    if is_csv:
+        # CSV input - need video path
+        if args.video:
+            video_path = args.video
+        else:
+            # Try to find video from CSV name (e.g., IMG_6713_labels.csv -> IMG_6713.mp4)
+            base = os.path.basename(input_path).replace("_labels.csv", "").replace("_audio_labels.csv", "")
+            video_path = find_video(base)
+            if not video_path:
+                print(f"[ERROR] Could not find video for {base}. Specify with -v")
+                sys.exit(1)
 
-    # Find source video
-    video_path = find_video(video_name)
-    if not video_path:
-        print(f"[ERROR] Video not found: {video_name} in {PREPROCESSED_DIR}")
-        sys.exit(1)
+        video_name = os.path.splitext(os.path.basename(video_path))[0]
+        fps = get_video_fps(video_path)
+        segments = load_csv_labels(input_path, fps)
+        print(f"Loaded {len(segments)} labels from CSV")
+        print(f"Shot buffers: {SHOT_BUFFERS}")
+    else:
+        # JSON input
+        with open(input_path) as f:
+            data = json.load(f)
+
+        video_name = data["source_video"]
+        segments = data["segments"]
+        fps = data["fps"]
+
+        # Find source video
+        video_path = find_video(video_name)
+        if not video_path:
+            print(f"[ERROR] Video not found: {video_name} in {PREPROCESSED_DIR}")
+            sys.exit(1)
 
     print(f"Source: {os.path.basename(video_path)}")
     print(f"Total segments: {len(segments)}")
