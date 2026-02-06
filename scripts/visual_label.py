@@ -516,15 +516,20 @@ def _detect_ball_signal(video_path: str, total_frames: int) -> dict:
     return ball_signal
 
 
-def detect_serves(pose_path: str, video_path: Optional[str] = None) -> List[Mark]:
-    """Auto-detect serve segments using arm speed + ball flight detection.
+def detect_shots(pose_path: str, video_path: Optional[str] = None, shot_type: str = "forehand") -> List[Mark]:
+    """Auto-detect shot segments using arm speed + ball flight detection.
 
     Uses two signals:
       1. Arm movement speed from pose landmarks (wrists + elbows)
       2. Moving yellow pixels in video frames (tennis ball in flight)
 
-    Frames where both signals are high → serve contact zone.
-    Each contact is windowed: 3 seconds before, 2 seconds after.
+    Frames where both signals are high → shot contact zone.
+    Each contact is windowed with buffer before and after for manual review.
+
+    Args:
+        pose_path: Path to pose JSON file
+        video_path: Optional path to video for ball detection
+        shot_type: Shot type to assign to detected segments (default: forehand)
     """
     with open(pose_path, "r") as f:
         data = json.load(f)
@@ -593,12 +598,13 @@ def detect_serves(pose_path: str, video_path: Optional[str] = None) -> List[Mark
         ]
 
     # Window each contact: 1 second before, 1 second after
+    # This gives ~2 second segments which comfortably contain a full shot motion
     buf = int(1 * fps)
     marks = []
     for peak in contacts:
         ws = max(0, peak - buf)
         we = min(total - 1, peak + buf)
-        marks.append(Mark("serve", ws, we))
+        marks.append(Mark(shot_type, ws, we))
 
     return marks
 
@@ -1062,7 +1068,13 @@ def main():
     parser.add_argument(
         "--detect",
         action="store_true",
-        help="Auto-detect serves from pose data and pre-load for review",
+        help="Auto-detect shots from pose data and pre-load for review",
+    )
+    parser.add_argument(
+        "--detect-type",
+        choices=SHOT_TYPES,
+        default="forehand",
+        help="Shot type to assign to auto-detected segments (default: forehand)",
     )
     args = parser.parse_args()
 
@@ -1136,11 +1148,11 @@ def main():
             print("  Run extract_poses.py first, or use --load with a CSV.")
             sys.exit(1)
         preproc_path = _find_preprocessed_video(pose_path)
-        print(f"Detecting serves from {os.path.basename(pose_path)}...")
+        print(f"Detecting shots from {os.path.basename(pose_path)}...")
         if preproc_path:
             print(f"  + ball tracking from {os.path.basename(preproc_path)}")
-        detected = detect_serves(pose_path, preproc_path)
-        print(f"  Found {len(detected)} serve segments")
+        detected = detect_shots(pose_path, preproc_path, shot_type=args.detect_type)
+        print(f"  Found {len(detected)} segments (marked as {args.detect_type})")
         if initial_marks:
             initial_marks.extend(detected)
         else:
