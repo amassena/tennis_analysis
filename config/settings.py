@@ -74,7 +74,7 @@ AUTO_PIPELINE = {
         "Tennis Videos": "chronological",
         "Tennis Videos Group By Shot Type": "type",
     },
-    "poll_interval": 300,        # seconds between iCloud checks
+    "poll_interval": 60,         # seconds between iCloud checks
     "state_file": os.path.join(PROJECT_ROOT, "pipeline_state.json"),
     "slowmo_factor": 4.0,       # setpts multiplier (4.0 = 0.25x speed)
     "slowmo_output_fps": 60,    # output framerate for slow-mo clips

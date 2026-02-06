@@ -15,6 +15,8 @@ import argparse
 import json
 import logging
 import os
+import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -253,8 +255,33 @@ def download_video(asset, raw_dir):
 
 # ── SSH/SCP Helpers ────────────────────────────────────────
 
+# Map SSH hostnames to Windows computer names for local detection
+_HOST_TO_HOSTNAME = {
+    "windows": "Andrew-PC",
+    "tmassena": "tmassena",  # Assuming this is the hostname
+}
+
+def _is_local_machine(host):
+    """Check if the target host is the local machine."""
+    local_hostname = socket.gethostname()
+    target_hostname = _HOST_TO_HOSTNAME.get(host, host)
+    return local_hostname.lower() == target_hostname.lower()
+
+
 def _run_ssh(host, cmd, timeout=3600):
-    """Run a command on a remote machine via SSH. Returns (success, stdout)."""
+    """Run a command on a remote machine via SSH (or locally if host is local)."""
+    if _is_local_machine(host):
+        log.info("LOCAL: %s", cmd)
+        # Run locally - Windows uses cmd /c for shell commands
+        if sys.platform == "win32":
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        else:
+            result = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=timeout)
+        if result.returncode != 0:
+            log.error("LOCAL failed (rc=%d): %s", result.returncode, result.stderr.strip())
+            return False, result.stderr
+        return True, result.stdout
+
     full_cmd = ["ssh", host, cmd]
     log.info("SSH [%s]: %s", host, cmd)
     result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=timeout)
@@ -265,7 +292,22 @@ def _run_ssh(host, cmd, timeout=3600):
 
 
 def _scp_to(host, project, local_path, remote_relative):
-    """Copy a file to a remote machine via SCP."""
+    """Copy a file to a remote machine via SCP (or locally if host is local)."""
+    if _is_local_machine(host):
+        dest_path = os.path.join(project, remote_relative)
+        # Check if source and destination are the same file
+        if os.path.exists(dest_path) and os.path.samefile(local_path, dest_path):
+            log.info("LOCAL skip (same file): %s", os.path.basename(local_path))
+            return True
+        log.info("LOCAL copy: %s -> %s", os.path.basename(local_path), dest_path)
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        try:
+            shutil.copy2(local_path, dest_path)
+            return True
+        except Exception as e:
+            log.error("LOCAL copy failed: %s", e)
+            return False
+
     remote_path = f"{host}:{project}/{remote_relative}"
     log.info("SCP to %s: %s -> %s", host, os.path.basename(local_path), remote_relative)
     result = subprocess.run(
@@ -276,7 +318,22 @@ def _scp_to(host, project, local_path, remote_relative):
 
 
 def _scp_from(host, project, remote_relative, local_path):
-    """Copy a file from a remote machine via SCP."""
+    """Copy a file from a remote machine via SCP (or locally if host is local)."""
+    if _is_local_machine(host):
+        src_path = os.path.join(project, remote_relative)
+        # Check if source and destination are the same file
+        if os.path.exists(local_path) and os.path.samefile(src_path, local_path):
+            log.info("LOCAL skip (same file): %s", os.path.basename(local_path))
+            return True
+        log.info("LOCAL copy: %s -> %s", src_path, os.path.basename(local_path))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        try:
+            shutil.copy2(src_path, local_path)
+            return True
+        except Exception as e:
+            log.error("LOCAL copy failed: %s", e)
+            return False
+
     remote_path = f"{host}:{project}/{remote_relative}"
     log.info("SCP from %s: %s -> %s", host, remote_relative, os.path.basename(local_path))
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
