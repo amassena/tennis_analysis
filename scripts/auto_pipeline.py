@@ -111,6 +111,20 @@ def authenticate():
         if not sys.stdin.isatty():
             log.error("2FA required but running non-interactively. "
                       "Run once from a terminal to refresh the session.")
+            # Send SMS notification about 2FA requirement
+            try:
+                from scripts.email_notify import send_sms, send_email
+                send_sms("Tennis Pipeline: 2FA required! Run auth_icloud.py on Windows to re-authenticate.")
+                send_email(
+                    "Tennis Pipeline: 2FA Required",
+                    "The iCloud session has expired and needs 2FA re-authentication.\n\n"
+                    "SSH to Windows and run:\n"
+                    "  cd C:\\Users\\amass\\tennis_analysis\n"
+                    "  venv\\Scripts\\python auth_icloud.py\n\n"
+                    "Pipeline is paused until re-authenticated."
+                )
+            except Exception as e:
+                log.warning("Failed to send 2FA notification: %s", e)
             return None
         log.info("Two-factor authentication required.")
         for attempt in range(1, 4):
