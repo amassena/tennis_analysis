@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.settings import POSES_DIR, MODELS_DIR, PROJECT_ROOT, VIEW_ANGLES, DEFAULT_VIEW_ANGLE
-from scripts.video_metadata import get_view_angle
+from scripts.video_metadata import get_view_angle_auto
 
 
 def load_model_and_meta(model_dir):
@@ -239,13 +239,13 @@ def main():
     print(f"  Features: {n_features}")
     print()
 
-    # Determine view angle
+    # Determine view angle (auto-detect from pose if no metadata)
     if args.view_angle:
         view_angle = args.view_angle
         print(f"View angle (CLI override): {view_angle}")
     else:
-        view_angle = get_view_angle(video_name)
-        print(f"View angle (from metadata): {view_angle}")
+        view_angle = get_view_angle_auto(video_name)
+        print(f"View angle (auto-detected): {view_angle}")
 
     # Build view_angle one-hot if model supports it (104 features)
     view_angle_one_hot = None

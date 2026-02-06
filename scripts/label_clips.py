@@ -17,7 +17,7 @@ from config.settings import (
     MODEL,
     SHOT_TYPES,
 )
-from scripts.video_metadata import get_view_angle
+from scripts.video_metadata import get_view_angle_auto
 
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -263,8 +263,14 @@ def save_clip(clip_data, shot_type, training_dir):
 # ── CSV Batch Mode ───────────────────────────────────────────
 
 
-def parse_labels_csv(csv_path, shot_types, max_frame):
-    """Parse a CSV file with columns: shot_type, start, end.
+def parse_labels_csv(csv_path, shot_types, max_frame, fps=60.0):
+    """Parse a CSV file with labels.
+
+    Supports two formats:
+    - New v2: shot_type, frame (single contact point)
+    - Old v1: shot_type, start_frame, end_frame (range)
+
+    For single-frame labels, creates a window based on sequence_length (30 frames).
 
     Returns list of (shot_type, start_frame, end_frame) tuples.
     Validates shot types and frame ranges.
@@ -273,15 +279,17 @@ def parse_labels_csv(csv_path, shot_types, max_frame):
         print(f"  [ERROR] CSV not found: {csv_path}")
         return None
 
+    # Window size for single-frame labels (frames before/after contact)
+    # Using 15 frames each side = 30 frame window at 60fps = 0.5s total
+    window_before = 15
+    window_after = 15
+
     labels = []
     with open(csv_path, "r") as f:
         reader = csv.reader(f)
         for line_num, row in enumerate(reader, 1):
             # Skip empty lines and comments
             if not row or row[0].strip().startswith("#"):
-                continue
-            if len(row) < 3:
-                print(f"  [WARN] Line {line_num}: expected 3 columns, got {len(row)} — skipping")
                 continue
 
             shot_type = row[0].strip().lower()
@@ -290,8 +298,18 @@ def parse_labels_csv(csv_path, shot_types, max_frame):
                 continue
 
             try:
-                start = int(row[1].strip())
-                end = int(row[2].strip())
+                if len(row) == 2:
+                    # New v2 format: shot_type, frame (single contact point)
+                    contact = int(row[1].strip())
+                    start = max(0, contact - window_before)
+                    end = min(max_frame, contact + window_after)
+                elif len(row) >= 3:
+                    # Old v1 format: shot_type, start_frame, end_frame
+                    start = int(row[1].strip())
+                    end = int(row[2].strip())
+                else:
+                    print(f"  [WARN] Line {line_num}: expected 2-3 columns, got {len(row)} — skipping")
+                    continue
             except ValueError:
                 print(f"  [WARN] Line {line_num}: invalid frame numbers — skipping")
                 continue
@@ -301,8 +319,8 @@ def parse_labels_csv(csv_path, shot_types, max_frame):
                 continue
 
             if end > max_frame:
-                print(f"  [WARN] Line {line_num}: end frame {end} exceeds max {max_frame} — skipping")
-                continue
+                print(f"  [WARN] Line {line_num}: end frame {end} exceeds max {max_frame} — clamping")
+                end = max_frame
 
             labels.append((shot_type, start, end))
 
@@ -360,7 +378,7 @@ def interactive_mode(pose_data, source_video, training_dir, stride, seq_len):
     pose_file = pose_data.get("source_pose_file", os.path.splitext(source_video)[0] + ".json")
 
     # Get view angle for this video
-    view_angle = get_view_angle(source_video)
+    view_angle = get_view_angle_auto(source_video)
 
     # Shortcut map
     shortcut_map = {
@@ -605,7 +623,7 @@ def main():
             sys.exit(1)
 
         # Get view angle for this video
-        view_angle = get_view_angle(source_video)
+        view_angle = get_view_angle_auto(source_video)
 
         print(f"\nProcessing {len(labels)} label(s) from CSV...")
         print(f"  View angle: {view_angle}")
