@@ -23,7 +23,8 @@ import cv2
 # Add project root so config is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.settings import POSES_DIR, PROJECT_ROOT, SHOT_TYPES
+from config.settings import POSES_DIR, PROJECT_ROOT, SHOT_TYPES, VIEW_ANGLES, DEFAULT_VIEW_ANGLE
+from scripts.video_metadata import load_video_metadata, save_video_metadata
 
 # ── Data structures ──────────────────────────────────────────
 
@@ -66,6 +67,7 @@ HELP_TEXT = [
     "X/Delete   Delete selected mark",
     "Click seg  Select it, drag edges to resize",
     "",
+    "V          Cycle view angle (camera position)",
     "H          Toggle this help",
     "Q          Save CSV and quit",
 ]
@@ -107,6 +109,10 @@ class AppState:
         self.tl_w = 0
         self.tl_h = 0
 
+        # View angle (camera position) - per-video metadata
+        self.view_angle = DEFAULT_VIEW_ANGLE
+        self.video_name: Optional[str] = None  # set by run_labeler for metadata saving
+
     def set_message(self, text: str):
         self.message = text
         self.message_time = time.time()
@@ -122,6 +128,13 @@ class AppState:
         m, s = divmod(int(secs), 60)
         frac = int((secs - int(secs)) * 100)
         return f"{m}:{s:02d}.{frac:02d}"
+
+    def cycle_view_angle(self):
+        """Cycle to the next view angle."""
+        idx = VIEW_ANGLES.index(self.view_angle) if self.view_angle in VIEW_ANGLES else 0
+        idx = (idx + 1) % len(VIEW_ANGLES)
+        self.view_angle = VIEW_ANGLES[idx]
+        self.set_message(f"View angle: {self.view_angle}")
 
 
 # ── Video discovery ──────────────────────────────────────────
@@ -176,6 +189,13 @@ def draw_overlay(frame, state: AppState):
     speed_str = f"{state.speed}x" if state.playing else ""
     info = f"Frame {state.current_frame}/{state.total_frames - 1}  {state.timestamp()}  {status} {speed_str}"
     draw_text_with_bg(frame, info, (10, 25))
+
+    # Top-right: view angle
+    angle_text = f"View: {state.view_angle}"
+    # Get text size to right-align
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    (tw, th), _ = cv2.getTextSize(angle_text, font, 0.55, 1)
+    draw_text_with_bg(frame, angle_text, (w - tw - 20, 25), color=(200, 200, 100))
 
     # Marking indicator
     if state.marking_type is not None:
@@ -726,6 +746,11 @@ def handle_key(raw_key: int, state: AppState, cap) -> Optional[str]:
         state.show_help = not state.show_help
         return None
 
+    # Cycle view angle
+    if ch == "v":
+        state.cycle_view_angle()
+        return None
+
     return None
 
 
@@ -885,6 +910,17 @@ def run_labeler(video_path: str, output_csv: str, initial_marks: Optional[List[M
             if m.start_frame >= 0 and m.end_frame < total_frames
         ]
 
+    # Extract video name for metadata (e.g., IMG_6665 from IMG_6665_skeleton.mp4)
+    video_basename = os.path.basename(video_path)
+    video_name = video_basename.replace("_skeleton.mp4", "").replace("_skeleton.MP4", "")
+    if video_name == video_basename:
+        video_name = os.path.splitext(video_basename)[0]
+    state.video_name = video_name
+
+    # Load existing view angle from metadata
+    metadata = load_video_metadata(video_name)
+    state.view_angle = metadata.get("view_angle", DEFAULT_VIEW_ANGLE)
+
     window_name = f"Visual Labeler — {os.path.basename(video_path)}"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 1280, 720)
@@ -982,6 +1018,13 @@ def run_labeler(video_path: str, output_csv: str, initial_marks: Optional[List[M
     # ── Cleanup ──
     cap.release()
     cv2.destroyAllWindows()
+
+    # ── Save view angle to metadata ──
+    if state.video_name:
+        metadata = load_video_metadata(state.video_name)
+        metadata["view_angle"] = state.view_angle
+        save_video_metadata(state.video_name, metadata)
+        print(f"Saved view angle: {state.view_angle}")
 
     # ── Save CSV ──
     if state.marks:

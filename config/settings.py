@@ -17,6 +17,10 @@ SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 
 SHOT_TYPES = ["forehand", "backhand", "serve", "neutral"]
 
+# ── View angles (camera positions) ───────────────────────────
+VIEW_ANGLES = ["back-court", "left-side", "right-side", "front", "overhead"]
+DEFAULT_VIEW_ANGLE = "back-court"
+
 # ── Video processing defaults ─────────────────────────────────
 VIDEO = {
     "target_fps": 60,

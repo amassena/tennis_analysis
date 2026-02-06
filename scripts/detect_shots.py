@@ -8,7 +8,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.settings import POSES_DIR, MODELS_DIR, PROJECT_ROOT
+from config.settings import POSES_DIR, MODELS_DIR, PROJECT_ROOT, VIEW_ANGLES, DEFAULT_VIEW_ANGLE
+from scripts.video_metadata import get_view_angle
 
 
 def load_model_and_meta(model_dir):
@@ -62,8 +63,17 @@ def load_pose_frames(pose_path):
     return frames, fps, total
 
 
-def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map):
+def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map, view_angle_one_hot=None):
     """Slide a window over all frames and predict shot type for each window.
+
+    Args:
+        model: Trained Keras model
+        frames: List of pose landmarks per frame
+        mean, std: Normalization parameters
+        seq_len: Sequence length for model input
+        stride: Window stride
+        inverse_label_map: Dict mapping int label to string
+        view_angle_one_hot: 5-element one-hot for view angle (None for old 99-feature models)
 
     Returns list of (center_frame, predicted_label, confidence) tuples.
     """
@@ -71,6 +81,11 @@ def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map):
 
     total = len(frames)
     predictions = []
+
+    # Determine feature count based on model
+    n_features = 99
+    if view_angle_one_hot is not None:
+        n_features = 104
 
     for start in range(0, total - seq_len + 1, stride):
         window = []
@@ -81,9 +96,17 @@ def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map):
                     flat.extend(kp[:3])
                 while len(flat) < 99:
                     flat.append(0.0)
-                window.append(flat[:99])
+                pose_features = flat[:99]
             else:
-                window.append([0.0] * 99)
+                pose_features = [0.0] * 99
+
+            # Append view_angle one-hot if using 104-feature model
+            if view_angle_one_hot is not None:
+                frame_features = pose_features + view_angle_one_hot
+            else:
+                frame_features = pose_features
+
+            window.append(frame_features)
 
         X = np.array([window], dtype=np.float32)
         X = (X - mean) / std
@@ -180,6 +203,8 @@ def main():
     parser.add_argument("--stride", type=int, default=5, help="Window stride in frames (default: 5)")
     parser.add_argument("--min-confidence", type=float, default=0.0,
                         help="Minimum confidence to include a segment (default: 0.0)")
+    parser.add_argument("--view-angle", choices=VIEW_ANGLES,
+                        help=f"Override view angle (default: load from metadata or {DEFAULT_VIEW_ANGLE})")
     args = parser.parse_args()
 
     # Find pose JSON
@@ -204,11 +229,35 @@ def main():
     model, meta, mean, std = load_model_and_meta(MODELS_DIR)
 
     seq_len = meta["sequence_length"]
+    n_features = meta.get("num_features", 99)
     inverse_label_map = meta["inverse_label_map"]
     label_map = meta["label_map"]
+    view_angle_map = meta.get("view_angle_map", None)
 
     print(f"  Classes: {list(label_map.keys())}")
     print(f"  Sequence length: {seq_len} frames")
+    print(f"  Features: {n_features}")
+    print()
+
+    # Determine view angle
+    if args.view_angle:
+        view_angle = args.view_angle
+        print(f"View angle (CLI override): {view_angle}")
+    else:
+        view_angle = get_view_angle(video_name)
+        print(f"View angle (from metadata): {view_angle}")
+
+    # Build view_angle one-hot if model supports it (104 features)
+    view_angle_one_hot = None
+    if n_features == 104 and view_angle_map is not None:
+        if view_angle not in view_angle_map:
+            print(f"  [WARN] Unknown view angle '{view_angle}', using {DEFAULT_VIEW_ANGLE}")
+            view_angle = DEFAULT_VIEW_ANGLE
+        view_angle_idx = view_angle_map[view_angle]
+        view_angle_one_hot = [0.0] * len(VIEW_ANGLES)
+        view_angle_one_hot[view_angle_idx] = 1.0
+    elif n_features == 99:
+        print("  [INFO] Using legacy 99-feature model (view angle not supported)")
     print()
 
     print(f"Loading poses: {os.path.basename(pose_path)}...")
@@ -218,7 +267,7 @@ def main():
     print()
 
     print(f"Running inference (stride={args.stride})...")
-    predictions = run_inference(model, frames, mean, std, seq_len, args.stride, inverse_label_map)
+    predictions = run_inference(model, frames, mean, std, seq_len, args.stride, inverse_label_map, view_angle_one_hot)
     print(f"  {len(predictions)} windows evaluated")
 
     # Merge into segments
@@ -235,10 +284,11 @@ def main():
 
     # Save output
     output = {
-        "version": 1,
+        "version": 2,
         "source_video": video_name,
         "pose_json": os.path.basename(pose_path),
         "model": meta["model_file"],
+        "view_angle": view_angle,
         "fps": fps,
         "total_frames": total_frames,
         "stride": args.stride,

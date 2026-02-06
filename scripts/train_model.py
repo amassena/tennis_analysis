@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 # Add project root to path so config is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.settings import TRAINING_DATA_DIR, MODELS_DIR, MODEL, SHOT_TYPES
+from config.settings import TRAINING_DATA_DIR, MODELS_DIR, MODEL, SHOT_TYPES, VIEW_ANGLES, DEFAULT_VIEW_ANGLE
 
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -97,14 +97,19 @@ def load_clips(file_paths):
 def clips_to_arrays(clips_by_type, seq_len, shot_types):
     """Convert clip dicts to numpy arrays.
 
+    Includes view_angle as 5-element one-hot encoding appended to pose features.
+    Total features: 99 (pose) + 5 (view_angle) = 104.
+
     Returns:
-        X: numpy array shape (N, seq_len, 99)
+        X: numpy array shape (N, seq_len, 104)
         y: numpy array shape (N,) with integer labels
         label_map: dict mapping shot_type string to integer
+        view_angle_map: dict mapping view_angle string to integer index
     """
     import numpy as np
 
     label_map = {t: i for i, t in enumerate(shot_types)}
+    view_angle_map = {v: i for i, v in enumerate(VIEW_ANGLES)}
 
     X_list = []
     y_list = []
@@ -114,11 +119,21 @@ def clips_to_arrays(clips_by_type, seq_len, shot_types):
         for clip in clips:
             frames = clip["frames"]
 
+            # Get view_angle (default for v1 clips without it)
+            view_angle = clip.get("view_angle", DEFAULT_VIEW_ANGLE)
+            if view_angle not in view_angle_map:
+                view_angle = DEFAULT_VIEW_ANGLE
+
+            # Build one-hot encoding for view_angle
+            view_angle_idx = view_angle_map[view_angle]
+            view_angle_one_hot = [0.0] * len(VIEW_ANGLES)
+            view_angle_one_hot[view_angle_idx] = 1.0
+
             # Pad or truncate to seq_len
             frame_data = []
             for frame in frames[:seq_len]:
                 landmarks = frame.get("world_landmarks_xyz", [])
-                # Flatten 33 keypoints × 3 coords = 99 features
+                # Flatten 33 keypoints x 3 coords = 99 features
                 flat = []
                 for kp in landmarks:
                     flat.extend(kp[:3])
@@ -126,11 +141,16 @@ def clips_to_arrays(clips_by_type, seq_len, shot_types):
                 # Pad if fewer than 99 features
                 while len(flat) < 99:
                     flat.append(0.0)
-                frame_data.append(flat[:99])
+                pose_features = flat[:99]
+
+                # Append view_angle one-hot (same for all frames in clip)
+                frame_features = pose_features + view_angle_one_hot
+                frame_data.append(frame_features)
 
             # Pad with zeros if fewer frames than seq_len
+            # Note: padded frames still get the view_angle one-hot
             while len(frame_data) < seq_len:
-                frame_data.append([0.0] * 99)
+                frame_data.append([0.0] * 99 + view_angle_one_hot)
 
             X_list.append(frame_data)
             y_list.append(label)
@@ -138,7 +158,7 @@ def clips_to_arrays(clips_by_type, seq_len, shot_types):
     X = np.array(X_list, dtype=np.float32)
     y = np.array(y_list, dtype=np.int32)
 
-    return X, y, label_map
+    return X, y, label_map, view_angle_map
 
 
 # ── Normalization ────────────────────────────────────────────
@@ -297,7 +317,7 @@ def evaluate_model(model, X_val, y_val, label_map):
 # ── Model Saving ─────────────────────────────────────────────
 
 
-def save_model(model, path, normalization, label_map, history, eval_results):
+def save_model(model, path, normalization, label_map, view_angle_map, history, eval_results):
     """Save .h5 model and metadata JSON with atomic writes."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -309,6 +329,7 @@ def save_model(model, path, normalization, label_map, history, eval_results):
     meta_part = meta_path + ".part"
 
     inverse_label_map = {str(v): k for k, v in label_map.items()}
+    inverse_view_angle_map = {str(v): k for k, v in view_angle_map.items()}
     mean, std = normalization
 
     # Convert history to serializable lists
@@ -321,10 +342,12 @@ def save_model(model, path, normalization, label_map, history, eval_results):
     best_epoch = int(val_losses.index(min(val_losses))) + 1 if val_losses else 0
 
     metadata = {
-        "version": 1,
+        "version": 2,
         "model_file": os.path.basename(path),
         "label_map": label_map,
         "inverse_label_map": inverse_label_map,
+        "view_angle_map": view_angle_map,
+        "inverse_view_angle_map": inverse_view_angle_map,
         "normalization": {
             "mean": mean.tolist(),
             "std": std.tolist(),
@@ -485,9 +508,12 @@ def main():
 
     # ── Convert to arrays ─────────────────────────────────────
     print("Converting to arrays...")
-    X, y, label_map = clips_to_arrays(clips_by_type, seq_len, active_types)
+    X, y, label_map, view_angle_map = clips_to_arrays(clips_by_type, seq_len, active_types)
+    n_features = X.shape[2]  # 104 (99 pose + 5 view_angle)
     print(f"  X shape: {X.shape}  y shape: {y.shape}")
+    print(f"  Features per frame: {n_features} (99 pose + 5 view_angle)")
     print(f"  Label map: {label_map}")
+    print(f"  View angle map: {view_angle_map}")
     print()
 
     n_classes = len(active_types)
@@ -518,7 +544,7 @@ def main():
     # ── Build model ───────────────────────────────────────────
     print("Building GRU model...")
     n_classes = len(active_types)
-    model = build_gru_model(seq_len, 99, n_classes, config)
+    model = build_gru_model(seq_len, n_features, n_classes, config)
     model.summary()
     print()
 
@@ -536,7 +562,7 @@ def main():
     # ── Save ──────────────────────────────────────────────────
     model_path = os.path.join(MODELS_DIR, "shot_classifier.h5")
     print(f"\nSaving model to {model_path}...")
-    save_model(model, model_path, (mean, std), label_map, history, eval_results)
+    save_model(model, model_path, (mean, std), label_map, view_angle_map, history, eval_results)
 
     # ── Summary ───────────────────────────────────────────────
     print_training_summary(history, eval_results, elapsed, model_path, total_clips)

@@ -17,6 +17,7 @@ from config.settings import (
     MODEL,
     SHOT_TYPES,
 )
+from scripts.video_metadata import get_view_angle
 
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -358,6 +359,9 @@ def interactive_mode(pose_data, source_video, training_dir, stride, seq_len):
     duration = video_info.get("duration_seconds", total_frames / fps)
     pose_file = pose_data.get("source_pose_file", os.path.splitext(source_video)[0] + ".json")
 
+    # Get view angle for this video
+    view_angle = get_view_angle(source_video)
+
     # Shortcut map
     shortcut_map = {
         "f": "forehand",
@@ -477,10 +481,11 @@ def interactive_mode(pose_data, source_video, training_dir, stride, seq_len):
             interp_frames, interp_indices = interpolate_missing_frames(frames, w_start, w_end)
 
             clip_data = {
-                "version": 1,
+                "version": 2,
                 "source_video": source_video,
                 "source_pose_file": pose_file,
                 "shot_type": shot_type,
+                "view_angle": view_angle,
                 "start_frame": w_start,
                 "end_frame": w_end,
                 "sequence_length": len(interp_frames),
@@ -599,7 +604,11 @@ def main():
             print("  No valid labels found in CSV.")
             sys.exit(1)
 
+        # Get view angle for this video
+        view_angle = get_view_angle(source_video)
+
         print(f"\nProcessing {len(labels)} label(s) from CSV...")
+        print(f"  View angle: {view_angle}")
         frames = pose_data["frames"]
         total_saved = 0
 
@@ -615,10 +624,11 @@ def main():
                     frames, w_start, w_end
                 )
                 clip_data = {
-                    "version": 1,
+                    "version": 2,
                     "source_video": source_video,
                     "source_pose_file": os.path.basename(pose_path),
                     "shot_type": shot_type,
+                    "view_angle": view_angle,
                     "start_frame": w_start,
                     "end_frame": w_end,
                     "sequence_length": len(interp_frames),
