@@ -29,6 +29,45 @@ EMAIL_CONFIG = {
 }
 
 
+def send_sms(message: str) -> bool:
+    """Send an SMS via email-to-SMS gateway.
+
+    Args:
+        message: Short text message (SMS has 160 char limit)
+
+    Returns:
+        True if sent successfully, False otherwise
+    """
+    sms_email = os.environ.get("SMS_EMAIL", "")
+    if not sms_email:
+        print("[SMS] Not configured - set SMS_EMAIL in .env")
+        return False
+
+    config = EMAIL_CONFIG
+    if not config["sender_email"] or not config["sender_password"]:
+        print("[SMS] Email not configured")
+        return False
+
+    try:
+        # SMS via email gateway - no subject, plain text only
+        msg = MIMEText(message[:160], "plain")  # SMS limit
+        msg["From"] = config["sender_email"]
+        msg["To"] = sms_email
+
+        context = ssl.create_default_context()
+        with smtplib.SMTP(config["smtp_server"], config["smtp_port"]) as server:
+            server.starttls(context=context)
+            server.login(config["sender_email"], config["sender_password"])
+            server.sendmail(config["sender_email"], sms_email, msg.as_string())
+
+        print(f"[SMS] Sent: {message[:50]}...")
+        return True
+
+    except Exception as e:
+        print(f"[SMS] Failed: {e}")
+        return False
+
+
 def send_email(subject: str, body: str, html_body: str = None) -> bool:
     """Send an email notification.
 
@@ -80,6 +119,20 @@ def send_email(subject: str, body: str, html_body: str = None) -> bool:
     except Exception as e:
         print(f"[EMAIL] Failed to send: {e}")
         return False
+
+
+def sms_processing_started(video_name: str, host: str):
+    """Send SMS when processing starts."""
+    msg = f"Tennis: Processing {video_name} on {host}"
+    return send_sms(msg)
+
+
+def sms_upload_complete(video_name: str, youtube_url: str):
+    """Send SMS when upload completes."""
+    # Shorten for SMS
+    short_name = video_name.replace("IMG_", "").replace(".mov", "").replace(".MOV", "")
+    msg = f"Tennis uploaded: {short_name}\n{youtube_url}"
+    return send_sms(msg)
 
 
 def notify_processing_started(video_name: str, host: str, ordering: str, view_angle: str):
@@ -147,6 +200,8 @@ You'll receive another email when processing completes.
 </html>
 """
 
+    # Send both email and SMS
+    sms_processing_started(video_name, host)
     return send_email(subject, body, html_body)
 
 
@@ -237,6 +292,8 @@ Watch on YouTube
 </html>
 """
 
+    # Send both email and SMS
+    sms_upload_complete(video_name, youtube_url)
     return send_email(subject, body, html_body)
 
 
