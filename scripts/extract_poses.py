@@ -399,7 +399,26 @@ def main():
         merge_pose_jsons(args.merge, args.output)
         return
 
-    # ── Startup checks ───────────────────────────────────────
+    # ── Quick skip check BEFORE loading heavy libraries ───────
+    if args.video:
+        video_path = args.video
+        if not os.path.isabs(video_path):
+            video_path = os.path.join(os.getcwd(), video_path)
+        if not os.path.exists(video_path):
+            print(f"[ERROR] Video not found: {video_path}")
+            sys.exit(1)
+
+        name = os.path.splitext(os.path.basename(video_path))[0]
+        output_path = args.output or os.path.join(POSES_DIR, name + ".json")
+
+        # Skip if poses file already exists (unless frame range specified)
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            if args.start_frame == 0 and args.end_frame == -1:
+                size = os.path.getsize(output_path)
+                print(f"[SKIP] {name}.json already exists ({format_size(size)})")
+                sys.exit(0)
+
+    # ── Startup checks (heavy imports) ────────────────────────
     try:
         import mediapipe as mp
         test_pose = mp.solutions.pose.Pose(
@@ -419,15 +438,6 @@ def main():
 
     # ── Single video with frame range ─────────────────────────
     if args.video:
-        video_path = args.video
-        if not os.path.isabs(video_path):
-            video_path = os.path.join(os.getcwd(), video_path)
-        if not os.path.exists(video_path):
-            print(f"[ERROR] Video not found: {video_path}")
-            sys.exit(1)
-
-        name = os.path.splitext(os.path.basename(video_path))[0]
-        output_path = args.output or os.path.join(POSES_DIR, name + ".json")
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
         print(f"Processing: {os.path.basename(video_path)}")
