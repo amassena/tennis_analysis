@@ -40,7 +40,7 @@ from config.settings import (
 )
 from scripts.email_notify import (
     notify_processing_started, notify_upload_complete, notify_processing_failed,
-    generate_youtube_title,
+    notify_videos_detected, generate_youtube_title,
 )
 from scripts.video_metadata import get_view_angle_auto
 
@@ -68,8 +68,25 @@ def load_state():
     path = AUTO_PIPELINE["state_file"]
     if os.path.exists(path):
         with open(path) as f:
-            return json.load(f)
-    return {"processed": {}, "daily_counts": {}}
+            state = json.load(f)
+    else:
+        state = {}
+    # Ensure all keys exist
+    state.setdefault("processed", {})
+    state.setdefault("daily_counts", {})
+    state.setdefault("failed", {})  # Track failed videos for retry
+    return state
+
+
+def add_to_failed_queue(state, asset_id, filename, error_msg):
+    """Add a video to the failed queue for later retry."""
+    state.setdefault("failed", {})[asset_id] = {
+        "filename": filename,
+        "error": error_msg,
+        "failed_at": datetime.now().isoformat(),
+        "retry_count": state.get("failed", {}).get(asset_id, {}).get("retry_count", 0) + 1,
+    }
+    save_state(state)
 
 
 def save_state(state):
@@ -164,8 +181,16 @@ def poll_icloud(api, album_name, state):
             continue
 
         asset_id = str(asset.id)
-        if asset_id in state.get("processed", {}):
-            continue
+        processed = state.get("processed", {}).get(asset_id)
+        if processed:
+            # Check if size changed (indicates clip/edit of same asset)
+            old_size = processed.get("size", 0)
+            new_size = getattr(asset, "size", 0) or 0
+            if old_size and new_size and old_size != new_size:
+                log.info("Found modified video: %s (size: %d -> %d)",
+                         asset.filename, old_size, new_size)
+            else:
+                continue  # Same asset, same size - skip
 
         log.info("Found new video: %s", asset.filename)
         new_videos.append(asset)
@@ -258,7 +283,7 @@ def download_video(asset, raw_dir):
 # Map SSH hostnames to Windows computer names for local detection
 _HOST_TO_HOSTNAME = {
     "windows": "Andrew-PC",
-    "tmassena": "tmassena",  # Assuming this is the hostname
+    "tmassena": "tmassena",
 }
 
 def _is_local_machine(host):
@@ -266,6 +291,53 @@ def _is_local_machine(host):
     local_hostname = socket.gethostname()
     target_hostname = _HOST_TO_HOSTNAME.get(host, host)
     return local_hostname.lower() == target_hostname.lower()
+
+
+def _check_machine_available(host, timeout=10):
+    """Check if a machine is reachable via SSH (or local)."""
+    if _is_local_machine(host):
+        return True
+    try:
+        result = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", host, "echo ok"],
+            capture_output=True, text=True, timeout=timeout
+        )
+        return result.returncode == 0 and "ok" in result.stdout
+    except Exception:
+        return False
+
+
+def _try_wake_machine(host):
+    """Try to wake a machine using WoL. Returns True if wake attempted."""
+    try:
+        from scripts.wake_machines import wake_machine
+        log.info("Attempting to wake %s via WoL...", host)
+        wake_machine(host, wait=True, timeout=30)
+        return True
+    except Exception as e:
+        log.warning("Failed to wake %s: %s", host, e)
+        return False
+
+
+def get_available_machines(machines):
+    """Filter machines list to only those currently reachable. Tries WoL for offline machines."""
+    available = []
+    for machine in machines:
+        host = machine["host"]
+        if _check_machine_available(host):
+            log.info("Machine %s is available", host)
+            available.append(machine)
+        else:
+            log.warning("Machine %s appears OFFLINE - trying WoL...", host)
+            _try_wake_machine(host)
+            # Recheck after wake attempt
+            time.sleep(5)
+            if _check_machine_available(host):
+                log.info("Machine %s is now available after WoL", host)
+                available.append(machine)
+            else:
+                log.warning("Machine %s still OFFLINE after WoL - skipping", host)
+    return available
 
 
 def _run_ssh(host, cmd, timeout=3600):
@@ -932,13 +1004,15 @@ def process_single_video(asset, state, machine, ordering="chronological"):
         notify_push(f"Tennis highlights upload failed: {filename}")
         notify_processing_failed(filename, host, "YouTube upload failed")
 
-    # 6. Update state
+    # 6. Update state (include size to detect clips/edits later)
+    asset_size = getattr(asset, "size", 0) or 0
     state.setdefault("processed", {})[asset_id] = {
         "filename": filename,
         "date": date_str,
         "youtube_url": youtube_url,
         "processed_at": datetime.now().isoformat(),
         "machine": host,
+        "size": asset_size,
     }
     state.setdefault("daily_counts", {})[date_str] = count
     save_state(state)
@@ -967,18 +1041,34 @@ def main_loop(once=False, debug=False):
             new_videos = poll_all_albums(api, state)
 
             if new_videos:
-                log.info("Found %d new video(s) to process across %d machine(s)",
-                         len(new_videos), len(machines))
+                # Check which machines are available
+                available_machines = get_available_machines(machines)
+                if not available_machines:
+                    log.error("No GPU machines available! Waiting for next poll...")
+                    from scripts.email_notify import send_sms
+                    send_sms("Tennis pipeline: No GPU machines available!")
+                    time.sleep(poll_interval)
+                    continue
+
+                log.info("Found %d new video(s) to process across %d available machine(s)",
+                         len(new_videos), len(available_machines))
+
+                # Build queue info and notify user
+                videos_info = []
+                for i, (asset, ordering) in enumerate(new_videos):
+                    machine = available_machines[i % len(available_machines)]
+                    videos_info.append((asset.filename, machine["host"], ordering))
+                notify_videos_detected(videos_info)
 
                 results = []  # (filename, url_or_None)
 
-                if len(new_videos) > 1 and len(machines) > 1:
-                    # Parallel: distribute videos across machines
+                if len(new_videos) > 1 and len(available_machines) > 1:
+                    # Parallel: distribute videos across available machines
                     log.info("Dispatching %d videos in parallel", len(new_videos))
-                    with ThreadPoolExecutor(max_workers=len(machines)) as pool:
+                    with ThreadPoolExecutor(max_workers=len(available_machines)) as pool:
                         futures = {}
                         for i, (asset, ordering) in enumerate(new_videos):
-                            machine = machines[i % len(machines)]
+                            machine = available_machines[i % len(available_machines)]
                             fut = pool.submit(process_single_video, asset, state,
                                               machine, ordering=ordering)
                             futures[fut] = (asset, machine)
@@ -998,7 +1088,7 @@ def main_loop(once=False, debug=False):
                 else:
                     # Sequential: single video or single machine
                     for i, (asset, ordering) in enumerate(new_videos):
-                        machine = machines[i % len(machines)]
+                        machine = available_machines[i % len(available_machines)]
                         try:
                             url = process_single_video(asset, state, machine,
                                                        ordering=ordering)
@@ -1008,6 +1098,8 @@ def main_loop(once=False, debug=False):
                             log.error("Failed to process %s on %s: %s",
                                       asset.filename, machine["host"], e,
                                       exc_info=True)
+                            # Send failure notification
+                            notify_processing_failed(asset.filename, machine["host"], str(e))
 
                 notify_complete(results)
             else:

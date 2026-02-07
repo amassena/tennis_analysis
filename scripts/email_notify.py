@@ -135,6 +135,66 @@ def sms_upload_complete(video_name: str, youtube_url: str):
     return send_sms(msg)
 
 
+def sms_videos_detected(videos_info: list):
+    """Send SMS when new videos are detected with queue info.
+
+    Args:
+        videos_info: List of (video_name, machine_host, ordering) tuples
+    """
+    if len(videos_info) == 1:
+        name, host, _ = videos_info[0]
+        short = name.replace("IMG_", "").replace(".MOV", "").replace(".mov", "")
+        msg = f"Tennis: {short} detected, processing on {host}"
+    else:
+        names = [v[0].replace("IMG_", "").replace(".MOV", "").replace(".mov", "") for v in videos_info]
+        msg = f"Tennis: {len(videos_info)} videos detected: {', '.join(names)}"
+    return send_sms(msg)
+
+
+def notify_videos_detected(videos_info: list):
+    """Send email/SMS when new videos are detected, showing queue status.
+
+    Args:
+        videos_info: List of (video_name, machine_host, ordering) tuples
+    """
+    if not videos_info:
+        return
+
+    # Send SMS first
+    sms_videos_detected(videos_info)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    if len(videos_info) == 1:
+        name, host, ordering = videos_info[0]
+        subject = f"🎾 Video detected: {name}"
+        body = f"""Tennis Video Detected
+
+Video: {name}
+Time: {timestamp}
+Machine: {host}
+Ordering: {ordering}
+
+Processing will begin shortly.
+"""
+    else:
+        subject = f"🎾 {len(videos_info)} videos detected"
+        lines = []
+        for i, (name, host, ordering) in enumerate(videos_info, 1):
+            lines.append(f"  {i}. {name} -> {host} ({ordering})")
+
+        body = f"""Tennis Videos Detected
+
+Time: {timestamp}
+Queue ({len(videos_info)} videos):
+{chr(10).join(lines)}
+
+Videos will be processed in parallel across machines.
+"""
+
+    return send_email(subject, body)
+
+
 def notify_processing_started(video_name: str, host: str, ordering: str, view_angle: str):
     """Send email when video processing starts.
 
