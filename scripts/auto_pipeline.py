@@ -319,7 +319,7 @@ def _try_wake_machine(host):
         return False
 
 
-def get_available_machines(machines):
+def get_available_machines(machines, max_wake_attempts=3, wake_wait_seconds=20):
     """Filter machines list to only those currently reachable. Tries WoL for offline machines."""
     available = []
     for machine in machines:
@@ -328,15 +328,22 @@ def get_available_machines(machines):
             log.info("Machine %s is available", host)
             available.append(machine)
         else:
-            log.warning("Machine %s appears OFFLINE - trying WoL...", host)
-            _try_wake_machine(host)
-            # Recheck after wake attempt
-            time.sleep(5)
-            if _check_machine_available(host):
-                log.info("Machine %s is now available after WoL", host)
-                available.append(machine)
-            else:
-                log.warning("Machine %s still OFFLINE after WoL - skipping", host)
+            # Try to wake the machine multiple times
+            woke_up = False
+            for attempt in range(1, max_wake_attempts + 1):
+                log.warning("Machine %s appears OFFLINE - WoL attempt %d/%d...",
+                           host, attempt, max_wake_attempts)
+                _try_wake_machine(host)
+                log.info("Waiting %d seconds for %s to wake up...", wake_wait_seconds, host)
+                time.sleep(wake_wait_seconds)
+                if _check_machine_available(host):
+                    log.info("Machine %s is now available after WoL (attempt %d)", host, attempt)
+                    available.append(machine)
+                    woke_up = True
+                    break
+            if not woke_up:
+                log.warning("Machine %s still OFFLINE after %d WoL attempts - skipping",
+                           host, max_wake_attempts)
     return available
 
 
