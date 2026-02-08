@@ -295,8 +295,14 @@ def process_job(job: dict) -> str:
     return youtube_url
 
 
-def worker_loop(once: bool = False):
+def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int, once: bool = False):
     """Main worker loop."""
+    # Update globals for other functions
+    global COORDINATOR_URL, WORKER_ID, POLL_INTERVAL
+    COORDINATOR_URL = coordinator_url
+    WORKER_ID = worker_id
+    POLL_INTERVAL = poll_interval
+
     log(f"Starting GPU worker: {WORKER_ID}")
     log(f"Coordinator: {COORDINATOR_URL}")
     log(f"Poll interval: {POLL_INTERVAL}s")
@@ -336,18 +342,18 @@ def main():
     parser = argparse.ArgumentParser(description="GPU Worker for tennis pipeline")
     parser.add_argument(
         "--coordinator",
-        default=COORDINATOR_URL,
+        default=None,
         help="Coordinator API URL",
     )
     parser.add_argument(
         "--worker-id",
-        default=WORKER_ID,
+        default=None,
         help="Worker identifier (default: hostname)",
     )
     parser.add_argument(
         "--poll-interval",
         type=int,
-        default=POLL_INTERVAL,
+        default=None,
         help="Seconds between polls",
     )
     parser.add_argument(
@@ -357,12 +363,11 @@ def main():
     )
     args = parser.parse_args()
 
-    global COORDINATOR_URL, WORKER_ID, POLL_INTERVAL
-    COORDINATOR_URL = args.coordinator
-    WORKER_ID = args.worker_id
-    POLL_INTERVAL = args.poll_interval
+    coordinator_url = args.coordinator or COORDINATOR_URL
+    worker_id = args.worker_id or WORKER_ID
+    poll_interval = args.poll_interval or POLL_INTERVAL
 
-    worker_loop(once=args.once)
+    worker_loop(coordinator_url, worker_id, poll_interval, once=args.once)
 
 
 if __name__ == "__main__":
