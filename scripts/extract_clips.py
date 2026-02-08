@@ -218,7 +218,14 @@ def compile_highlights(clip_paths, output_path):
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
-    os.remove(concat_file)
+    # Windows may not release file handle immediately
+    for attempt in range(3):
+        try:
+            os.remove(concat_file)
+            break
+        except PermissionError:
+            import time
+            time.sleep(0.5)
     return result.returncode == 0
 
 
@@ -348,8 +355,15 @@ def compile_combined_video(normal_path, slowmo_path, output_path):
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
+    # Windows may not release file handle immediately
     if os.path.exists(concat_file):
-        os.remove(concat_file)
+        for attempt in range(3):
+            try:
+                os.remove(concat_file)
+                break
+            except PermissionError:
+                import time
+                time.sleep(0.5)
     return result.returncode == 0
 
 
