@@ -82,6 +82,7 @@ AUTO_PIPELINE = {
     "gpu_machines": [
         {"host": "windows", "project": "C:/Users/amass/tennis_analysis"},
         {"host": "tmassena", "project": "C:/Users/amass/tennis_analysis"},
+        {"host": "desktop3090", "project": "C:/Users/Andrew/tennis_analysis"},
     ],
 }
 

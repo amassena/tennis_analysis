@@ -27,6 +27,10 @@ MACHINES = {
         "mac": "74:56:3C:4D:73:C8",
         "tailscale_ip": "100.98.226.93",
     },
+    "desktop3090": {
+        "mac": "7C:10:C9:45:1C:20",
+        "tailscale_ip": "100.101.233.108",
+    },
 }
 
 # Broadcast addresses to try

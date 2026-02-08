@@ -284,6 +284,7 @@ def download_video(asset, raw_dir):
 _HOST_TO_HOSTNAME = {
     "windows": "Andrew-PC",
     "tmassena": "tmassena",
+    "desktop3090": "DESKTOP-3OLAA45",
 }
 
 def _is_local_machine(host):
@@ -391,7 +392,7 @@ def _scp_to(host, project, local_path, remote_relative):
     log.info("SCP to %s: %s -> %s", host, os.path.basename(local_path), remote_relative)
     result = subprocess.run(
         ["scp", local_path, remote_path],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True, text=True, timeout=1800,  # 30 min for large files
     )
     return result.returncode == 0
 
@@ -418,7 +419,7 @@ def _scp_from(host, project, remote_relative, local_path):
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     result = subprocess.run(
         ["scp", remote_path, local_path],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True, text=True, timeout=1800,  # 30 min for large files
     )
     return result.returncode == 0
 
