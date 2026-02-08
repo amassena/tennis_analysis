@@ -75,11 +75,11 @@ def get_icloud_api():
                 key, value = line.split("=", 1)
                 env_vars[key.strip()] = value.strip().strip('"').strip("'")
 
-    apple_id = env_vars.get("ICLOUD_USER")
-    password = env_vars.get("ICLOUD_PASS")
+    apple_id = env_vars.get("ICLOUD_USER") or env_vars.get("ICLOUD_USERNAME")
+    password = env_vars.get("ICLOUD_PASS") or env_vars.get("ICLOUD_PASSWORD")
 
     if not apple_id or not password:
-        raise RuntimeError("ICLOUD_USER and ICLOUD_PASS must be in .env")
+        raise RuntimeError("ICLOUD_USER(NAME) and ICLOUD_PASS(WORD) must be in .env")
 
     log(f"Connecting to iCloud as {apple_id}")
     api = PyiCloudService(apple_id, password)
@@ -98,11 +98,10 @@ def scan_albums(api) -> list[dict]:
         log(f"Scanning album: {album_name}")
 
         try:
-            album = api.photos.albums.get(album_name)
-            if not album:
-                log(f"Album '{album_name}' not found", "WARN")
-                continue
+            # Use bracket notation for pyicloud album access
+            album = api.photos.albums[album_name]
 
+            count = 0
             for asset in album:
                 # Only process videos
                 if not hasattr(asset, "filename"):
@@ -117,7 +116,12 @@ def scan_albums(api) -> list[dict]:
                     "filename": filename,
                     "album_name": album_name,
                 })
+                count += 1
 
+            log(f"Found {count} videos in '{album_name}'")
+
+        except KeyError:
+            log(f"Album '{album_name}' not found", "WARN")
         except Exception as e:
             log(f"Error scanning album {album_name}: {e}", "ERROR")
 
