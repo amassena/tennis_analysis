@@ -442,7 +442,7 @@ def process_on_gpu(filename, machine, ordering="chronological"):
     # 2. Preprocess (NVENC, 60fps CFR)
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && {py} preprocess_nvenc.py {filename}",
+        f"cd {project} && {py} preprocess_nvenc.py \"{filename}\"",
         timeout=1800,
     )
     if not ok:
@@ -452,7 +452,7 @@ def process_on_gpu(filename, machine, ordering="chronological"):
     # 3. Extract poses (large videos can take 90+ min at ~34fps)
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && {py} scripts/extract_poses.py preprocessed/{base}.mp4",
+        f"cd {project} && {py} scripts/extract_poses.py \"preprocessed/{base}.mp4\"",
         timeout=10800,
     )
     if not ok:
@@ -463,7 +463,7 @@ def process_on_gpu(filename, machine, ordering="chronological"):
     shots_file = f"shots_detected_{base}.json"
     ok, _ = _run_ssh(
         host,
-        f"cd {project} && {py} scripts/detect_shots.py poses/{base}.json -o {shots_file}",
+        f"cd {project} && {py} scripts/detect_shots.py \"poses/{base}.json\" -o \"{shots_file}\"",
         timeout=1800,
     )
     if not ok:
@@ -471,7 +471,7 @@ def process_on_gpu(filename, machine, ordering="chronological"):
         return False
 
     # 5. Extract clips + highlights
-    extract_cmd = f"cd {project} && {py} scripts/extract_clips.py -i {shots_file} --highlights"
+    extract_cmd = f"cd {project} && {py} scripts/extract_clips.py -i \"{shots_file}\" --highlights"
     if ordering == "type":
         extract_cmd += " --group-by-type"
     ok, _ = _run_ssh(
