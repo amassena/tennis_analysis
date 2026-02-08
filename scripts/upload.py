@@ -63,8 +63,6 @@ def upload_to_youtube(video_path, title=None, description=None, dry_run=False):
     If dry_run=True, simulates the upload without actually calling YouTube API.
     Returns a fake URL for testing purposes.
     """
-    from googleapiclient.http import MediaFileUpload
-
     if not os.path.exists(video_path):
         print(f"[ERROR] Video not found: {video_path}")
         return None
@@ -104,6 +102,7 @@ def upload_to_youtube(video_path, title=None, description=None, dry_run=False):
     print(f"Uploading to YouTube (unlisted): {os.path.basename(video_path)} ({size_mb:.1f} MB)")
     print(f"  Title: {title}")
 
+    from googleapiclient.http import MediaFileUpload
     media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
 

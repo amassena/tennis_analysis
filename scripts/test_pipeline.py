@@ -37,6 +37,11 @@ def log(msg, status="INFO"):
     print(f"{icons.get(status, 'ℹ️')} {msg}")
 
 
+def send_notification(msg):
+    """Stub for notifications (ntfy removed)."""
+    pass
+
+
 def run_ssh(host, project, cmd, timeout=600):
     """Run a command on a remote machine via SSH."""
     full_cmd = f"cd {project} && {cmd}"
