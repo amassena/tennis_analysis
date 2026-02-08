@@ -1,0 +1,16 @@
+# GPU Worker dependencies
+
+# iCloud access
+pyicloud>=1.0.0
+
+# Video processing (already installed for pipeline)
+# mediapipe==0.10.18
+# tensorflow>=2.16.0
+# opencv-contrib-python>=4.10.0
+
+# YouTube upload
+# google-api-python-client (already installed)
+# google-auth-oauthlib (already installed)
+
+# HTTP client (stdlib)
+# urllib.request (builtin)

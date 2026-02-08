@@ -105,3 +105,22 @@ NOTIFICATIONS = {
         "app_password": os.environ.get("GMAIL_APP_PASSWORD", ""),
     },
 }
+
+# ── Distributed Coordinator ────────────────────────────────
+# Portable architecture: works on Raspberry Pi (local) or AWS (cloud)
+COORDINATOR = {
+    # API settings
+    "host": "0.0.0.0",
+    "port": 8080,
+    "db_path": os.path.join(PROJECT_ROOT, "coordinator.db"),  # SQLite for local
+
+    # AWS settings (for cloud deployment)
+    "aws_region": "us-west-2",
+    "dynamodb_table": "tennis-pipeline-jobs",
+
+    # Timeouts and intervals
+    "stale_claim_seconds": 3600,  # Release claims older than 1 hour
+    "icloud_poll_interval": 300,  # 5 minutes
+    "wol_check_interval": 60,     # 1 minute
+    "worker_poll_interval": 60,   # 1 minute
+}
