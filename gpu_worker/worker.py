@@ -131,8 +131,12 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     if not apple_id or not password:
         raise RuntimeError("ICLOUD_USER(NAME) and ICLOUD_PASS(WORD) must be in .env")
 
+    # Use shared session directory for cookie persistence
+    cookie_dir = PROJECT_ROOT / "config" / "icloud_session"
+    cookie_dir.mkdir(parents=True, exist_ok=True)
+
     log(f"Connecting to iCloud as {apple_id}")
-    api = PyiCloudService(apple_id, password)
+    api = PyiCloudService(apple_id, password, cookie_directory=str(cookie_dir))
 
     if api.requires_2fa:
         raise RuntimeError("iCloud requires 2FA - authenticate manually first")
@@ -278,13 +282,12 @@ def upload_to_youtube(video_path: Path, title: str = None) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"YouTube upload failed: {result.stderr}")
 
-    # Extract URL from output
+    # Extract URL from output - look for https://youtu.be/... or https://youtube.com/...
     for line in result.stdout.split("\n"):
-        if "youtu" in line.lower():
-            # Find URL in line
-            for word in line.split():
-                if "youtu" in word.lower():
-                    return word.strip()
+        for word in line.split():
+            word = word.strip()
+            if word.startswith("https://youtu"):
+                return word
 
     raise RuntimeError("Could not find YouTube URL in output")
 
