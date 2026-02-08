@@ -18,7 +18,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scripts.wake_machines import MACHINES, send_wol
+from scripts.wake_machines import MACHINES, send_wol_packet
 
 
 # Configuration
@@ -73,15 +73,24 @@ def wake_machine(name: str) -> bool:
         return False
 
     log(f"Sending WoL to {name} ({mac})")
-    return send_wol(mac)
+    try:
+        send_wol_packet(mac)
+        return True
+    except Exception as e:
+        log(f"WoL failed: {e}", "ERROR")
+        return False
 
 
-def wol_agent_loop(machines: list[str], once: bool = False):
+def wol_agent_loop(coordinator_url: str, check_interval: int, machines: list, once: bool = False):
     """Main WoL agent loop."""
     log("Starting WoL agent")
-    log(f"Coordinator: {COORDINATOR_URL}")
+    log(f"Coordinator: {coordinator_url}")
     log(f"Machines: {machines}")
-    log(f"Check interval: {CHECK_INTERVAL}s")
+    log(f"Check interval: {check_interval}s")
+
+    # Update global for api_request function
+    global COORDINATOR_URL
+    COORDINATOR_URL = coordinator_url
 
     last_wake = {m: 0 for m in machines}
 
@@ -119,26 +128,26 @@ def wol_agent_loop(machines: list[str], once: bool = False):
         if once:
             break
 
-        time.sleep(CHECK_INTERVAL)
+        time.sleep(check_interval)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Wake-on-LAN agent")
     parser.add_argument(
         "--coordinator",
-        default=COORDINATOR_URL,
+        default=None,
         help="Coordinator API URL",
     )
     parser.add_argument(
         "--machines",
         nargs="+",
-        default=list(MACHINES.keys()),
+        default=None,
         help="Machines to wake (default: all)",
     )
     parser.add_argument(
         "--check-interval",
         type=int,
-        default=CHECK_INTERVAL,
+        default=None,
         help="Seconds between checks",
     )
     parser.add_argument(
@@ -148,11 +157,11 @@ def main():
     )
     args = parser.parse_args()
 
-    global COORDINATOR_URL, CHECK_INTERVAL
-    COORDINATOR_URL = args.coordinator
-    CHECK_INTERVAL = args.check_interval
+    coordinator_url = args.coordinator or COORDINATOR_URL
+    check_interval = args.check_interval or CHECK_INTERVAL
+    machines = args.machines or list(MACHINES.keys())
 
-    wol_agent_loop(args.machines, once=args.once)
+    wol_agent_loop(coordinator_url, check_interval, machines, once=args.once)
 
 
 if __name__ == "__main__":

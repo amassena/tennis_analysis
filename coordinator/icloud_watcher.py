@@ -147,12 +147,16 @@ def add_jobs(videos: list[dict]) -> int:
     return added
 
 
-def watcher_loop(once: bool = False):
+def watcher_loop(coordinator_url: str, poll_interval: int, once: bool = False):
     """Main watcher loop."""
     log("Starting iCloud watcher")
-    log(f"Coordinator: {COORDINATOR_URL}")
+    log(f"Coordinator: {coordinator_url}")
     log(f"Albums: {ALBUMS}")
-    log(f"Poll interval: {POLL_INTERVAL}s")
+    log(f"Poll interval: {poll_interval}s")
+
+    # Update global for api_request function
+    global COORDINATOR_URL
+    COORDINATOR_URL = coordinator_url
 
     api = None
 
@@ -179,20 +183,20 @@ def watcher_loop(once: bool = False):
         if once:
             break
 
-        time.sleep(POLL_INTERVAL)
+        time.sleep(poll_interval)
 
 
 def main():
     parser = argparse.ArgumentParser(description="iCloud album watcher")
     parser.add_argument(
         "--coordinator",
-        default=COORDINATOR_URL,
+        default=None,
         help="Coordinator API URL",
     )
     parser.add_argument(
         "--poll-interval",
         type=int,
-        default=POLL_INTERVAL,
+        default=None,
         help="Seconds between polls",
     )
     parser.add_argument(
@@ -202,11 +206,10 @@ def main():
     )
     args = parser.parse_args()
 
-    global COORDINATOR_URL, POLL_INTERVAL
-    COORDINATOR_URL = args.coordinator
-    POLL_INTERVAL = args.poll_interval
+    coordinator_url = args.coordinator or COORDINATOR_URL
+    poll_interval = args.poll_interval or POLL_INTERVAL
 
-    watcher_loop(once=args.once)
+    watcher_loop(coordinator_url, poll_interval, once=args.once)
 
 
 if __name__ == "__main__":

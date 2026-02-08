@@ -57,10 +57,10 @@ def run_watcher():
     """Start the iCloud watcher."""
     from coordinator.icloud_watcher import watcher_loop
 
-    os.environ["COORDINATOR_URL"] = get_coordinator_url()
-    os.environ["ICLOUD_POLL_INTERVAL"] = str(COORDINATOR.get("icloud_poll_interval", 300))
+    coordinator_url = get_coordinator_url()
+    poll_interval = COORDINATOR.get("icloud_poll_interval", 300)
 
-    watcher_loop()
+    watcher_loop(coordinator_url, poll_interval)
 
 
 def run_wol():
@@ -68,10 +68,10 @@ def run_wol():
     from coordinator.wol_agent import wol_agent_loop
     from scripts.wake_machines import MACHINES
 
-    os.environ["COORDINATOR_URL"] = get_coordinator_url()
-    os.environ["WOL_CHECK_INTERVAL"] = str(COORDINATOR.get("wol_check_interval", 60))
+    coordinator_url = get_coordinator_url()
+    check_interval = COORDINATOR.get("wol_check_interval", 60)
 
-    wol_agent_loop(list(MACHINES.keys()))
+    wol_agent_loop(coordinator_url, check_interval, list(MACHINES.keys()))
 
 
 def run_all():
