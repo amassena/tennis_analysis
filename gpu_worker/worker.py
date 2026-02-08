@@ -94,15 +94,57 @@ def claim_job() -> dict:
 
 def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     """Download video from iCloud to raw directory."""
-    # Check if file already exists locally
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = RAW_DIR / filename
 
-    # Also check for case-insensitive match
+    # Track downloaded assets to handle same-name files with different content
+    asset_map_file = PROJECT_ROOT / "config" / "downloaded_assets.json"
+    asset_map_file.parent.mkdir(parents=True, exist_ok=True)
+
+    asset_map = {}
+    if asset_map_file.exists():
+        try:
+            with open(asset_map_file) as f:
+                asset_map = json.load(f)
+        except Exception:
+            asset_map = {}
+
+    # Check if this specific asset was already downloaded
+    if icloud_asset_id in asset_map:
+        local_path = Path(asset_map[icloud_asset_id])
+        if local_path.exists():
+            log(f"Asset already downloaded: {local_path}")
+            return local_path
+
+    # Check for existing file with same name (case-insensitive)
+    existing_file = None
     for existing in RAW_DIR.iterdir():
         if existing.name.lower() == filename.lower():
-            log(f"File already exists: {existing}")
-            return existing
+            existing_file = existing
+            break
+
+    if existing_file:
+        # Check if this file is tracked to a DIFFERENT asset
+        tracked_assets = {v: k for k, v in asset_map.items()}  # path -> asset_id
+        existing_asset = tracked_assets.get(str(existing_file))
+
+        if existing_asset is None:
+            # Legacy file, not tracked - assume it's this asset
+            log(f"File already exists (legacy): {existing_file}")
+            asset_map[icloud_asset_id] = str(existing_file)
+            with open(asset_map_file, "w") as f:
+                json.dump(asset_map, f, indent=2)
+            return existing_file
+        elif existing_asset == icloud_asset_id:
+            # Same asset, use it
+            log(f"File already exists: {existing_file}")
+            return existing_file
+        else:
+            # Different asset with same filename! Need unique name
+            stem = Path(filename).stem
+            ext = Path(filename).suffix
+            unique_name = f"{stem}_{icloud_asset_id[:8]}{ext}"
+            log(f"Name collision - using unique name: {unique_name}")
+            filename = unique_name
 
     # Import iCloud library (pyicloud)
     try:
@@ -167,6 +209,12 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
         f.write(download.content)
 
     log(f"Downloaded {output_path.stat().st_size / 1024 / 1024:.1f} MB")
+
+    # Track the downloaded asset
+    asset_map[icloud_asset_id] = str(output_path)
+    with open(asset_map_file, "w") as f:
+        json.dump(asset_map, f, indent=2)
+
     return output_path
 
 

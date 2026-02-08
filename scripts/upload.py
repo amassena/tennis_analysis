@@ -22,9 +22,11 @@ CREDENTIALS_FILE = os.path.join(PROJECT_ROOT, "config", "youtube_credentials.jso
 
 def get_youtube_service():
     """Authenticate and return a YouTube API service object."""
+    import httplib2
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
     from google.auth.transport.requests import Request
+    from google_auth_httplib2 import AuthorizedHttp
     from googleapiclient.discovery import build
 
     creds = None
@@ -49,7 +51,10 @@ def get_youtube_service():
             f.write(creds.to_json())
         print("Credentials saved for future uploads.")
 
-    return build(YOUTUBE_API_SERVICE, YOUTUBE_API_VERSION, credentials=creds)
+    # Use longer timeout (30 min) for large video uploads
+    http = httplib2.Http(timeout=1800)
+    authorized_http = AuthorizedHttp(creds, http=http)
+    return build(YOUTUBE_API_SERVICE, YOUTUBE_API_VERSION, http=authorized_http)
 
 
 def upload_to_youtube(video_path, title=None, description=None):
