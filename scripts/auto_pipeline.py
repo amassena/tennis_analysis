@@ -600,27 +600,6 @@ def upload_to_youtube(video_path, creation_date, video_number, view_angle="back-
     return url
 
 
-# ── Push Notification (ntfy.sh) ───────────────────────────
-
-def notify_push(message, title=None):
-    """Send a push notification via ntfy.sh."""
-    topic = NOTIFICATIONS.get("ntfy_topic")
-    if not topic:
-        log.warning("No ntfy_topic configured, skipping push notification")
-        return
-    try:
-        import urllib.request
-        url = f"https://ntfy.sh/{topic}"
-        data = message.encode("utf-8")
-        req = urllib.request.Request(url, data=data, method="POST")
-        if title:
-            req.add_header("Title", title)
-        urllib.request.urlopen(req, timeout=10)
-        log.info("Push notification sent to ntfy.sh/%s", topic)
-    except Exception as e:
-        log.warning("Failed to send push notification: %s", e)
-
-
 def send_email(recipients, subject, body):
     """Send an email notification via SMTP (e.g. Gmail)."""
     import smtplib
@@ -659,7 +638,6 @@ def notify_complete(results):
     summary = "\n".join(lines)
 
     # Push notification
-    notify_push(summary, title="Tennis highlights ready")
 
     # Email
     email_cfg = NOTIFICATIONS.get("email", {})
@@ -949,7 +927,6 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     log.info("Processing: %s on %s (ordering=%s)", filename, host, ordering)
     log.info("=" * 60)
 
-    notify_push(f"New tennis video detected: {filename}\nProcessing on {host} ({ordering} order)")
 
     # 1. Download from iCloud
     local_path = download_video(asset, RAW_DIR)
@@ -986,7 +963,6 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     youtube_url = upload_to_youtube(highlight_path, creation_date, count, view_angle, order_label)
 
     if youtube_url:
-        notify_push(f"Tennis highlights uploaded: {filename}\n{youtube_url}")
         # Send email with stats
         stats = {
             "shot_counts": {},  # TODO: load from shots_detected.json
@@ -1009,7 +985,6 @@ def process_single_video(asset, state, machine, ordering="chronological"):
                 pass
         notify_upload_complete(filename, youtube_url, stats, view_angle, order_label)
     else:
-        notify_push(f"Tennis highlights upload failed: {filename}")
         notify_processing_failed(filename, host, "YouTube upload failed")
 
     # 6. Update state (include size to detect clips/edits later)

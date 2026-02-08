@@ -57,8 +57,12 @@ def get_youtube_service():
     return build(YOUTUBE_API_SERVICE, YOUTUBE_API_VERSION, credentials=creds)
 
 
-def upload_to_youtube(video_path, title=None, description=None):
-    """Upload a video to YouTube as unlisted. Returns the video URL."""
+def upload_to_youtube(video_path, title=None, description=None, dry_run=False):
+    """Upload a video to YouTube as unlisted. Returns the video URL.
+
+    If dry_run=True, simulates the upload without actually calling YouTube API.
+    Returns a fake URL for testing purposes.
+    """
     from googleapiclient.http import MediaFileUpload
 
     if not os.path.exists(video_path):
@@ -70,6 +74,18 @@ def upload_to_youtube(video_path, title=None, description=None):
         title = basename.replace("_", " ").title()
     if description is None:
         description = f"Tennis practice highlight reel - {basename}"
+
+    size_mb = os.path.getsize(video_path) / (1024 * 1024)
+
+    if dry_run:
+        print(f"[DRY-RUN] Would upload to YouTube (unlisted): {os.path.basename(video_path)} ({size_mb:.1f} MB)")
+        print(f"  Title: {title}")
+        print(f"  Description: {description[:50]}...")
+        # Return a fake URL that indicates dry-run
+        fake_id = f"DRYRUN_{basename[:20]}"
+        url = f"https://youtu.be/{fake_id}"
+        print(f"  [DRY-RUN] Simulated URL: {url}")
+        return url
 
     youtube = get_youtube_service()
 
@@ -85,7 +101,6 @@ def upload_to_youtube(video_path, title=None, description=None):
         },
     }
 
-    size_mb = os.path.getsize(video_path) / (1024 * 1024)
     print(f"Uploading to YouTube (unlisted): {os.path.basename(video_path)} ({size_mb:.1f} MB)")
     print(f"  Title: {title}")
 
@@ -204,6 +219,8 @@ def main():
     parser.add_argument("--description", type=str, help="YouTube video description")
     parser.add_argument("--all", action="store_true", dest="upload_all",
                         help="Upload to both YouTube and iCloud Drive")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Simulate uploads without actually uploading (for testing)")
     args = parser.parse_args()
 
     # Default: upload to both
@@ -235,7 +252,7 @@ def main():
 
     # YouTube
     if args.youtube or args.upload_all:
-        url = upload_to_youtube(video_path, title=args.title, description=args.description)
+        url = upload_to_youtube(video_path, title=args.title, description=args.description, dry_run=args.dry_run)
         results["youtube"] = url
 
     # iCloud Drive

@@ -206,7 +206,11 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     download = photo.download()
 
     with open(output_path, "wb") as f:
-        f.write(download.content)
+        # Handle both Response object (.content) and raw bytes
+        if hasattr(download, 'content'):
+            f.write(download.content)
+        else:
+            f.write(download)
 
     log(f"Downloaded {output_path.stat().st_size / 1024 / 1024:.1f} MB")
 
@@ -306,22 +310,31 @@ def run_pipeline(video_path: Path) -> Path:
     return highlights[0]
 
 
-def upload_to_youtube(video_path: Path, title: str = None) -> str:
-    """Upload video to YouTube and return URL."""
+def upload_to_youtube(video_path: Path, title: str = None, dry_run: bool = False) -> str:
+    """Upload video to YouTube and return URL.
+
+    If dry_run=True, simulates the upload without actually uploading.
+    """
     if not title:
         date_str = datetime.now().strftime("%Y-%m-%d")
         title = f"Tennis Practice {date_str}"
 
     python = sys.executable
 
+    cmd = [
+        python,
+        str(PROJECT_ROOT / "scripts" / "upload.py"),
+        str(video_path),
+        "--title", title,
+        "--youtube",  # Upload to YouTube (unlisted by default)
+    ]
+
+    if dry_run:
+        cmd.append("--dry-run")
+        log("YouTube upload: DRY-RUN mode")
+
     result = subprocess.run(
-        [
-            python,
-            str(PROJECT_ROOT / "scripts" / "upload.py"),
-            str(video_path),
-            "--title", title,
-            "--youtube",  # Upload to YouTube (unlisted by default)
-        ],
+        cmd,
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
@@ -340,8 +353,14 @@ def upload_to_youtube(video_path: Path, title: str = None) -> str:
     raise RuntimeError("Could not find YouTube URL in output")
 
 
-def process_job(job: dict) -> str:
-    """Process a single job. Returns YouTube URL on success."""
+def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = False) -> str:
+    """Process a single job. Returns YouTube URL or highlight path on success.
+
+    Args:
+        job: Job dict with video_id, filename, icloud_asset_id
+        skip_youtube: If True, skip YouTube upload entirely
+        youtube_dry_run: If True, simulate YouTube upload without actually uploading
+    """
     video_id = job["video_id"]
     filename = job["filename"]
     icloud_asset_id = job["icloud_asset_id"]
@@ -358,14 +377,27 @@ def process_job(job: dict) -> str:
     highlight_path = run_pipeline(video_path)
 
     # Upload to YouTube
-    youtube_url = upload_to_youtube(highlight_path)
+    if skip_youtube:
+        log(f"Completed: {highlight_path} (YouTube upload skipped)")
+        return f"file://{highlight_path}"
 
+    youtube_url = upload_to_youtube(highlight_path, dry_run=youtube_dry_run)
     log(f"Completed: {youtube_url}")
     return youtube_url
 
 
-def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int, once: bool = False):
-    """Main worker loop."""
+def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
+                once: bool = False, skip_youtube: bool = False, youtube_dry_run: bool = False):
+    """Main worker loop.
+
+    Args:
+        coordinator_url: URL of the coordinator API
+        worker_id: Identifier for this worker
+        poll_interval: Seconds between polling for jobs
+        once: If True, process one job and exit
+        skip_youtube: If True, skip YouTube upload entirely
+        youtube_dry_run: If True, simulate YouTube upload without actually uploading
+    """
     # Update globals for other functions
     global COORDINATOR_URL, WORKER_ID, POLL_INTERVAL
     COORDINATOR_URL = coordinator_url
@@ -375,6 +407,10 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int, once: 
     log(f"Starting GPU worker: {WORKER_ID}")
     log(f"Coordinator: {COORDINATOR_URL}")
     log(f"Poll interval: {POLL_INTERVAL}s")
+    if skip_youtube:
+        log("YouTube upload: DISABLED")
+    elif youtube_dry_run:
+        log("YouTube upload: DRY-RUN MODE (no actual uploads)")
 
     while True:
         try:
@@ -382,7 +418,7 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int, once: 
 
             if job:
                 try:
-                    youtube_url = process_job(job)
+                    youtube_url = process_job(job, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
                     api_request(
                         "POST",
                         f"/jobs/{job['video_id']}/complete?worker_id={WORKER_ID}",
@@ -430,13 +466,26 @@ def main():
         action="store_true",
         help="Process one job and exit",
     )
+    parser.add_argument(
+        "--skip-youtube",
+        action="store_true",
+        help="Skip YouTube upload entirely (just generate highlights)",
+    )
+    parser.add_argument(
+        "--youtube-dry-run",
+        action="store_true",
+        help="Simulate YouTube upload without actually uploading (for testing)",
+    )
     args = parser.parse_args()
 
     coordinator_url = args.coordinator or COORDINATOR_URL
     worker_id = args.worker_id or WORKER_ID
     poll_interval = args.poll_interval or POLL_INTERVAL
+    skip_youtube = args.skip_youtube
+    youtube_dry_run = args.youtube_dry_run
 
-    worker_loop(coordinator_url, worker_id, poll_interval, once=args.once)
+    worker_loop(coordinator_url, worker_id, poll_interval,
+                once=args.once, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
 
 
 if __name__ == "__main__":

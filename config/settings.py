@@ -90,7 +90,6 @@ AUTO_PIPELINE = {
 # Add phone numbers / email addresses here to get notified
 # when highlight videos are processed and uploaded.
 NOTIFICATIONS = {
-    "ntfy_topic": "tennis-pipeline-andrew",
     "imessage": [
         "+12068527753",
     ],

@@ -81,8 +81,12 @@ def get_icloud_api():
     if not apple_id or not password:
         raise RuntimeError("ICLOUD_USER(NAME) and ICLOUD_PASS(WORD) must be in .env")
 
+    # Use shared session directory for cookie persistence
+    cookie_dir = project_root / "config" / "icloud_session"
+    cookie_dir.mkdir(parents=True, exist_ok=True)
+
     log(f"Connecting to iCloud as {apple_id}")
-    api = PyiCloudService(apple_id, password)
+    api = PyiCloudService(apple_id, password, cookie_directory=str(cookie_dir))
 
     if api.requires_2fa:
         raise RuntimeError("iCloud requires 2FA - authenticate manually first")

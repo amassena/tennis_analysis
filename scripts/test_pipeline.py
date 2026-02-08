@@ -66,26 +66,15 @@ def run_scp_from(host, project, remote_path, local_path):
     return result.returncode == 0
 
 
-def send_notification(message):
-    """Send test notification via ntfy.sh."""
-    topic = NOTIFICATIONS.get("ntfy_topic")
-    if topic:
-        try:
-            import urllib.request
-            req = urllib.request.Request(
-                f"https://ntfy.sh/{topic}",
-                data=message.encode(),
-                headers={"Title": "Pipeline Test"}
-            )
-            urllib.request.urlopen(req, timeout=10)
-            return True
-        except Exception as e:
-            log(f"Notification failed: {e}", "WARN")
-    return False
+def test_pipeline(machine, upload=False, cleanup=False, dry_run=False):
+    """Run full pipeline test.
 
-
-def test_pipeline(machine, upload=False, cleanup=False):
-    """Run full pipeline test."""
+    Args:
+        machine: Machine config dict with host and project path
+        upload: If True, upload to YouTube for real
+        cleanup: If True, clean up test files after
+        dry_run: If True, simulate YouTube upload without actually uploading
+    """
     host = machine["host"]
     project = machine["project"]
     python = f"{project}/venv/Scripts/python.exe"
@@ -187,21 +176,23 @@ def test_pipeline(machine, upload=False, cleanup=False):
         else:
             log("Failed to copy highlights", "WARN")
 
-    # Step 8: YouTube upload (optional)
-    if upload:
-        log("Uploading to YouTube...", "RUN")
+    # Step 8: YouTube upload (optional, supports dry-run)
+    if upload or dry_run:
+        mode = "[DRY-RUN] " if dry_run else ""
+        log(f"{mode}Uploading to YouTube...", "RUN")
+        dry_run_flag = " --dry-run" if dry_run else ""
         ok, out, err = run_ssh(host, project,
-            f"{python} scripts/upload.py highlights/{highlight_file} --title \"[TEST] Pipeline Test\" --privacy unlisted",
+            f"{python} scripts/upload.py highlights/{highlight_file} --title \"[TEST] Pipeline Test\" --youtube{dry_run_flag}",
             timeout=300)
         if ok and "youtu" in out.lower():
-            log(f"YouTube upload done", "OK")
+            log(f"{mode}YouTube upload done", "OK")
             results["youtube"] = True
             # Extract URL
             for line in out.split('\n'):
                 if 'youtu' in line.lower():
                     log(f"  URL: {line.strip()}", "INFO")
         else:
-            log("YouTube upload failed", "WARN")
+            log(f"{mode}YouTube upload failed", "WARN")
             results["youtube"] = False
 
     # Send completion notification
@@ -235,6 +226,8 @@ def main():
                         help="Machine to test on (default: desktop3090)")
     parser.add_argument("--upload", action="store_true",
                         help="Upload to YouTube (unlisted)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Test full pipeline with simulated YouTube upload (no actual upload)")
     parser.add_argument("--cleanup", action="store_true",
                         help="Clean up test files after")
     parser.add_argument("--list-machines", action="store_true",
@@ -260,7 +253,7 @@ def main():
         print("Create it first with: ffmpeg -f concat -safe 0 -i clips_list.txt -c copy test/TEST_6shots.mov")
         sys.exit(1)
 
-    success = test_pipeline(machines[args.machine], upload=args.upload, cleanup=args.cleanup)
+    success = test_pipeline(machines[args.machine], upload=args.upload, cleanup=args.cleanup, dry_run=args.dry_run)
     sys.exit(0 if success else 1)
 
 

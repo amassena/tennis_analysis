@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import json
+import shutil
 
 # Auto-detect project root from script location
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -13,9 +14,41 @@ TARGET_FPS = 60
 CQ = 32
 PRESET = "p4"
 
+# Find ffmpeg/ffprobe - check common locations if not in PATH
+def _find_ffmpeg():
+    """Find ffmpeg executable, checking common Windows locations."""
+    # Try PATH first
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg, shutil.which("ffprobe")
+
+    # Common Windows locations - use explicit user paths for scheduled tasks
+    locations = [
+        # WinGet links for known users
+        r"C:\Users\amass\AppData\Local\Microsoft\WinGet\Links",
+        r"C:\Users\Andrew\AppData\Local\Microsoft\WinGet\Links",
+        # Standard locations
+        r"C:\ffmpeg\bin",
+        r"C:\Program Files\ffmpeg\bin",
+        # Environment variable fallback
+        os.path.expandvars(r"%USERPROFILE%\AppData\Local\Microsoft\WinGet\Links"),
+        os.path.expandvars(r"%USERPROFILE%\ffmpeg\bin"),
+    ]
+
+    for loc in locations:
+        ffmpeg_path = os.path.join(loc, "ffmpeg.exe")
+        ffprobe_path = os.path.join(loc, "ffprobe.exe")
+        if os.path.exists(ffmpeg_path):
+            return ffmpeg_path, ffprobe_path
+
+    # Fallback to just the command name
+    return "ffmpeg", "ffprobe"
+
+FFMPEG, FFPROBE = _find_ffmpeg()
+
 
 def probe_duration(filepath):
-    cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", filepath]
+    cmd = [FFPROBE, "-v", "quiet", "-print_format", "json", "-show_format", filepath]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode == 0:
         data = json.loads(result.stdout)
@@ -28,7 +61,7 @@ def _nvenc_works():
     import subprocess as _sp
     try:
         r = _sp.run(
-            ["ffmpeg", "-hide_banner", "-y",
+            [FFMPEG, "-hide_banner", "-y",
              "-f", "lavfi", "-i", "nullsrc=s=64x64:d=0.1",
              "-c:v", "h264_nvenc", "-f", "null", "-"],
             capture_output=True, text=True, timeout=10
@@ -67,7 +100,7 @@ def convert(src, dst):
         ]
 
     cmd = [
-        "ffmpeg", "-y",
+        FFMPEG, "-y",
         "-i", src,
         "-map", "0:v:0", "-map", "0:a:0?",  # ? makes audio optional
         "-r", str(TARGET_FPS),
