@@ -94,6 +94,16 @@ def claim_job() -> dict:
 
 def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     """Download video from iCloud to raw directory."""
+    # Check if file already exists locally
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = RAW_DIR / filename
+
+    # Also check for case-insensitive match
+    for existing in RAW_DIR.iterdir():
+        if existing.name.lower() == filename.lower():
+            log(f"File already exists: {existing}")
+            return existing
+
     # Import iCloud library (pyicloud)
     try:
         from pyicloud import PyiCloudService
@@ -115,11 +125,11 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
                 key, value = line.split("=", 1)
                 env_vars[key.strip()] = value.strip().strip('"').strip("'")
 
-    apple_id = env_vars.get("ICLOUD_USER")
-    password = env_vars.get("ICLOUD_PASS")
+    apple_id = env_vars.get("ICLOUD_USER") or env_vars.get("ICLOUD_USERNAME")
+    password = env_vars.get("ICLOUD_PASS") or env_vars.get("ICLOUD_PASSWORD")
 
     if not apple_id or not password:
-        raise RuntimeError("ICLOUD_USER and ICLOUD_PASS must be in .env")
+        raise RuntimeError("ICLOUD_USER(NAME) and ICLOUD_PASS(WORD) must be in .env")
 
     log(f"Connecting to iCloud as {apple_id}")
     api = PyiCloudService(apple_id, password)
@@ -127,16 +137,16 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     if api.requires_2fa:
         raise RuntimeError("iCloud requires 2FA - authenticate manually first")
 
-    # Find the asset
+    # Find the asset by searching all photos
     log(f"Looking for asset {icloud_asset_id}")
     photo = None
 
-    for album in api.photos.albums.values():
-        for p in album:
-            if p.id == icloud_asset_id:
-                photo = p
-                break
-        if photo:
+    # Search through all photos (more reliable than album iteration)
+    log("Searching all photos...")
+    for p in api.photos.all:
+        if p.id == icloud_asset_id:
+            photo = p
+            log(f"Found: {p.filename}")
             break
 
     if not photo:
@@ -193,22 +203,31 @@ def run_pipeline(video_path: Path) -> Path:
     log("Step 3: Detecting shots")
     shots_file = PROJECT_ROOT / f"shots_detected_{video_name}.json"
 
-    result = subprocess.run(
-        [
-            python,
-            str(PROJECT_ROOT / "scripts" / "detect_shots.py"),
-            str(poses_file),
-            "-o", str(shots_file),
-        ],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Shot detection failed: {result.stderr}")
+    if not shots_file.exists():
+        result = subprocess.run(
+            [
+                python,
+                str(PROJECT_ROOT / "scripts" / "detect_shots.py"),
+                str(poses_file),
+                "-o", str(shots_file),
+            ],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Shot detection failed: {result.stderr}")
 
     # Step 4: Extract clips and compile highlights
     log("Step 4: Extracting clips and highlights")
+
+    # Check if highlights already exist
+    highlight_pattern = f"{video_name}*highlights*.mp4"
+    existing_highlights = list(HIGHLIGHTS_DIR.glob(highlight_pattern))
+
+    if existing_highlights:
+        log(f"Highlights already exist: {existing_highlights[0].name}")
+        return existing_highlights[0]
 
     result = subprocess.run(
         [
@@ -227,7 +246,6 @@ def run_pipeline(video_path: Path) -> Path:
         raise RuntimeError(f"Clip extraction failed: {result.stderr}")
 
     # Find the highlight file
-    highlight_pattern = f"{video_name}*highlights*.mp4"
     highlights = list(HIGHLIGHTS_DIR.glob(highlight_pattern))
 
     if not highlights:
@@ -250,7 +268,7 @@ def upload_to_youtube(video_path: Path, title: str = None) -> str:
             str(PROJECT_ROOT / "scripts" / "upload.py"),
             str(video_path),
             "--title", title,
-            "--privacy", "unlisted",
+            "--youtube",  # Upload to YouTube (unlisted by default)
         ],
         cwd=PROJECT_ROOT,
         capture_output=True,
