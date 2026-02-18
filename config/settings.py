@@ -123,3 +123,68 @@ COORDINATOR = {
     "wol_check_interval": 60,     # 1 minute
     "worker_poll_interval": 60,   # 1 minute
 }
+
+# ── Cloud Infrastructure ───────────────────────────────────
+# Hetzner (orchestration) + RunPod (GPU burst) + Cloudflare R2 (storage)
+CLOUD = {
+    "enabled": False,  # Set True to use cloud instead of local GPUs
+
+    # Hetzner CPX31 - Orchestration server at playfullife.com
+    # ~$12/mo: 4 vCPU, 8GB RAM, 160GB SSD
+    "hetzner": {
+        "host": os.environ.get("HETZNER_HOST", "playfullife.com"),
+        "api_token": os.environ.get("HETZNER_API_TOKEN", ""),
+        "ssh_key_path": os.path.expanduser("~/.ssh/id_rsa"),
+    },
+
+    # RunPod - GPU burst processing
+    # A100 80GB: ~$1.99/hr, RTX 4090: ~$0.69/hr
+    "runpod": {
+        "api_key": os.environ.get("RUNPOD_API_KEY", ""),
+        "gpu_type": "NVIDIA A100 80GB PCIe",  # or "NVIDIA GeForce RTX 4090"
+        "cloud_type": "SECURE",  # SECURE or COMMUNITY
+        "docker_image": "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
+        "volume_size_gb": 50,
+        "max_bid_per_gpu": 2.50,  # Max $/hr for spot instances
+        "timeout_seconds": 3600,  # Max pod runtime (1 hour)
+        "min_download_mbps": 500,  # Minimum network speed
+    },
+
+    # Cloudflare R2 - Video storage (zero egress fees!)
+    # ~$0.015/GB/month, free egress, S3-compatible
+    "r2": {
+        "account_id": os.environ.get("CF_ACCOUNT_ID", ""),
+        "access_key_id": os.environ.get("CF_R2_ACCESS_KEY_ID", ""),
+        "secret_access_key": os.environ.get("CF_R2_SECRET_ACCESS_KEY", ""),
+        "bucket_name": "tennis-videos",
+        "endpoint_url": None,  # Auto-generated from account_id
+        "multipart_threshold_mb": 100,  # Use multipart for files > 100MB
+        "multipart_chunk_mb": 50,       # 50MB chunks for multipart
+        "lifecycle_days": {
+            "raw": 7,           # Delete raw videos after 7 days
+            "preprocessed": 14, # Delete preprocessed after 14 days
+            "highlights": 0,    # Keep highlights forever (0 = no expiry)
+        },
+    },
+
+    # YouTube API - Final publishing
+    "youtube": {
+        "client_secrets_file": os.path.join(PROJECT_ROOT, "config", "client_secrets.json"),
+        "credentials_file": os.path.join(PROJECT_ROOT, "config", "youtube_credentials.json"),
+        "default_privacy": "unlisted",
+        "category_id": "17",  # Sports
+        "add_chapters": True,  # Auto-generate chapters from shots
+    },
+}
+
+# Helper to get R2 endpoint URL
+def get_r2_endpoint():
+    """Generate R2 endpoint URL from account ID."""
+    account_id = CLOUD["r2"]["account_id"]
+    if account_id:
+        return f"https://{account_id}.r2.cloudflarestorage.com"
+    return None
+
+# Set endpoint if account_id is configured
+if CLOUD["r2"]["account_id"]:
+    CLOUD["r2"]["endpoint_url"] = get_r2_endpoint()

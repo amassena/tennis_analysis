@@ -80,6 +80,13 @@ tennis_analysis/
 │   ├── detect_shots.py         # Run model on full video poses
 │   ├── extract_clips.py        # Clip extraction + highlights (NVENC-aware)
 │   └── auto_pipeline.py        # Automated iCloud -> GPU -> YouTube daemon
+├── storage/
+│   └── r2_client.py            # Cloudflare R2 storage client
+├── gpu_worker/
+│   ├── worker.py               # Local GPU worker daemon
+│   └── runpod_executor.py      # RunPod cloud GPU executor
+├── coordinator/
+│   └── api.py                  # Flask coordinator API
 ├── preprocess_nvenc.py         # Windows NVENC preprocessing
 ├── pipeline_state.json         # Tracks processed videos and YouTube URLs
 ├── {video}_labels.csv          # Per-video manual + auto labels
@@ -139,6 +146,47 @@ iPhone -> add video to album -> iCloud sync
 **Combined video format:** The output highlight has two sections:
 1. Normal-speed highlights (all shots concatenated from 60fps preprocessed video)
 2. 0.25x slow-motion highlights (same shots extracted from original 240fps, using `setpts=4.0*PTS`)
+
+## Cloud Architecture (Optional)
+
+For processing away from home or burst capacity, the pipeline supports cloud deployment:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Hetzner CPX31 (~$12/mo)        │  playfullife.com             │
+│  - Flask coordinator API         │  - iCloud polling            │
+│  - Job queue (SQLite)            │  - YouTube upload            │
+│  - RunPod orchestration          │  - Notification dispatch     │
+└─────────────────────────────────────────────────────────────────┘
+          │                                    │
+          ▼                                    ▼
+┌─────────────────────────┐      ┌─────────────────────────────────┐
+│  Cloudflare R2 (~$6/mo) │      │  RunPod GPU (~$65-130/mo burst) │
+│  - Zero egress fees     │◄────►│  - A100 80GB @ $1.99/hr         │
+│  - Lifecycle policies   │      │  - Spin up on demand            │
+│  - Presigned URLs       │      │  - Auto-terminate when done     │
+└─────────────────────────┘      └─────────────────────────────────┘
+```
+
+**Components:**
+- **Hetzner CPX31**: Orchestration (4 vCPU, 8GB RAM, $12/mo). Runs coordinator API, polls iCloud, dispatches to RunPod
+- **RunPod**: GPU burst (A100 80GB $1.99/hr, RTX 4090 $0.69/hr). Processes video then auto-terminates
+- **Cloudflare R2**: Video storage (~$0.015/GB/mo, zero egress). Pipeline downloads/uploads via presigned URLs
+
+**Enable cloud mode:**
+1. Set environment variables (see `.env.example`)
+2. Set `CLOUD["enabled"] = True` in `config/settings.py`
+3. Run `python storage/r2_client.py setup` to create bucket + lifecycle rules
+
+**New modules:**
+- `storage/r2_client.py` - Cloudflare R2 uploads/downloads with multipart support
+- `gpu_worker/runpod_executor.py` - RunPod pod lifecycle and job execution
+
+**Cost estimate (10 videos/month):**
+- Hetzner: $12/mo (always on)
+- RunPod: ~$20/mo (10 videos × 20min × $1.99/hr)
+- R2: ~$6/mo (400GB storage)
+- **Total: ~$38/mo** vs local GPUs drawing 300W
 
 ## Iterative Workflow
 
