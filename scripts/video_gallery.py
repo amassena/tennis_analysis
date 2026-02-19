@@ -620,14 +620,16 @@ async def gallery_page():
 
                 grid.innerHTML = data.videos.map(v => {
                     const isVideo = !v.key.endsWith('.json') && !v.key.endsWith('.jpg');
-                    const thumbKey = v.key.replace('raw/', 'thumbs/').replace(/\\.[^.]+$/, '.jpg');
+                    const baseName = v.name.replace(/\.(mp4|mov|MP4|MOV)$/i, '');
+                    const thumbUrl = '/thumb/' + encodeURIComponent(baseName + '.jpg');
                     const date = new Date(v.modified).toLocaleDateString();
 
                     return `
                     <div class="card" onclick="openFile('${v.key}', '${v.name}')">
-                        <div class="card-thumb" id="thumb-${v.name.replace(/[^a-z0-9]/gi, '')}">
+                        <div class="card-thumb">
                             ${v.key.endsWith('.json') ? '<span style="font-size:32px;color:var(--text-muted)">{}</span>' :
-                              v.key.endsWith('.jpg') ? '' : '<span style="font-size:32px;color:var(--text-muted)">🎬</span>'}
+                              v.key.endsWith('.jpg') ? '' :
+                              '<img src="' + thumbUrl + '" onerror="this.outerHTML=\\'<span style=font-size:32px>🎬</span>\\'">'}
                             ${isVideo ? '<div class="play-icon">▶</div>' : ''}
                         </div>
                         <div class="card-body">
@@ -640,34 +642,8 @@ async def gallery_page():
                     </div>`;
                 }).join('');
 
-                // Load thumbnails for videos
-                if (prefix === 'raw/') {
-                    data.videos.forEach(v => {
-                        const name = v.name.replace(/\.(mp4|mov|MP4|MOV)$/i, '');
-                        const thumbUrl = '/thumb/' + encodeURIComponent(name + '.jpg');
-                        const id = 'thumb-' + v.name.replace(/[^a-z0-9]/gi, '');
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.innerHTML = '<img src="' + thumbUrl + '" onerror="this.style.display=\'none\'"><div class="play-icon">▶</div>';
-                        }
-                    });
-                }
-
-                // Load actual images for thumbs tab
-                if (prefix === 'thumbs/') {
-                    data.videos.forEach(async v => {
-                        try {
-                            const res = await fetch(`/videos/url/${v.key}`);
-                            const d = await res.json();
-                            if (d.url) {
-                                const id = 'thumb-' + v.name.replace(/[^a-z0-9]/gi, '');
-                                const el = document.getElementById(id);
-                                if (el) el.innerHTML = `<img src="${d.url}">`;
-                            }
-                        } catch (e) {}
-                    });
-                }
-            } catch (e) {
+                
+                            } catch (e) {
                 grid.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Error: ${e.message}</div>`;
             }
         }
