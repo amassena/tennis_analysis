@@ -32,13 +32,30 @@ VIDEO = {
     "audio_codec": "aac",
 }
 
-# ── MediaPipe pose settings ───────────────────────────────────
+# ── Pose estimation settings ─────────────────────────────────
+# Two backends available:
+# - "yolo": YOLOv8-Pose (17 keypoints, GPU, ~200fps)
+# - "mediapipe": MediaPipe (33 keypoints, CPU, ~8fps)
+POSE_BACKEND = "yolo"  # Default to YOLO for speed
+
+YOLO_POSE = {
+    "model": "yolov8m-pose.pt",  # s=small, m=medium, l=large, x=xlarge
+    "num_keypoints": 17,
+    "keypoint_names": [
+        "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+        "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+        "left_wrist", "right_wrist", "left_hip", "right_hip",
+        "left_knee", "right_knee", "left_ankle", "right_ankle"
+    ],
+}
+
 MEDIAPIPE = {
     "model_complexity": 2,          # 0, 1, or 2 (2 = most accurate)
     "min_detection_confidence": 0.5,
     "min_tracking_confidence": 0.5,
     "enable_segmentation": False,
     "smooth_landmarks": True,
+    "num_keypoints": 33,
 }
 
 # ── Model / training hyperparameters ──────────────────────────

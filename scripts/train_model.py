@@ -98,10 +98,10 @@ def clips_to_arrays(clips_by_type, seq_len, shot_types):
     """Convert clip dicts to numpy arrays.
 
     Includes view_angle as 5-element one-hot encoding appended to pose features.
-    Total features: 99 (pose) + 5 (view_angle) = 104.
+    Total features: N_pose (51 for YOLO, 99 for MediaPipe) + 5 (view_angle).
 
     Returns:
-        X: numpy array shape (N, seq_len, 104)
+        X: numpy array shape (N, seq_len, n_features)
         y: numpy array shape (N,) with integer labels
         label_map: dict mapping shot_type string to integer
         view_angle_map: dict mapping view_angle string to integer index
@@ -113,6 +113,19 @@ def clips_to_arrays(clips_by_type, seq_len, shot_types):
 
     X_list = []
     y_list = []
+
+    # Detect num_pose_features from first clip (51 for YOLO 17*3, 99 for MediaPipe 33*3)
+    num_pose_features = None
+    for shot_type, clips in clips_by_type.items():
+        if clips and clips[0]["frames"]:
+            first_frame = clips[0]["frames"][0]
+            landmarks = first_frame.get("world_landmarks_xyz", [])
+            num_pose_features = len(landmarks) * 3
+            break
+    if num_pose_features is None:
+        num_pose_features = 51  # Default for YOLO
+
+    print(f"  Detected {num_pose_features // 3} keypoints ({num_pose_features} pose features)")
 
     for shot_type, clips in clips_by_type.items():
         label = label_map[shot_type]
@@ -133,24 +146,23 @@ def clips_to_arrays(clips_by_type, seq_len, shot_types):
             frame_data = []
             for frame in frames[:seq_len]:
                 landmarks = frame.get("world_landmarks_xyz", [])
-                # Flatten 33 keypoints x 3 coords = 99 features
+                # Flatten keypoints x 3 coords
                 flat = []
                 for kp in landmarks:
                     flat.extend(kp[:3])
 
-                # Pad if fewer than 99 features
-                while len(flat) < 99:
+                # Pad if fewer features
+                while len(flat) < num_pose_features:
                     flat.append(0.0)
-                pose_features = flat[:99]
+                pose_features = flat[:num_pose_features]
 
                 # Append view_angle one-hot (same for all frames in clip)
                 frame_features = pose_features + view_angle_one_hot
                 frame_data.append(frame_features)
 
             # Pad with zeros if fewer frames than seq_len
-            # Note: padded frames still get the view_angle one-hot
             while len(frame_data) < seq_len:
-                frame_data.append([0.0] * 99 + view_angle_one_hot)
+                frame_data.append([0.0] * num_pose_features + view_angle_one_hot)
 
             X_list.append(frame_data)
             y_list.append(label)
@@ -509,9 +521,10 @@ def main():
     # ── Convert to arrays ─────────────────────────────────────
     print("Converting to arrays...")
     X, y, label_map, view_angle_map = clips_to_arrays(clips_by_type, seq_len, active_types)
-    n_features = X.shape[2]  # 104 (99 pose + 5 view_angle)
+    n_features = X.shape[2]
+    n_pose_features = n_features - 5  # Total - view_angle one-hot
     print(f"  X shape: {X.shape}  y shape: {y.shape}")
-    print(f"  Features per frame: {n_features} (99 pose + 5 view_angle)")
+    print(f"  Features per frame: {n_features} ({n_pose_features} pose + 5 view_angle)")
     print(f"  Label map: {label_map}")
     print(f"  View angle map: {view_angle_map}")
     print()

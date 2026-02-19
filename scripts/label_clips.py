@@ -197,9 +197,14 @@ def interpolate_missing_frames(frames, start, end):
                 interpolated_indices.append(frame_idx)
             else:
                 # No neighbors at all — zero fill
+                # Detect num_keypoints from detected frames (default 17 for YOLO)
+                num_kp = 17
+                for d_idx in detected:
+                    num_kp = len(detected[d_idx])
+                    break
                 result.append({
                     "frame_idx": frame_idx,
-                    "world_landmarks_xyz": [[0.0, 0.0, 0.0]] * 33,
+                    "world_landmarks_xyz": [[0.0, 0.0, 0.0]] * num_kp,
                 })
                 interpolated_indices.append(frame_idx)
 
@@ -659,7 +664,7 @@ def main():
                 saved += 1
 
             total_saved += saved
-            print(f"  {shot_type}: frames {start}-{end} → {saved} clips")
+            print(f"  {shot_type}: frames {start}-{end} -> {saved} clips")
 
         print(f"\n[OK] Saved {total_saved} clips total")
         clip_counts = count_clips_per_type(TRAINING_DATA_DIR)

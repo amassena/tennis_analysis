@@ -63,7 +63,7 @@ def load_pose_frames(pose_path):
     return frames, fps, total
 
 
-def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map, view_angle_one_hot=None):
+def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map, view_angle_one_hot=None, n_pose_features=None):
     """Slide a window over all frames and predict shot type for each window.
 
     Args:
@@ -73,7 +73,8 @@ def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map, 
         seq_len: Sequence length for model input
         stride: Window stride
         inverse_label_map: Dict mapping int label to string
-        view_angle_one_hot: 5-element one-hot for view angle (None for old 99-feature models)
+        view_angle_one_hot: 5-element one-hot for view angle (None for old models)
+        n_pose_features: Number of pose features (51 for YOLO, 99 for MediaPipe)
 
     Returns list of (center_frame, predicted_label, confidence) tuples.
     """
@@ -82,10 +83,10 @@ def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map, 
     total = len(frames)
     predictions = []
 
-    # Determine feature count based on model
-    n_features = 99
-    if view_angle_one_hot is not None:
-        n_features = 104
+    # Determine pose feature count from model if not specified
+    if n_pose_features is None:
+        model_features = model.input_shape[-1]
+        n_pose_features = model_features - 5 if view_angle_one_hot else model_features
 
     for start in range(0, total - seq_len + 1, stride):
         window = []
@@ -94,13 +95,13 @@ def run_inference(model, frames, mean, std, seq_len, stride, inverse_label_map, 
                 flat = []
                 for kp in frames[i]:
                     flat.extend(kp[:3])
-                while len(flat) < 99:
+                while len(flat) < n_pose_features:
                     flat.append(0.0)
-                pose_features = flat[:99]
+                pose_features = flat[:n_pose_features]
             else:
-                pose_features = [0.0] * 99
+                pose_features = [0.0] * n_pose_features
 
-            # Append view_angle one-hot if using 104-feature model
+            # Append view_angle one-hot if provided
             if view_angle_one_hot is not None:
                 frame_features = pose_features + view_angle_one_hot
             else:

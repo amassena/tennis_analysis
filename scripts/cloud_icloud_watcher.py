@@ -38,7 +38,7 @@ STATE_FILE = "/opt/tennis/watcher_state.json"
 
 # Albums to watch
 ALBUMS = ["Tennis Videos", "Tennis Videos Group By Shot Type"]
-POLL_INTERVAL = 300  # 5 minutes
+POLL_INTERVAL = 20  # 20 seconds for testing
 
 
 def log(msg):
