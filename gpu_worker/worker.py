@@ -34,12 +34,26 @@ PREPROCESSED_DIR = PROJECT_ROOT / "preprocessed"
 POSES_DIR = PROJECT_ROOT / "poses"
 CLIPS_DIR = PROJECT_ROOT / "clips"
 HIGHLIGHTS_DIR = PROJECT_ROOT / "highlights"
+THUMBS_DIR = PROJECT_ROOT / "thumbs"
 
 
 def log(msg: str, level: str = "INFO"):
     """Log with timestamp."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] [{level}] {msg}", flush=True)
+
+
+def report_stage(video_id: str, stage: str, progress: float = None, message: str = None):
+    """Report current processing stage to coordinator."""
+    try:
+        data = {"stage": stage}
+        if progress is not None:
+            data["progress"] = progress
+        if message:
+            data["message"] = message
+        api_request("POST", f"/jobs/{video_id}/stage?worker_id={WORKER_ID}", data)
+    except Exception as e:
+        log(f"Failed to report stage: {e}", "WARN")
 
 
 def api_request(method: str, endpoint: str, data: dict = None) -> dict:
@@ -222,13 +236,121 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     return output_path
 
 
+def generate_thumbnail(video_path: Path, output_path: Path = None) -> Path:
+    """Generate a thumbnail from a video at ~10% into the video."""
+    THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if output_path is None:
+        output_path = THUMBS_DIR / f"{video_path.stem}.jpg"
+
+    if output_path.exists():
+        log(f"Thumbnail already exists: {output_path}")
+        return output_path
+
+    # Get video duration
+    probe_cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(video_path)
+    ]
+    result = subprocess.run(probe_cmd, capture_output=True, text=True)
+
+    try:
+        duration = float(result.stdout.strip())
+        # Seek to 10% into video for a good frame
+        seek_time = duration * 0.1
+    except (ValueError, TypeError):
+        seek_time = 5  # Default to 5 seconds if duration unknown
+
+    # Extract frame
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", str(seek_time),
+        "-i", str(video_path),
+        "-vframes", "1",
+        "-vf", "scale=480:-1",  # 480px wide, maintain aspect ratio
+        "-q:v", "2",  # High quality JPEG
+        str(output_path)
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        log(f"Thumbnail generation failed: {result.stderr}", "WARN")
+        return None
+
+    log(f"Generated thumbnail: {output_path}")
+    return output_path
+
+
+def upload_thumbnail_to_r2(thumb_path: Path, video_name: str) -> bool:
+    """Upload thumbnail to R2 storage."""
+    try:
+        import boto3
+        from botocore.config import Config
+    except ImportError:
+        log("boto3 not installed, skipping R2 upload", "WARN")
+        return False
+
+    # Load R2 credentials from .env
+    env_path = PROJECT_ROOT / ".env"
+    if not env_path.exists():
+        log("No .env file for R2 credentials", "WARN")
+        return False
+
+    env_vars = {}
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                env_vars[key.strip()] = value.strip().strip('"').strip("'")
+
+    account_id = env_vars.get("CF_ACCOUNT_ID")
+    access_key = env_vars.get("CF_R2_ACCESS_KEY_ID")
+    secret_key = env_vars.get("CF_R2_SECRET_ACCESS_KEY")
+    bucket = env_vars.get("R2_BUCKET", "tennis-videos")
+
+    if not all([account_id, access_key, secret_key]):
+        log("R2 credentials not configured in .env", "WARN")
+        return False
+
+    try:
+        client = boto3.client(
+            "s3",
+            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+            region_name="us-east-1",
+        )
+
+        key = f"thumbs/{video_name}.jpg"
+        client.upload_file(str(thumb_path), bucket, key, ExtraArgs={"ContentType": "image/jpeg"})
+        log(f"Uploaded thumbnail to R2: {key}")
+        return True
+    except Exception as e:
+        log(f"R2 upload failed: {e}", "WARN")
+        return False
+
+
 def run_pipeline(video_path: Path) -> Path:
-    """Run the full processing pipeline on a video."""
+    """Run the full processing pipeline on a video (no stage reporting)."""
+    return run_pipeline_with_stages(video_path, None)
+
+
+def run_pipeline_with_stages(video_path: Path, video_id: str = None) -> Path:
+    """Run the full processing pipeline on a video with stage reporting."""
     video_name = video_path.stem
     python = sys.executable
 
+    def stage(name: str, progress: float = 0, msg: str = None):
+        if video_id:
+            report_stage(video_id, name, progress, msg)
+
     # Step 1: Preprocess (VFR -> CFR)
     log("Step 1: Preprocessing video")
+    stage("preprocessing", 0, "Starting NVENC preprocessing")
     preprocessed = PREPROCESSED_DIR / f"{video_name}.mp4"
 
     if not preprocessed.exists():
@@ -240,23 +362,41 @@ def run_pipeline(video_path: Path) -> Path:
         )
         if result.returncode != 0:
             raise RuntimeError(f"Preprocess failed: {result.stderr}")
+    stage("preprocessing", 100, "Preprocessing complete")
 
-    # Step 2: Extract poses
-    log("Step 2: Extracting poses")
+    # Step 2: Generate and upload thumbnail
+    log("Step 2: Generating thumbnail")
+    stage("thumbnail", 0, "Generating thumbnail")
+    thumb_path = generate_thumbnail(preprocessed)
+    if thumb_path:
+        upload_thumbnail_to_r2(thumb_path, video_name)
+    stage("thumbnail", 100, "Thumbnail complete")
+
+    # Step 3: Pre-scan for dead sections
+    log("Step 3: Pre-scanning for dead sections")
+    stage("prescan", 0, "Scanning for dead sections")
+    # Pre-scan is part of pose extraction with --skip-dead
+
+    # Step 4: Extract poses
+    log("Step 4: Extracting poses")
+    stage("poses", 0, "Starting pose extraction")
     poses_file = POSES_DIR / f"{video_name}.json"
 
     if not poses_file.exists():
         result = subprocess.run(
-            [python, str(PROJECT_ROOT / "scripts" / "extract_poses.py"), str(preprocessed)],
+            [python, str(PROJECT_ROOT / "scripts" / "extract_poses.py"),
+             str(preprocessed), "--skip-dead"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
             raise RuntimeError(f"Pose extraction failed: {result.stderr}")
+    stage("poses", 100, "Pose extraction complete")
 
-    # Step 3: Detect shots
-    log("Step 3: Detecting shots")
+    # Step 5: Detect shots
+    log("Step 5: Detecting shots")
+    stage("detection", 0, "Running shot detection model")
     shots_file = PROJECT_ROOT / f"shots_detected_{video_name}.json"
 
     if not shots_file.exists():
@@ -273,9 +413,11 @@ def run_pipeline(video_path: Path) -> Path:
         )
         if result.returncode != 0:
             raise RuntimeError(f"Shot detection failed: {result.stderr}")
+    stage("detection", 100, "Shot detection complete")
 
-    # Step 4: Extract clips and compile highlights
-    log("Step 4: Extracting clips and highlights")
+    # Step 6: Extract clips and compile highlights
+    log("Step 6: Extracting clips and highlights")
+    stage("clips", 0, "Extracting clips")
 
     # Check if highlights already exist
     highlight_pattern = f"{video_name}*highlights*.mp4"
@@ -283,6 +425,7 @@ def run_pipeline(video_path: Path) -> Path:
 
     if existing_highlights:
         log(f"Highlights already exist: {existing_highlights[0].name}")
+        stage("clips", 100, "Using existing highlights")
         return existing_highlights[0]
 
     result = subprocess.run(
@@ -300,6 +443,7 @@ def run_pipeline(video_path: Path) -> Path:
     )
     if result.returncode != 0:
         raise RuntimeError(f"Clip extraction failed: {result.stderr}")
+    stage("clips", 100, "Clip extraction complete")
 
     # Find the highlight file
     highlights = list(HIGHLIGHTS_DIR.glob(highlight_pattern))
@@ -371,17 +515,22 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
     api_request("POST", f"/jobs/{video_id}/processing?worker_id={WORKER_ID}")
 
     # Download from iCloud
+    report_stage(video_id, "downloading", 0, f"Downloading {filename}")
     video_path = download_from_icloud(icloud_asset_id, filename)
+    report_stage(video_id, "downloading", 100, "Download complete")
 
     # Run pipeline
-    highlight_path = run_pipeline(video_path)
+    highlight_path = run_pipeline_with_stages(video_path, video_id)
 
     # Upload to YouTube
     if skip_youtube:
+        report_stage(video_id, "done", 100, "Complete (YouTube skipped)")
         log(f"Completed: {highlight_path} (YouTube upload skipped)")
         return f"file://{highlight_path}"
 
+    report_stage(video_id, "uploading", 0, "Uploading to YouTube")
     youtube_url = upload_to_youtube(highlight_path, dry_run=youtube_dry_run)
+    report_stage(video_id, "done", 100, f"Complete: {youtube_url}")
     log(f"Completed: {youtube_url}")
     return youtube_url
 

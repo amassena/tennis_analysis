@@ -517,8 +517,8 @@ async def gallery_page():
                 <div class="stat-label">Videos</div>
             </div>
             <div class="stat">
-                <div class="stat-value" id="stat-poses">-</div>
-                <div class="stat-label">Poses</div>
+                <div class="stat-value" id="stat-highlights">-</div>
+                <div class="stat-label">Highlights</div>
             </div>
             <div class="stat">
                 <div class="stat-value" id="stat-size">-</div>
@@ -530,8 +530,9 @@ async def gallery_page():
     <main class="main">
         <div class="tabs">
             <button class="tab active" data-prefix="raw/">Videos</button>
+            <button class="tab" data-prefix="highlights/">Highlights</button>
             <button class="tab" data-prefix="poses/">Pose Data</button>
-            <button class="tab" data-prefix="thumbs/">Thumbnails</button>
+            <button class="tab" data-prefix="shots/">Detections</button>
         </div>
 
         <div class="grid" id="grid">
@@ -588,15 +589,15 @@ async def gallery_page():
 
         async function loadStats() {
             try {
-                const [rawRes, posesRes] = await Promise.all([
+                const [rawRes, highlightsRes] = await Promise.all([
                     fetch('/videos?prefix=raw/'),
-                    fetch('/videos?prefix=poses/')
+                    fetch('/videos?prefix=highlights/')
                 ]);
                 const raw = await rawRes.json();
-                const poses = await posesRes.json();
+                const highlights = await highlightsRes.json();
 
                 document.getElementById('stat-videos').textContent = raw.count;
-                document.getElementById('stat-poses').textContent = poses.count;
+                document.getElementById('stat-highlights').textContent = highlights.count;
 
                 const totalMB = raw.videos.reduce((sum, v) => sum + v.size_mb, 0);
                 document.getElementById('stat-size').textContent =
@@ -621,7 +622,7 @@ async def gallery_page():
                 grid.innerHTML = data.videos.map(v => {
                     const isVideo = !v.key.endsWith('.json') && !v.key.endsWith('.jpg');
                     const baseName = v.name.replace(/\.(mp4|mov|MP4|MOV)$/i, '');
-                    const thumbUrl = '/thumb/' + encodeURIComponent(baseName + '.jpg');
+                    const thumbUrl = '/thumb/' + encodeURIComponent(baseName + '.jpg') + '?v=' + Date.now();
                     const date = new Date(v.modified).toLocaleDateString();
 
                     return `

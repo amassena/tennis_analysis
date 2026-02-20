@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from .state import StateBackend, VideoJob, VideoStatus
+from .state import StateBackend, VideoJob, VideoStatus, ProcessingStage
 
 
 class SQLiteStateBackend(StateBackend):
@@ -33,7 +33,13 @@ class SQLiteStateBackend(StateBackend):
                 error_message TEXT,
                 retry_count INTEGER DEFAULT 0,
                 album_name TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                current_stage TEXT,
+                stage_progress REAL,
+                stage_message TEXT,
+                stage_updated_at TEXT,
+                pod_id TEXT,
+                pod_status TEXT
             )
         """)
 
@@ -45,6 +51,32 @@ class SQLiteStateBackend(StateBackend):
             CREATE INDEX IF NOT EXISTS idx_jobs_icloud ON jobs(icloud_asset_id)
         """)
 
+        # Migration: add new columns if they don't exist
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN current_stage TEXT")
+        except:
+            pass
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN stage_progress REAL")
+        except:
+            pass
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN stage_message TEXT")
+        except:
+            pass
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN stage_updated_at TEXT")
+        except:
+            pass
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN pod_id TEXT")
+        except:
+            pass
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN pod_status TEXT")
+        except:
+            pass
+
         await self._db.commit()
 
     async def close(self) -> None:
@@ -54,6 +86,8 @@ class SQLiteStateBackend(StateBackend):
 
     def _row_to_job(self, row: aiosqlite.Row) -> VideoJob:
         """Convert a database row to a VideoJob."""
+        # Handle optional columns that may not exist in older databases
+        row_dict = dict(row)
         return VideoJob(
             video_id=row["video_id"],
             icloud_asset_id=row["icloud_asset_id"],
@@ -67,6 +101,12 @@ class SQLiteStateBackend(StateBackend):
             retry_count=row["retry_count"],
             album_name=row["album_name"],
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+            current_stage=ProcessingStage(row_dict["current_stage"]) if row_dict.get("current_stage") else None,
+            stage_progress=row_dict.get("stage_progress"),
+            stage_message=row_dict.get("stage_message"),
+            stage_updated_at=datetime.fromisoformat(row_dict["stage_updated_at"]) if row_dict.get("stage_updated_at") else None,
+            pod_id=row_dict.get("pod_id"),
+            pod_status=row_dict.get("pod_status"),
         )
 
     async def add_job(self, job: VideoJob) -> None:
@@ -216,3 +256,61 @@ class SQLiteStateBackend(StateBackend):
             stats["total"] = row["total"]
 
         return stats
+
+    async def update_stage(
+        self,
+        video_id: str,
+        stage: ProcessingStage,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        """Update the current processing stage and progress."""
+        now = datetime.now(timezone.utc).isoformat()
+        await self._db.execute(
+            """
+            UPDATE jobs
+            SET current_stage = ?, stage_progress = ?, stage_message = ?, stage_updated_at = ?
+            WHERE video_id = ?
+            """,
+            (stage.value, progress, message, now, video_id),
+        )
+        await self._db.commit()
+
+    async def update_pod_info(
+        self,
+        video_id: str,
+        pod_id: Optional[str] = None,
+        pod_status: Optional[str] = None,
+    ) -> None:
+        """Update RunPod pod information for a job."""
+        updates = []
+        params = []
+
+        if pod_id is not None:
+            updates.append("pod_id = ?")
+            params.append(pod_id)
+
+        if pod_status is not None:
+            updates.append("pod_status = ?")
+            params.append(pod_status)
+
+        if updates:
+            params.append(video_id)
+            await self._db.execute(
+                f"UPDATE jobs SET {', '.join(updates)} WHERE video_id = ?",
+                params,
+            )
+            await self._db.commit()
+
+    async def get_active_jobs(self) -> list[VideoJob]:
+        """Get all jobs that are currently being processed."""
+        async with self._db.execute(
+            """
+            SELECT * FROM jobs
+            WHERE status IN (?, ?)
+            ORDER BY claimed_at DESC
+            """,
+            (VideoStatus.CLAIMED.value, VideoStatus.PROCESSING.value),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [self._row_to_job(row) for row in rows]

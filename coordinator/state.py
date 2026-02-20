@@ -20,6 +20,22 @@ class VideoStatus(str, Enum):
     FAILED = "failed"
 
 
+class ProcessingStage(str, Enum):
+    """Stages in the video processing pipeline."""
+    QUEUED = "queued"
+    DOWNLOADING = "downloading"
+    PREPROCESSING = "preprocessing"
+    THUMBNAIL = "thumbnail"
+    PRESCAN = "prescan"
+    POSES = "poses"
+    DETECTION = "detection"
+    CLIPS = "clips"
+    SLOWMO = "slowmo"
+    COMBINED = "combined"
+    UPLOADING = "uploading"
+    DONE = "done"
+
+
 @dataclass
 class VideoJob:
     """Represents a video processing job."""
@@ -35,6 +51,14 @@ class VideoJob:
     retry_count: int = 0
     album_name: Optional[str] = None  # "Tennis Videos" or "Tennis Videos Group By Shot Type"
     created_at: Optional[datetime] = None
+    # Progress tracking
+    current_stage: Optional[ProcessingStage] = None
+    stage_progress: Optional[float] = None  # 0-100 percent
+    stage_message: Optional[str] = None
+    stage_updated_at: Optional[datetime] = None
+    # RunPod tracking
+    pod_id: Optional[str] = None
+    pod_status: Optional[str] = None
 
 
 class StateBackend(ABC):
@@ -104,4 +128,34 @@ class StateBackend(ABC):
     @abstractmethod
     async def get_stats(self) -> dict:
         """Get job statistics (counts by status)."""
+        pass
+
+    @abstractmethod
+    async def update_stage(
+        self,
+        video_id: str,
+        stage: "ProcessingStage",
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        """Update the current processing stage and progress."""
+        pass
+
+    @abstractmethod
+    async def update_pod_info(
+        self,
+        video_id: str,
+        pod_id: Optional[str] = None,
+        pod_status: Optional[str] = None,
+    ) -> None:
+        """Update RunPod pod information for a job."""
+        pass
+
+    @abstractmethod
+    async def get_active_jobs(self) -> list["VideoJob"]:
+        """Get all jobs that are currently being processed."""
+        pass
+
+    async def close(self) -> None:
+        """Clean up resources."""
         pass
