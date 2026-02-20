@@ -76,16 +76,156 @@ def init_pose_model(mp_config):
     )
 
 
+# ── Dead Section Detection ────────────────────────────────────
+
+
+def prescan_dead_sections(video_path, sample_interval=10, min_dead_seconds=5.0,
+                          detection_confidence=0.5):
+    """Fast pre-scan to find sections with no person detected.
+
+    Samples every Nth frame to quickly identify "dead" sections where no
+    pose is detected for extended periods.
+
+    Args:
+        video_path: Path to video file
+        sample_interval: Check every Nth frame (default: 10)
+        min_dead_seconds: Minimum duration to consider "dead" (default: 5.0)
+        detection_confidence: Minimum confidence for pose detection
+
+    Returns:
+        Tuple of (active_regions, dead_regions, stats) where regions are
+        lists of (start_frame, end_frame) tuples
+    """
+    import cv2
+    import mediapipe as mp
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"  [ERROR] Cannot open {video_path}")
+        return None, None, None
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    min_dead_frames = int(min_dead_seconds * fps)
+
+    print(f"  Pre-scanning for dead sections (every {sample_interval} frames)...")
+
+    # Use lightweight pose model for speed
+    pose = mp.solutions.pose.Pose(
+        static_image_mode=True,  # Faster for sparse sampling
+        model_complexity=0,  # Fastest model
+        min_detection_confidence=detection_confidence,
+    )
+
+    # Sample frames
+    detections = []  # List of (frame_idx, has_pose)
+    frame_idx = 0
+    samples_checked = 0
+
+    start_time = time.time()
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if frame_idx % sample_interval == 0:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            result = pose.process(rgb)
+            has_pose = result.pose_landmarks is not None
+            detections.append((frame_idx, has_pose))
+            samples_checked += 1
+
+            if samples_checked % 100 == 0:
+                pct = frame_idx / total_frames * 100
+                print(f"\r  Pre-scan: {pct:.0f}%", end="", flush=True)
+
+        frame_idx += 1
+
+    cap.release()
+    pose.close()
+    elapsed = time.time() - start_time
+
+    print(f"\r  Pre-scan: 100% ({samples_checked} samples in {elapsed:.1f}s)")
+
+    # Find dead and active regions
+    dead_regions = []
+    active_regions = []
+
+    # Expand detections to frame ranges
+    current_region_start = 0
+    current_has_pose = detections[0][1] if detections else True
+
+    for i, (frame_idx, has_pose) in enumerate(detections):
+        if has_pose != current_has_pose:
+            # Region change
+            region_end = frame_idx
+            if current_has_pose:
+                active_regions.append((current_region_start, region_end))
+            else:
+                if region_end - current_region_start >= min_dead_frames:
+                    dead_regions.append((current_region_start, region_end))
+                else:
+                    # Too short to be "dead", treat as active
+                    active_regions.append((current_region_start, region_end))
+
+            current_region_start = frame_idx
+            current_has_pose = has_pose
+
+    # Handle final region
+    if current_has_pose:
+        active_regions.append((current_region_start, total_frames))
+    else:
+        if total_frames - current_region_start >= min_dead_frames:
+            dead_regions.append((current_region_start, total_frames))
+        else:
+            active_regions.append((current_region_start, total_frames))
+
+    # Merge adjacent active regions (within sample_interval * 2 frames)
+    merge_gap = sample_interval * 2
+    merged_active = []
+    for start, end in sorted(active_regions):
+        if merged_active and start - merged_active[-1][1] <= merge_gap:
+            merged_active[-1] = (merged_active[-1][0], end)
+        else:
+            merged_active.append((start, end))
+
+    # Calculate stats
+    total_active = sum(end - start for start, end in merged_active)
+    total_dead = sum(end - start for start, end in dead_regions)
+    skip_pct = total_dead / total_frames * 100 if total_frames > 0 else 0
+
+    stats = {
+        "total_frames": total_frames,
+        "active_frames": total_active,
+        "dead_frames": total_dead,
+        "skip_percentage": round(skip_pct, 1),
+        "active_regions": len(merged_active),
+        "dead_regions": len(dead_regions),
+        "prescan_time": round(elapsed, 1),
+    }
+
+    if dead_regions:
+        dead_secs = total_dead / fps
+        print(f"  Found {len(dead_regions)} dead section(s): {dead_secs:.0f}s "
+              f"({skip_pct:.0f}% of video will be skipped)")
+    else:
+        print(f"  No dead sections found (continuous activity)")
+
+    return merged_active, dead_regions, stats
+
+
 # ── Extraction ───────────────────────────────────────────────
 
 
 def extract_poses(video_path, pose_model, visualize, poses_dir,
-                  start_frame=0, end_frame=-1):
+                  start_frame=0, end_frame=-1, active_regions=None):
     """Read frames, run MediaPipe, collect landmarks, optionally write skeleton video.
 
     Args:
         start_frame: First frame to process (inclusive, default 0).
         end_frame: Last frame to process (exclusive, -1 = all frames).
+        active_regions: List of (start, end) frame ranges to process. If provided,
+            only frames within these regions are processed (dead section skipping).
 
     Returns dict with video_info, detection_stats, landmark_names, and frames,
     or None on failure.
@@ -117,13 +257,29 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
         "duration_seconds": round(duration, 2),
     }
 
+    # Build frame skip set from active_regions
+    skip_frames = set()
+    if active_regions:
+        # Create set of frames TO PROCESS (active)
+        active_set = set()
+        for region_start, region_end in active_regions:
+            for f in range(region_start, region_end):
+                active_set.add(f)
+        # Skip frames are those NOT in active set
+        frames_to_process = len(active_set)
+        skip_count = total_frames - frames_to_process
+        print(f"  Active regions: {len(active_regions)}, "
+              f"processing {frames_to_process} frames (skipping {skip_count})")
+    else:
+        active_set = None  # Process all frames
+
     # Landmark names for reference
     landmark_names = [lm.name for lm in mp.solutions.pose.PoseLandmark]
 
-    # Skeleton video writer (optional) — disabled for partial ranges
+    # Skeleton video writer (optional) — disabled for partial ranges or skip mode
     skeleton_writer = None
     skeleton_part_path = None
-    if visualize and start_frame == 0 and end_frame == -1:
+    if visualize and start_frame == 0 and end_frame == -1 and active_regions is None:
         name = os.path.splitext(os.path.basename(video_path))[0]
         skeleton_path = os.path.join(poses_dir, name + "_skeleton.mp4")
         skeleton_part_path = os.path.join(poses_dir, name + "_skeleton.part.mp4")
@@ -137,6 +293,8 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
 
     frames = []
     frames_detected = 0
+    frames_processed = 0
+    frames_skipped = 0
     start_time = time.time()
 
     # Seek to start frame if needed
@@ -155,6 +313,14 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
             break
 
         timestamp = frame_idx / fps if fps > 0 else 0.0
+
+        # Skip frames not in active regions (dead section skipping)
+        if active_set is not None and frame_idx not in active_set:
+            frames_skipped += 1
+            frame_idx += 1
+            continue
+
+        frames_processed += 1
 
         # BGR → RGB, set non-writeable for performance
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -223,15 +389,21 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
         frame_idx += 1
 
         # Progress every 100 frames
-        if frame_idx % 100 == 0:
+        if frames_processed % 100 == 0:
             elapsed = time.time() - start_time
-            processed = frame_idx - start_frame
-            fps_actual = processed / elapsed if elapsed > 0 else 0
-            det_rate = frames_detected / processed * 100 if processed > 0 else 0
-            remaining_frames = actual_end - frame_idx
-            remaining = remaining_frames / fps_actual if fps_actual > 0 else 0
+            fps_actual = frames_processed / elapsed if elapsed > 0 else 0
+            det_rate = frames_detected / frames_processed * 100 if frames_processed > 0 else 0
+            if active_set:
+                # Estimate based on active frames remaining
+                remaining_active = len(active_set) - frames_processed
+                remaining = remaining_active / fps_actual if fps_actual > 0 else 0
+                progress_str = f"{frames_processed}/{len(active_set)}"
+            else:
+                remaining_frames = actual_end - frame_idx
+                remaining = remaining_frames / fps_actual if fps_actual > 0 else 0
+                progress_str = f"{frame_idx}/{actual_end}"
             print(
-                f"\r  Processing: {frame_idx}/{actual_end} "
+                f"\r  Processing: {progress_str} "
                 f"({det_rate:.1f}% detected) "
                 f"[{fps_actual:.1f} fps, ETA {format_duration(remaining)}]",
                 end="",
@@ -253,20 +425,29 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
         print()
         print(f"  Skeleton:  {os.path.basename(skeleton_final)} ({format_size(os.path.getsize(skeleton_final))})")
 
-    processed_count = frame_idx - start_frame
-    detection_rate = frames_detected / processed_count if processed_count > 0 else 0
-    fps_avg = processed_count / elapsed if elapsed > 0 else 0
+    detection_rate = frames_detected / frames_processed if frames_processed > 0 else 0
+    fps_avg = frames_processed / elapsed if elapsed > 0 else 0
 
-    print(
-        f"\r  Detected: {frames_detected}/{processed_count} "
-        f"({detection_rate * 100:.1f}%)  "
-        f"Time: {format_duration(elapsed)}  "
-        f"Avg: {fps_avg:.1f} fps"
-    )
+    if frames_skipped > 0:
+        print(
+            f"\r  Detected: {frames_detected}/{frames_processed} "
+            f"({detection_rate * 100:.1f}%)  "
+            f"Skipped: {frames_skipped}  "
+            f"Time: {format_duration(elapsed)}  "
+            f"Avg: {fps_avg:.1f} fps"
+        )
+    else:
+        print(
+            f"\r  Detected: {frames_detected}/{frames_processed} "
+            f"({detection_rate * 100:.1f}%)  "
+            f"Time: {format_duration(elapsed)}  "
+            f"Avg: {fps_avg:.1f} fps"
+        )
 
     detection_stats = {
-        "frames_processed": processed_count,
+        "frames_processed": frames_processed,
         "frames_detected": frames_detected,
+        "frames_skipped": frames_skipped,
         "detection_rate": round(detection_rate, 4),
         "processing_time_seconds": round(elapsed, 1),
     }
@@ -328,16 +509,39 @@ def merge_pose_jsons(json_paths, output_path):
 
 
 def process_video(video_path, output_path, visualize=False,
-                  start_frame=0, end_frame=-1):
-    """Process a single video file and save pose JSON. Returns True on success."""
+                  start_frame=0, end_frame=-1, skip_dead=False,
+                  min_dead_seconds=5.0):
+    """Process a single video file and save pose JSON. Returns True on success.
+
+    Args:
+        video_path: Path to input video
+        output_path: Path for output JSON
+        visualize: Generate skeleton overlay video
+        start_frame: First frame to process
+        end_frame: Last frame to process (-1 = all)
+        skip_dead: If True, pre-scan and skip dead sections
+        min_dead_seconds: Minimum duration to consider "dead"
+    """
     import cv2  # noqa: F401
 
     name = os.path.splitext(os.path.basename(video_path))[0]
     poses_dir = os.path.dirname(output_path) or POSES_DIR
 
+    # Pre-scan for dead sections if enabled
+    active_regions = None
+    prescan_stats = None
+    if skip_dead:
+        active_regions, dead_regions, prescan_stats = prescan_dead_sections(
+            video_path, min_dead_seconds=min_dead_seconds
+        )
+        if active_regions is None:
+            print("  [WARN] Pre-scan failed, processing all frames")
+            active_regions = None
+
     pose_model = init_pose_model(MEDIAPIPE)
     pose_result = extract_poses(video_path, pose_model, visualize, poses_dir,
-                                start_frame=start_frame, end_frame=end_frame)
+                                start_frame=start_frame, end_frame=end_frame,
+                                active_regions=active_regions)
     pose_model.close()
 
     if pose_result is None:
@@ -357,6 +561,10 @@ def process_video(video_path, output_path, visualize=False,
         "landmark_names": pose_result["landmark_names"],
         "frames": pose_result["frames"],
     }
+
+    # Add prescan stats if dead section skipping was used
+    if prescan_stats:
+        pose_data["prescan_stats"] = prescan_stats
 
     save_pose_json(pose_data, output_path)
 
@@ -388,6 +596,10 @@ def main():
                         help="Generate skeleton overlay video")
     parser.add_argument("--merge", nargs="+", metavar="JSON",
                         help="Merge partial pose JSONs into one")
+    parser.add_argument("--skip-dead", action="store_true",
+                        help="Pre-scan and skip dead sections (no person detected)")
+    parser.add_argument("--min-dead", type=float, default=5.0,
+                        help="Minimum seconds to consider 'dead' (default: 5.0)")
     args = parser.parse_args()
 
     # ── Merge mode ────────────────────────────────────────────
@@ -442,7 +654,8 @@ def main():
 
         print(f"Processing: {os.path.basename(video_path)}")
         ok = process_video(video_path, output_path, visualize=args.visualize,
-                           start_frame=args.start_frame, end_frame=args.end_frame)
+                           start_frame=args.start_frame, end_frame=args.end_frame,
+                           skip_dead=args.skip_dead, min_dead_seconds=args.min_dead)
         sys.exit(0 if ok else 1)
 
     # ── Batch mode: all preprocessed videos ───────────────────
@@ -456,6 +669,8 @@ def main():
     print(f"Found {len(videos)} video(s) in {PREPROCESSED_DIR}/")
     if args.visualize:
         print("  Skeleton visualization: ON")
+    if args.skip_dead:
+        print(f"  Dead section skipping: ON (min {args.min_dead}s)")
     print()
 
     results = {"ok": [], "skip": [], "fail": []}
@@ -480,7 +695,8 @@ def main():
             if args.visualize:
                 active_skeleton_part = os.path.join(POSES_DIR, name + "_skeleton.part.mp4")
 
-            ok = process_video(video_path, json_path, visualize=args.visualize)
+            ok = process_video(video_path, json_path, visualize=args.visualize,
+                               skip_dead=args.skip_dead, min_dead_seconds=args.min_dead)
 
             active_json_part = None
             active_skeleton_part = None

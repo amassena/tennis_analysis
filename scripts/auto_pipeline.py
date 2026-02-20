@@ -9,6 +9,7 @@ uploads to YouTube.  Supports multiple GPU machines with parallel dispatch.
 Usage:
     python scripts/auto_pipeline.py          # daemon mode (polls every 5 min)
     python scripts/auto_pipeline.py --once   # single pass then exit
+    python scripts/auto_pipeline.py --parallel  # use parallel chunk processing
 """
 
 import argparse
@@ -238,17 +239,20 @@ def download_video(asset, raw_dir):
     expected_size = asset.versions.get("original", {}).get("size") or asset.size
     if os.path.exists(dest_path) and expected_size:
         if os.path.getsize(dest_path) == expected_size:
-            log.info("Skip download (exists): %s", filename)
+            log.info("[STAGE:download] Skip download (exists): %s", filename)
             return dest_path
 
     os.makedirs(raw_dir, exist_ok=True)
     part_path = dest_path + ".part"
 
+    log.info("[STAGE:download] Downloading %s from iCloud (%s expected)",
+             filename, format_size(expected_size) if expected_size else "unknown size")
+
     for attempt in range(1, ICLOUD["max_retries"] + 1):
         try:
             response = asset.download("original")
             if response is None:
-                log.error("No download URL for %s", filename)
+                log.error("[STAGE:download:FAILED] No download URL for %s", filename)
                 return None
 
             downloaded = 0
@@ -263,18 +267,18 @@ def download_video(asset, raw_dir):
                             downloaded += len(chunk)
 
             os.replace(part_path, dest_path)
-            log.info("Downloaded %s (%s)", filename, format_size(downloaded))
+            log.info("[STAGE:download:COMPLETE] Downloaded %s (%s)", filename, format_size(downloaded))
             return dest_path
 
         except Exception as e:
-            log.warning("Download attempt %d/%d failed for %s: %s",
+            log.warning("[STAGE:download] Download attempt %d/%d failed for %s: %s",
                         attempt, ICLOUD["max_retries"], filename, e)
             if os.path.exists(part_path):
                 os.remove(part_path)
             if attempt < ICLOUD["max_retries"]:
                 time.sleep(ICLOUD["retry_delay"])
 
-    log.error("Download failed after %d attempts: %s", ICLOUD["max_retries"], filename)
+    log.error("[STAGE:download:FAILED] Download failed after %d attempts: %s", ICLOUD["max_retries"], filename)
     return None
 
 
@@ -426,62 +430,93 @@ def _scp_from(host, project, remote_relative, local_path):
 
 # ── GPU Processing ─────────────────────────────────────────
 
-def process_on_gpu(filename, machine, ordering="chronological"):
-    """Run the full pipeline on a GPU machine via SSH: preprocess, poses, detect, clips."""
+def process_on_gpu(filename, machine, ordering="chronological", parallel=False,
+                   all_machines=None, skip_dead=True):
+    """Run the full pipeline on a GPU machine via SSH: preprocess, poses, detect, clips.
+
+    Args:
+        filename: Video filename to process
+        machine: Primary machine dict (host, project)
+        ordering: "chronological" or "type" for highlight ordering
+        parallel: If True, use parallel chunk processing across all_machines
+        all_machines: List of all available machines for parallel processing
+        skip_dead: If True, skip dead sections during pose extraction
+    """
     base = os.path.splitext(filename)[0]
     host = machine["host"]
     project = machine["project"]
     py = f"{project}/venv/Scripts/python.exe"
 
     # 1. Transfer raw video
+    log.info("[STAGE:transfer_raw] Transferring %s to %s", filename, host)
     local_raw = os.path.join(RAW_DIR, filename)
     if not _scp_to(host, project, local_raw, f"raw/{filename}"):
-        log.error("Failed to transfer %s to %s", filename, host)
+        log.error("[STAGE:transfer_raw:FAILED] Failed to transfer %s to %s", filename, host)
         return False
+    log.info("[STAGE:transfer_raw:COMPLETE] Transfer complete")
 
     # 2. Preprocess (NVENC, 60fps CFR)
-    ok, _ = _run_ssh(
+    log.info("[STAGE:preprocess] Starting NVENC preprocessing on %s", host)
+    ok, output = _run_ssh(
         host,
         f"cd {project} && {py} preprocess_nvenc.py \"{filename}\"",
         timeout=1800,
     )
     if not ok:
-        log.error("Preprocess failed for %s on %s", filename, host)
+        log.error("[STAGE:preprocess:FAILED] Preprocess failed for %s on %s", filename, host)
         return False
+    log.info("[STAGE:preprocess:COMPLETE] Preprocess complete")
 
-    # 3. Extract poses (large videos can take 90+ min at ~34fps)
-    ok, _ = _run_ssh(
-        host,
-        f"cd {project} && {py} scripts/extract_poses.py \"preprocessed/{base}.mp4\"",
-        timeout=10800,
-    )
-    if not ok:
-        log.error("Pose extraction failed for %s on %s", filename, host)
-        return False
+    # 3. Extract poses - use parallel processing if enabled and multiple machines available
+    log.info("[STAGE:poses] Starting pose extraction on %s", host)
+    if parallel and all_machines and len(all_machines) > 1:
+        log.info("[STAGE:poses] Using parallel pose extraction across %d machines", len(all_machines))
+        from scripts.parallel_pipeline import process_video_parallel
+        # Parallel processing handles preprocessing internally, so we pass the raw file
+        if not process_video_parallel(filename, machines=all_machines):
+            log.error("[STAGE:poses:FAILED] Parallel pose extraction failed for %s", filename)
+            return False
+    else:
+        # Standard single-machine pose extraction (large videos can take 90+ min at ~34fps)
+        # Use --skip-dead to skip sections with no person detected
+        skip_flag = "--skip-dead" if skip_dead else ""
+        ok, output = _run_ssh(
+            host,
+            f"cd {project} && {py} scripts/extract_poses.py \"preprocessed/{base}.mp4\" {skip_flag}",
+            timeout=10800,
+        )
+        if not ok:
+            log.error("[STAGE:poses:FAILED] Pose extraction failed for %s on %s", filename, host)
+            return False
+    log.info("[STAGE:poses:COMPLETE] Pose extraction complete")
 
     # 4. Detect shots
+    log.info("[STAGE:detect] Running shot detection on %s", host)
     shots_file = f"shots_detected_{base}.json"
-    ok, _ = _run_ssh(
+    ok, output = _run_ssh(
         host,
         f"cd {project} && {py} scripts/detect_shots.py \"poses/{base}.json\" -o \"{shots_file}\"",
         timeout=1800,
     )
     if not ok:
-        log.error("Shot detection failed for %s on %s", filename, host)
+        log.error("[STAGE:detect:FAILED] Shot detection failed for %s on %s", filename, host)
         return False
+    log.info("[STAGE:detect:COMPLETE] Shot detection complete")
 
     # 5. Extract clips + highlights
+    log.info("[STAGE:clips] Extracting clips and highlights on %s", host)
     extract_cmd = f"cd {project} && {py} scripts/extract_clips.py -i \"{shots_file}\" --highlights"
     if ordering == "type":
         extract_cmd += " --group-by-type"
-    ok, _ = _run_ssh(
+    ok, output = _run_ssh(
         host,
         extract_cmd,
         timeout=3600,
     )
     if not ok:
-        log.error("Clip extraction failed for %s on %s", filename, host)
+        log.error("[STAGE:clips:FAILED] Clip extraction failed for %s on %s", filename, host)
         return False
+    log.info("[STAGE:clips:COMPLETE] Clip extraction complete")
 
     return True
 
@@ -501,6 +536,8 @@ def compile_combined_on_gpu(filename, machine, ordering="chronological"):
     slowmo_fps = AUTO_PIPELINE["slowmo_output_fps"]
     group_by_type = "True" if ordering == "type" else "False"
     shots_file = f"shots_detected_{base}.json"
+
+    log.info("[STAGE:slowmo] Creating slow-mo highlights on %s", host)
 
     # Build and run a Python one-liner that calls the functions
     # in extract_clips.py to produce slow-mo + combined video
@@ -530,10 +567,10 @@ def compile_combined_on_gpu(filename, machine, ordering="chronological"):
     )
     if not ok:
         # Fall back: if slow-mo fails, just use the normal highlights
-        log.warning("Combined video failed on %s, will use normal highlights only for %s", host, base)
+        log.warning("[STAGE:slowmo:FAILED] Combined video failed on %s, will use normal highlights only for %s", host, base)
         return False
 
-    log.info("Combined video compiled for %s on %s", base, host)
+    log.info("[STAGE:combined:COMPLETE] Combined video compiled for %s on %s", base, host)
     return True
 
 
@@ -548,16 +585,20 @@ def transfer_to_mac(filename, machine):
     local_combined = os.path.join(HIGHLIGHTS_DIR, combined_name)
     os.makedirs(HIGHLIGHTS_DIR, exist_ok=True)
 
+    log.info("[STAGE:transfer_back] Transferring highlights from %s to Mac", host)
+
     # Try combined first, fall back to normal highlights
     if _scp_from(host, project, f"highlights/{combined_name}", local_combined):
+        log.info("[STAGE:transfer_back:COMPLETE] Transferred %s", combined_name)
         return local_combined
 
-    log.warning("Combined not found on %s, trying normal highlights for %s", host, base)
+    log.warning("[STAGE:transfer_back] Combined not found, trying normal highlights for %s", base)
     local_normal = os.path.join(HIGHLIGHTS_DIR, normal_name)
     if _scp_from(host, project, f"highlights/{normal_name}", local_normal):
+        log.info("[STAGE:transfer_back:COMPLETE] Transferred %s", normal_name)
         return local_normal
 
-    log.error("No highlight video found on %s for %s", host, base)
+    log.error("[STAGE:transfer_back:FAILED] No highlight video found on %s for %s", host, base)
     return None
 
 
@@ -591,12 +632,12 @@ def upload_to_youtube(video_path, creation_date, video_number, view_angle="back-
         f"Auto-generated by tennis_analysis pipeline"
     )
 
-    log.info("Uploading to YouTube: %s", title)
+    log.info("[STAGE:upload] Uploading to YouTube: %s", title)
     url = _yt_upload(video_path, title=title, description=description)
     if url:
-        log.info("YouTube upload complete: %s", url)
+        log.info("[STAGE:upload:COMPLETE] YouTube URL: %s", url)
     else:
-        log.error("YouTube upload failed for %s", video_path)
+        log.error("[STAGE:upload:FAILED] YouTube upload failed for %s", video_path)
     return url
 
 
@@ -916,15 +957,27 @@ def preflight():
 
 # ── Main Loop ──────────────────────────────────────────────
 
-def process_single_video(asset, state, machine, ordering="chronological"):
-    """Process one video through the full pipeline. Returns youtube URL or None."""
+def process_single_video(asset, state, machine, ordering="chronological",
+                          parallel=False, all_machines=None, skip_dead=True):
+    """Process one video through the full pipeline. Returns youtube URL or None.
+
+    Args:
+        asset: iCloud photo asset
+        state: Pipeline state dict
+        machine: Primary GPU machine for processing
+        ordering: "chronological" or "type" for highlight ordering
+        parallel: If True, use parallel chunk processing
+        all_machines: All available machines for parallel processing
+        skip_dead: If True, skip dead sections during pose extraction
+    """
     filename = asset.filename
     base = os.path.splitext(filename)[0]
     asset_id = str(asset.id)
     host = machine["host"]
 
     log.info("=" * 60)
-    log.info("Processing: %s on %s (ordering=%s)", filename, host, ordering)
+    log.info("Processing: %s on %s (ordering=%s, parallel=%s, skip_dead=%s)",
+             filename, host, ordering, parallel, skip_dead)
     log.info("=" * 60)
 
 
@@ -941,7 +994,9 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     notify_processing_started(filename, host, order_label, view_angle)
 
     # 2. GPU pipeline: preprocess -> poses -> detect -> clips
-    if not process_on_gpu(filename, machine, ordering=ordering):
+    if not process_on_gpu(filename, machine, ordering=ordering,
+                          parallel=parallel, all_machines=all_machines,
+                          skip_dead=skip_dead):
         return None
 
     # 3. Compile combined normal + slow-mo highlight on GPU
@@ -1004,16 +1059,23 @@ def process_single_video(asset, state, machine, ordering="chronological"):
     return youtube_url
 
 
-def main_loop(once=False, debug=False):
-    """Main daemon loop: poll iCloud, process new videos, upload."""
+def main_loop(once=False, debug=False, parallel=False, skip_dead=True):
+    """Main daemon loop: poll iCloud, process new videos, upload.
+
+    Args:
+        once: If True, single pass then exit
+        debug: If True, enable debug logging
+        parallel: If True, use parallel chunk processing for large videos
+        skip_dead: If True, skip dead sections during pose extraction
+    """
     setup_logging(debug=debug)
     albums = AUTO_PIPELINE.get("albums", {})
     album_names = list(albums.keys()) if albums else [AUTO_PIPELINE.get("album", "Tennis Videos")]
     poll_interval = AUTO_PIPELINE["poll_interval"]
     machines = AUTO_PIPELINE["gpu_machines"]
 
-    log.info("Auto pipeline started (albums=%s, poll=%ds, once=%s, machines=%s)",
-             album_names, poll_interval, once,
+    log.info("Auto pipeline started (albums=%s, poll=%ds, once=%s, parallel=%s, skip_dead=%s, machines=%s)",
+             album_names, poll_interval, once, parallel, skip_dead,
              [m["host"] for m in machines])
 
     api = authenticate()
@@ -1053,7 +1115,10 @@ def main_loop(once=False, debug=False):
                         for i, (asset, ordering) in enumerate(new_videos):
                             machine = available_machines[i % len(available_machines)]
                             fut = pool.submit(process_single_video, asset, state,
-                                              machine, ordering=ordering)
+                                              machine, ordering=ordering,
+                                              parallel=parallel,
+                                              all_machines=available_machines,
+                                              skip_dead=skip_dead)
                             futures[fut] = (asset, machine)
                         for fut in as_completed(futures):
                             asset, machine = futures[fut]
@@ -1074,7 +1139,10 @@ def main_loop(once=False, debug=False):
                         machine = available_machines[i % len(available_machines)]
                         try:
                             url = process_single_video(asset, state, machine,
-                                                       ordering=ordering)
+                                                       ordering=ordering,
+                                                       parallel=parallel,
+                                                       all_machines=available_machines,
+                                                       skip_dead=skip_dead)
                             results.append((asset.filename, url))
                         except Exception as e:
                             results.append((asset.filename, None))
@@ -1111,13 +1179,18 @@ def main():
                         help="Enable debug logging (dumps iCloud field names)")
     parser.add_argument("--preflight", action="store_true",
                         help="Run pre-flight checks and exit (no processing)")
+    parser.add_argument("--parallel", action="store_true",
+                        help="Use parallel chunk processing across all GPUs for pose extraction")
+    parser.add_argument("--no-skip-dead", action="store_true",
+                        help="Disable dead section skipping (process all frames)")
     args = parser.parse_args()
 
     if args.preflight:
         ok = preflight()
         sys.exit(0 if ok else 1)
 
-    main_loop(once=args.once, debug=args.debug)
+    main_loop(once=args.once, debug=args.debug, parallel=args.parallel,
+              skip_dead=not args.no_skip_dead)
 
 
 if __name__ == "__main__":

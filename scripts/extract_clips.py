@@ -11,6 +11,7 @@ Usage:
     python scripts/extract_clips.py -i labels.csv -v video.mp4   # CSV labels
     python scripts/extract_clips.py -i detections.json           # JSON detections
     python scripts/extract_clips.py --highlights                 # compile highlights
+    python scripts/extract_clips.py --parallel                   # parallel extraction
 """
 
 import argparse
@@ -19,6 +20,7 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -367,6 +369,80 @@ def compile_combined_video(normal_path, slowmo_path, output_path):
     return result.returncode == 0
 
 
+def extract_clip_task(args):
+    """Worker function for parallel clip extraction.
+
+    Args:
+        args: tuple of (video_path, seg, output_path, pad, index, total)
+
+    Returns:
+        (output_path, success, size_mb)
+    """
+    video_path, seg, output_path, pad, index, total = args
+    success = extract_clip(video_path, seg["start_time"], seg["end_time"], output_path, pad)
+    if success and os.path.exists(output_path):
+        size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        return (output_path, True, size_mb, seg)
+    return (output_path, False, 0, seg)
+
+
+def extract_clips_parallel(video_path, segments, type_dirs, video_name, pad=0.3, max_workers=4):
+    """Extract clips in parallel using thread pool.
+
+    Args:
+        video_path: Path to source video
+        segments: List of segment dicts with shot_type, start_time, end_time
+        type_dirs: Dict mapping shot_type to output directory
+        video_name: Base name for output files
+        pad: Padding before/after each clip
+        max_workers: Number of parallel extraction threads
+
+    Returns:
+        (extracted dict by type, all_extracted_in_order list)
+    """
+    extracted = {st: [] for st in type_dirs}
+    all_extracted_in_order = []
+    counters = {st: 0 for st in type_dirs}
+
+    # Build task list
+    tasks = []
+    for i, seg in enumerate(segments):
+        st = seg["shot_type"]
+        counters[st] += 1
+        filename = f"{video_name}_{st}_{counters[st]:03d}.mp4"
+        output_path = os.path.join(type_dirs[st], filename)
+        tasks.append((video_path, seg, output_path, pad, i, len(segments)))
+
+    # Process in parallel
+    print(f"Extracting {len(tasks)} clips using {max_workers} workers...")
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(extract_clip_task, task): task for task in tasks}
+
+        for fut in as_completed(futures):
+            completed += 1
+            output_path, success, size_mb, seg = fut.result()
+            st = seg["shot_type"]
+
+            if success:
+                extracted[st].append(output_path)
+                all_extracted_in_order.append((st, output_path, seg["start_time"]))
+                print(f"\r  [{completed}/{len(tasks)}] {os.path.basename(output_path)} [{size_mb:.1f} MB]",
+                      end="", flush=True)
+            else:
+                print(f"\r  [{completed}/{len(tasks)}] {os.path.basename(output_path)} [FAILED]",
+                      end="", flush=True)
+
+    print()  # Newline after progress
+
+    # Sort by start time to maintain chronological order
+    all_extracted_in_order.sort(key=lambda x: x[2])
+    all_extracted_in_order = [(st, path) for st, path, _ in all_extracted_in_order]
+
+    return extracted, all_extracted_in_order
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract shot clips and compile highlights")
     parser.add_argument("-i", "--input", help="Detection JSON or labels CSV")
@@ -387,6 +463,10 @@ def main():
                         help="Also compile per-type highlight reels")
     parser.add_argument("--group-by-type", action="store_true",
                         help="Group clips by shot type instead of chronological order")
+    parser.add_argument("--parallel", action="store_true",
+                        help="Extract clips in parallel (faster on multi-core)")
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Number of parallel workers (default: 4)")
     args = parser.parse_args()
 
     if args.include_neutral:
@@ -484,29 +564,36 @@ def main():
         os.makedirs(d, exist_ok=True)
         type_dirs[st] = d
 
-    # Extract clips
-    extracted = {st: [] for st in type_counts}
-    all_extracted_in_order = []  # (shot_type, path) in chronological order
-    counters = {st: 0 for st in type_counts}
+    # Extract clips (parallel or sequential)
+    if args.parallel:
+        extracted, all_extracted_in_order = extract_clips_parallel(
+            video_path, filtered, type_dirs, video_name,
+            pad=args.pad, max_workers=args.workers
+        )
+    else:
+        # Sequential extraction
+        extracted = {st: [] for st in type_counts}
+        all_extracted_in_order = []  # (shot_type, path) in chronological order
+        counters = {st: 0 for st in type_counts}
 
-    for i, seg in enumerate(filtered):
-        st = seg["shot_type"]
-        counters[st] += 1
-        filename = f"{video_name}_{st}_{counters[st]:03d}.mp4"
-        output_path = os.path.join(type_dirs[st], filename)
+        for i, seg in enumerate(filtered):
+            st = seg["shot_type"]
+            counters[st] += 1
+            filename = f"{video_name}_{st}_{counters[st]:03d}.mp4"
+            output_path = os.path.join(type_dirs[st], filename)
 
-        duration = seg["end_time"] - seg["start_time"]
-        conf = seg["avg_confidence"]
-        print(f"  [{i+1}/{len(filtered)}] {st} {seg['start_time']:.1f}-{seg['end_time']:.1f}s "
-              f"({duration:.1f}s, {conf:.0%}) -> {filename}", end="")
+            duration = seg["end_time"] - seg["start_time"]
+            conf = seg["avg_confidence"]
+            print(f"  [{i+1}/{len(filtered)}] {st} {seg['start_time']:.1f}-{seg['end_time']:.1f}s "
+                  f"({duration:.1f}s, {conf:.0%}) -> {filename}", end="")
 
-        if extract_clip(video_path, seg["start_time"], seg["end_time"], output_path, args.pad):
-            size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            print(f"  [{size_mb:.1f} MB]")
-            extracted[st].append(output_path)
-            all_extracted_in_order.append((st, output_path))
-        else:
-            print("  [FAILED]")
+            if extract_clip(video_path, seg["start_time"], seg["end_time"], output_path, args.pad):
+                size_mb = os.path.getsize(output_path) / (1024 * 1024)
+                print(f"  [{size_mb:.1f} MB]")
+                extracted[st].append(output_path)
+                all_extracted_in_order.append((st, output_path))
+            else:
+                print("  [FAILED]")
 
     print()
     print("=" * 50)

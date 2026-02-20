@@ -73,13 +73,15 @@ tennis_analysis/
 ├── scripts/
 │   ├── icloud_download.py
 │   ├── preprocess_videos.py    # Mac (libx264)
-│   ├── extract_poses.py        # --visualize for skeleton overlay
+│   ├── extract_poses.py        # --visualize, --skip-dead for optimization
 │   ├── visual_label.py         # GUI labeler (Mac only, needs display)
 │   ├── label_clips.py          # CSV + poses -> training clips
 │   ├── train_model.py          # GRU training pipeline
 │   ├── detect_shots.py         # Run model on full video poses
-│   ├── extract_clips.py        # Clip extraction + highlights (NVENC-aware)
-│   └── auto_pipeline.py        # Automated iCloud -> GPU -> YouTube daemon
+│   ├── extract_clips.py        # Clip extraction + highlights (--parallel)
+│   ├── auto_pipeline.py        # Automated iCloud -> GPU -> YouTube daemon
+│   ├── parallel_pipeline.py    # Multi-GPU parallel chunk processing
+│   └── compress_for_upload.py  # HEVC compression for smaller uploads
 ├── storage/
 │   └── r2_client.py            # Cloudflare R2 storage client
 ├── gpu_worker/
@@ -134,6 +136,20 @@ iPhone -> add video to album -> iCloud sync
 - Daemon mode: `python scripts/auto_pipeline.py` (polls every 5 minutes)
 - Single pass: `python scripts/auto_pipeline.py --once`
 - Debug (dumps iCloud field names): `python scripts/auto_pipeline.py --debug`
+
+**Monitoring:**
+```bash
+python scripts/pipeline_status.py           # Live dashboard (auto-refresh)
+python scripts/pipeline_status.py --summary # Quick status check
+python scripts/pipeline_status.py --tail    # Formatted log tail
+tail -f pipeline.log                        # Raw log
+```
+
+The dashboard shows:
+- GPU machine status (online/offline, GPU utilization)
+- Current video and processing stage
+- Progress bars for long-running stages
+- Recent log entries with color coding
 
 **Launchd service** (auto-starts on login, restarts on crash):
 - Start: `launchctl load ~/Library/LaunchAgents/com.tennis-analysis.auto-pipeline.plist`
@@ -211,8 +227,64 @@ For processing away from home or burst capacity, the pipeline supports cloud dep
 - Shot classification accuracy: >85% on validation set
 - Processing time: <1 hour per 15min practice video
 
+## Performance Optimizations
+
+### Dead Section Skipping (Default: ON)
+The pipeline pre-scans videos to detect "dead" sections (no person detected for 5+ seconds) and skips them during pose extraction. This significantly speeds up processing for videos with setup time, breaks, or walking between shots.
+
+```bash
+# Enabled by default in auto_pipeline.py
+python scripts/auto_pipeline.py              # skips dead sections
+python scripts/auto_pipeline.py --no-skip-dead  # process all frames
+
+# Manual usage
+python scripts/extract_poses.py video.mp4 --skip-dead
+python scripts/extract_poses.py video.mp4 --skip-dead --min-dead 3.0  # custom threshold
+```
+
+Timestamps remain aligned with the original video - only processing is skipped, not frames in the output.
+
+### Parallel Chunk Processing
+For large videos, splits at keyframe boundaries and processes chunks in parallel across both GPU machines for ~1.8x speedup.
+
+```bash
+# Via auto_pipeline
+python scripts/auto_pipeline.py --parallel
+
+# Direct usage
+python scripts/parallel_pipeline.py video.mov
+python scripts/parallel_pipeline.py video.mov --machines windows tmassena
+```
+
+### Parallel Clip Extraction
+Extract multiple clips simultaneously using thread pool:
+
+```bash
+python scripts/extract_clips.py -i shots.json --parallel --workers 4
+```
+
+### Pre-Upload Compression (Optional)
+Compress videos before iCloud upload for slower connections. Uses HEVC (H.265) for 40-50% size reduction with minimal quality loss.
+
+```bash
+python scripts/compress_for_upload.py video.mov                    # HEVC CRF 22
+python scripts/compress_for_upload.py video.mov --crf 24           # more compression
+python scripts/compress_for_upload.py video.mov -o compressed/     # output directory
+python scripts/compress_for_upload.py *.mov                        # batch mode
+```
+
+Note: This runs on Mac before upload; does not reduce iCloud storage - just speeds up upload.
+
+## iPhone Recording Settings
+
+For optimal file size without quality loss:
+- **Settings > Camera > Formats**: "High Efficiency" (HEVC/H.265) - saves ~50% vs H.264
+- **Settings > Camera > Record Slo-mo**: 1080p HD at 240fps
+- **Trim dead sections**: In Photos app, Edit > drag yellow handles > Save as New Clip
+
 ## Known Issues
 
+- **Mac uses `python3`**: Always use `python3` on Mac, not `python`
 - **mediapipe version**: Must use 0.10.18 (0.10.32+ dropped `solutions` API)
 - **protobuf**: Windows needs protobuf==5.28.3 despite mediapipe wanting <5
 - **opencv**: Use opencv-contrib-python only (conflicts with opencv-python)
