@@ -60,7 +60,7 @@ MEDIAPIPE = {
 
 # ── Model / training hyperparameters ──────────────────────────
 MODEL = {
-    "sequence_length": 30,    # frames per input window (0.5s at 60fps)
+    "sequence_length": 90,    # frames per input window (1.5s at 60fps) - captures full stroke
     "hidden_units": 128,
     "num_layers": 2,
     "dropout": 0.3,
@@ -142,30 +142,23 @@ COORDINATOR = {
 }
 
 # ── Cloud Infrastructure ───────────────────────────────────
-# Hetzner (orchestration) + RunPod (GPU burst) + Cloudflare R2 (storage)
+# Hetzner (orchestration) + Cloudflare R2 (storage) + Local GPUs via Tailscale
+# NOTE: RunPod removed - using local GPU machines only (no cloud GPU billing)
 CLOUD = {
-    "enabled": False,  # Set True to use cloud instead of local GPUs
+    "enabled": False,  # Set True to use cloud orchestration with local GPUs
 
-    # Hetzner CPX31 - Orchestration server at playfullife.com
-    # ~$12/mo: 4 vCPU, 8GB RAM, 160GB SSD
+    # Hetzner CPX31 - Orchestration server (5.78.96.237)
+    # ~$5/mo: Polls iCloud, dispatches to local GPUs via Tailscale SSH
     "hetzner": {
-        "host": os.environ.get("HETZNER_HOST", "playfullife.com"),
-        "api_token": os.environ.get("HETZNER_API_TOKEN", ""),
+        "host": os.environ.get("HETZNER_HOST", "5.78.96.237"),
         "ssh_key_path": os.path.expanduser("~/.ssh/id_rsa"),
     },
 
-    # RunPod - GPU burst processing
-    # A100 80GB: ~$1.99/hr, RTX 4090: ~$0.69/hr
-    "runpod": {
-        "api_key": os.environ.get("RUNPOD_API_KEY", ""),
-        "gpu_type": "NVIDIA A100 80GB PCIe",  # or "NVIDIA GeForce RTX 4090"
-        "cloud_type": "SECURE",  # SECURE or COMMUNITY
-        "docker_image": "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
-        "volume_size_gb": 50,
-        "max_bid_per_gpu": 2.50,  # Max $/hr for spot instances
-        "timeout_seconds": 3600,  # Max pod runtime (1 hour)
-        "min_download_mbps": 500,  # Minimum network speed
-    },
+    # Local GPU machines (accessed via Tailscale)
+    "gpu_machines": [
+        {"name": "windows", "tailscale_ip": "100.x.x.x", "gpu": "RTX 5080"},
+        {"name": "tmassena", "tailscale_ip": "100.x.x.x", "gpu": "RTX 4080"},
+    ],
 
     # Cloudflare R2 - Video storage (zero egress fees!)
     # ~$0.015/GB/month, free egress, S3-compatible
@@ -192,6 +185,7 @@ CLOUD = {
         "category_id": "17",  # Sports
         "add_chapters": True,  # Auto-generate chapters from shots
     },
+
 }
 
 # Helper to get R2 endpoint URL

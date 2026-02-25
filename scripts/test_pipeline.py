@@ -38,7 +38,7 @@ def log(msg, status="INFO"):
 
 
 def send_notification(msg):
-    """Stub for notifications (ntfy removed)."""
+    """Stub for notifications."""
     pass
 
 

@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tennis video analysis pipeline that processes 240fps iPhone footage to auto-detect shot types (forehand, backhand, serve, neutral), extract clips, and compile highlight reels. Uses MediaPipe pose estimation feeding into a GRU neural network for temporal shot classification.
 
+## Critical Rules
+
+**NEVER downsample or reduce video quality as a solution to performance problems.**
+- Preserve original frame rate (240fps) in all output videos
+- Preserve original resolution (1080p/4K) in all output videos
+- The 240fps slow-motion capability is a core feature, not optional
+- Find other optimizations (GPU acceleration, parallel processing, better algorithms) instead of sacrificing quality
+
 ## Three-Machine Setup
 
 - **Mac (M4)**: iCloud downloads, manual labeling (visual_label.py GUI), lightweight tasks, pipeline orchestration
@@ -76,17 +84,19 @@ tennis_analysis/
 │   ├── extract_poses.py        # --visualize, --skip-dead for optimization
 │   ├── visual_label.py         # GUI labeler (Mac only, needs display)
 │   ├── label_clips.py          # CSV + poses -> training clips
-│   ├── train_model.py          # GRU training pipeline
+│   ├── train_model.py          # GRU training pipeline (video-level split)
 │   ├── detect_shots.py         # Run model on full video poses
+│   ├── heuristic_detect.py     # Rule-based fallback detector (no ML)
 │   ├── extract_clips.py        # Clip extraction + highlights (--parallel)
 │   ├── auto_pipeline.py        # Automated iCloud -> GPU -> YouTube daemon
+│   ├── orchestrator.py         # Cloud VM orchestrator (polls iCloud, dispatches)
 │   ├── parallel_pipeline.py    # Multi-GPU parallel chunk processing
 │   └── compress_for_upload.py  # HEVC compression for smaller uploads
 ├── storage/
 │   └── r2_client.py            # Cloudflare R2 storage client
 ├── gpu_worker/
 │   ├── worker.py               # Local GPU worker daemon
-│   └── runpod_executor.py      # RunPod cloud GPU executor
+│   └── process.py              # Stateless GPU processor (R2 in/out)
 ├── coordinator/
 │   └── api.py                  # Flask coordinator API
 ├── preprocess_nvenc.py         # Windows NVENC preprocessing
@@ -163,46 +173,52 @@ The dashboard shows:
 1. Normal-speed highlights (all shots concatenated from 60fps preprocessed video)
 2. 0.25x slow-motion highlights (same shots extracted from original 240fps, using `setpts=4.0*PTS`)
 
-## Cloud Architecture (Optional)
+## Cloud Architecture (LOCAL GPU ONLY)
 
-For processing away from home or burst capacity, the pipeline supports cloud deployment:
+The pipeline now uses LOCAL GPUs exclusively via Tailscale SSH. No cloud GPU = no billing leaks.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Hetzner CPX31 (~$12/mo)        │  playfullife.com             │
-│  - Flask coordinator API         │  - iCloud polling            │
-│  - Job queue (SQLite)            │  - YouTube upload            │
-│  - RunPod orchestration          │  - Notification dispatch     │
-└─────────────────────────────────────────────────────────────────┘
-          │                                    │
-          ▼                                    ▼
-┌─────────────────────────┐      ┌─────────────────────────────────┐
-│  Cloudflare R2 (~$6/mo) │      │  RunPod GPU (~$65-130/mo burst) │
-│  - Zero egress fees     │◄────►│  - A100 80GB @ $1.99/hr         │
-│  - Lifecycle policies   │      │  - Spin up on demand            │
-│  - Presigned URLs       │      │  - Auto-terminate when done     │
-└─────────────────────────┘      └─────────────────────────────────┘
+Cloud VM (5.78.96.237)              Local GPU Machines
+┌─────────────────────────┐        ┌─────────────────────────┐
+│  orchestrator.py        │──SSH──>│  process.py             │
+│  - Poll iCloud          │        │  - Stateless            │
+│  - Track jobs (SQLite)  │ Tail-  │  - Download from R2     │
+│  - Dispatch via SSH     │ scale  │  - Process video        │
+│  - Alert on failure     │        │  - Upload results to R2 │
+│  - Upload to YouTube    │        │  - Exit code = status   │
+└─────────────────────────┘        └─────────────────────────┘
+          │                        windows (RTX 5080)
+          │                        tmassena (RTX 4080)
+          ▼
+┌─────────────────────────┐
+│  Cloudflare R2 (~$6/mo) │
+│  - raw/ (input videos)  │
+│  - highlights/ (output) │
+│  - poses/ (backup)      │
+│  - Zero egress fees     │
+└─────────────────────────┘
 ```
+
+**Design principles:**
+- **LOCAL GPU ONLY**: No cloud GPU = no billing leaks (RunPod removed)
+- **FAIL-LOUD**: Never silent failures, errors logged clearly
+- **OBSERVABLE**: SQLite state, JSON logs
+- **IDEMPOTENT**: Safe to retry any operation
 
 **Components:**
-- **Hetzner CPX31**: Orchestration (4 vCPU, 8GB RAM, $12/mo). Runs coordinator API, polls iCloud, dispatches to RunPod
-- **RunPod**: GPU burst (A100 80GB $1.99/hr, RTX 4090 $0.69/hr). Processes video then auto-terminates
-- **Cloudflare R2**: Video storage (~$0.015/GB/mo, zero egress). Pipeline downloads/uploads via presigned URLs
+- **Hetzner VM** (5.78.96.237, ~$5/mo): Runs `orchestrator.py`, polls iCloud, dispatches to local GPUs
+- **Local GPUs**: windows (RTX 5080) and tmassena (RTX 4080) via Tailscale SSH
+- **Cloudflare R2**: Video storage (~$0.015/GB/mo, zero egress)
 
-**Enable cloud mode:**
-1. Set environment variables (see `.env.example`)
-2. Set `CLOUD["enabled"] = True` in `config/settings.py`
-3. Run `python storage/r2_client.py setup` to create bucket + lifecycle rules
+**Enable cloud orchestration mode:**
+1. Set up Tailscale on all machines (Hetzner + GPU machines)
+2. Copy `.env` with R2 + iCloud credentials to Hetzner
+3. Run `orchestrator.py` on Hetzner VM
 
-**New modules:**
-- `storage/r2_client.py` - Cloudflare R2 uploads/downloads with multipart support
-- `gpu_worker/runpod_executor.py` - RunPod pod lifecycle and job execution
-
-**Cost estimate (10 videos/month):**
-- Hetzner: $12/mo (always on)
-- RunPod: ~$20/mo (10 videos × 20min × $1.99/hr)
-- R2: ~$6/mo (400GB storage)
-- **Total: ~$38/mo** vs local GPUs drawing 300W
+**Cost estimate (local GPUs):**
+- Hetzner: ~$5/mo
+- R2: ~$6/mo
+- **Total: ~$11/mo** (electricity for local GPUs is separate)
 
 ## Iterative Workflow
 

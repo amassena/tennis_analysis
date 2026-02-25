@@ -12,7 +12,6 @@ An end-to-end tennis training analysis system that automatically captures, analy
 - **Highlight compilation**: Normal speed + 0.25x slow-mo from 240fps source
 - **Multi-GPU processing**: Parallel dispatch across 2 Windows machines (RTX 5080 + 4080)
 - **Album-based workflow**: Two iCloud albums control clip ordering (chronological vs grouped by type)
-- **Push notifications**: ntfy.sh integration for processing status
 - **Launchd service**: Auto-start daemon on Mac login
 
 ### Current Limitations

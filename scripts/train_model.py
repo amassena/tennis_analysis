@@ -62,6 +62,77 @@ def discover_training_data(training_dir, shot_types):
     return data
 
 
+def extract_video_id(clip_path):
+    """Extract video ID from clip filename.
+
+    Clip filenames follow pattern: {video_id}_{start}_{end}_{shot_type}.json
+    e.g., IMG_6665_1234_1290_forehand.json -> IMG_6665
+    """
+    filename = os.path.basename(clip_path)
+    # Remove extension and split by underscore
+    parts = filename.rsplit(".", 1)[0].split("_")
+    # Video ID is typically IMG_XXXX (first two parts)
+    if len(parts) >= 2 and parts[0] == "IMG":
+        return f"{parts[0]}_{parts[1]}"
+    # Fallback: use first part
+    return parts[0]
+
+
+def split_by_video(clips_by_type, val_ratio=0.2, seed=42):
+    """Split clips by video, not by clip.
+
+    IMPORTANT: This prevents data leakage where the same video appears in both
+    train and validation sets. The model was achieving 95% accuracy but failing
+    in production because it memorized video-specific features.
+
+    Args:
+        clips_by_type: Dict mapping shot_type -> list of clip paths
+        val_ratio: Fraction of videos to use for validation
+        seed: Random seed for reproducibility
+
+    Returns:
+        (train_clips_by_type, val_clips_by_type)
+    """
+    import random
+    random.seed(seed)
+
+    # Collect all unique video IDs across all shot types
+    all_videos = set()
+    video_to_clips = {}  # video_id -> {shot_type: [clips]}
+
+    for shot_type, clip_paths in clips_by_type.items():
+        for path in clip_paths:
+            video_id = extract_video_id(path)
+            all_videos.add(video_id)
+
+            if video_id not in video_to_clips:
+                video_to_clips[video_id] = {st: [] for st in clips_by_type.keys()}
+            video_to_clips[video_id][shot_type].append(path)
+
+    # Shuffle and split videos
+    all_videos = sorted(list(all_videos))  # Sort for reproducibility
+    random.shuffle(all_videos)
+
+    n_val = max(1, int(len(all_videos) * val_ratio))
+    val_videos = set(all_videos[:n_val])
+    train_videos = set(all_videos[n_val:])
+
+    print(f"  Video-level split:")
+    print(f"    Train videos ({len(train_videos)}): {sorted(train_videos)}")
+    print(f"    Val videos ({len(val_videos)}): {sorted(val_videos)}")
+
+    # Build train/val clip sets
+    train_clips = {st: [] for st in clips_by_type.keys()}
+    val_clips = {st: [] for st in clips_by_type.keys()}
+
+    for video_id, clips_dict in video_to_clips.items():
+        target = val_clips if video_id in val_videos else train_clips
+        for shot_type, paths in clips_dict.items():
+            target[shot_type].extend(paths)
+
+    return train_clips, val_clips
+
+
 def load_clips(file_paths):
     """Read clip JSON files and validate structure.
 
@@ -518,17 +589,6 @@ def main():
         if len(clips) != len(data_by_type[shot_type]):
             print(f"  [WARN] {shot_type}: loaded {len(clips)}/{len(data_by_type[shot_type])}")
 
-    # ── Convert to arrays ─────────────────────────────────────
-    print("Converting to arrays...")
-    X, y, label_map, view_angle_map = clips_to_arrays(clips_by_type, seq_len, active_types)
-    n_features = X.shape[2]
-    n_pose_features = n_features - 5  # Total - view_angle one-hot
-    print(f"  X shape: {X.shape}  y shape: {y.shape}")
-    print(f"  Features per frame: {n_features} ({n_pose_features} pose + 5 view_angle)")
-    print(f"  Label map: {label_map}")
-    print(f"  View angle map: {view_angle_map}")
-    print()
-
     n_classes = len(active_types)
     if n_classes < 2:
         print("[ERROR] Need at least 2 shot types with clips to train a classifier.")
@@ -536,17 +596,42 @@ def main():
         print("  Label some neutral segments (gaps between serves) or other shot types.")
         sys.exit(1)
 
+    # ── Video-Level Split ─────────────────────────────────────
+    print("Splitting by video (prevents data leakage)...")
+
+    # CRITICAL: Split by VIDEO, not by clip
+    # This prevents the same video appearing in both train and val sets
+    # which was causing the model to memorize video-specific features
+    train_clips_by_type, val_clips_by_type = split_by_video(
+        clips_by_type,
+        val_ratio=config["validation_split"],
+        seed=42,
+    )
+
+    # Convert to arrays separately
+    print("Converting train clips to arrays...")
+    X_train, y_train, label_map_train, view_angle_map_train = clips_to_arrays(train_clips_by_type, seq_len, active_types)
+    print(f"  Train: {X_train.shape[0]} clips")
+
+    print("Converting val clips to arrays...")
+    X_val, y_val, label_map_val, view_angle_map_val = clips_to_arrays(val_clips_by_type, seq_len, active_types)
+    print(f"  Val: {X_val.shape[0]} clips")
+
+    # Verify label maps match
+    assert label_map_train == label_map_val, "Label maps don't match!"
+    label_map = label_map_train
+    view_angle_map = view_angle_map_train
+
+    # Get feature count from train arrays
+    n_features = X_train.shape[2]
+    n_pose_features = n_features - 5  # Total - view_angle one-hot
+    print(f"  Features per frame: {n_features} ({n_pose_features} pose + 5 view_angle)")
+    print(f"  Label map: {label_map}")
+    print(f"  View angle map: {view_angle_map}")
+    print()
+
     # ── Normalize ─────────────────────────────────────────────
     print("Computing normalization...")
-
-    # Stratified split first (normalize only on training set)
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y,
-        test_size=config["validation_split"],
-        stratify=y,
-        random_state=42,
-    )
-    print(f"  Train: {X_train.shape[0]}  Val: {X_val.shape[0]}")
 
     mean, std = compute_normalization(X_train)
     X_train = normalize(X_train, mean, std)
