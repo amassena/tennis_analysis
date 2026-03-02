@@ -98,7 +98,7 @@ def format_job(job: dict, verbose: bool = False) -> str:
     message = job.get("stage_message", "")
     worker = job.get("claimed_by", "")
     pod = job.get("pod_id", "")
-    youtube = job.get("youtube_url", "")
+    youtube = job.get("highlights_url", "")
     error = job.get("error_message", "")
 
     # Status colors
@@ -290,6 +290,189 @@ def stream_logs():
         print(f"{RED}Error: {e}{RESET}")
 
 
+def ssh_cmd(cmd: str, timeout: int = 30) -> tuple:
+    """Run SSH command and return (success, stdout, stderr)."""
+    try:
+        result = subprocess.run(
+            ["ssh", HETZNER_SSH, cmd],
+            capture_output=True, text=True, timeout=timeout
+        )
+        return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
+    except Exception as e:
+        return False, "", str(e)
+
+
+def reset_failed_jobs():
+    """Reset failed jobs to pending."""
+    ok, out, _ = ssh_cmd('''
+cd /opt/tennis && /opt/tennis/venv/bin/python -c "
+import sqlite3
+conn = sqlite3.connect('coordinator.db')
+c = conn.cursor()
+c.execute('UPDATE jobs SET status=\"pending\", claimed_at=NULL WHERE status=\"failed\"')
+conn.commit()
+print(f'{c.rowcount} jobs reset')
+"
+    ''')
+    return out if ok else None
+
+
+def reset_stale_claimed(minutes: int = 30):
+    """Reset jobs claimed more than N minutes ago."""
+    ok, out, _ = ssh_cmd(f'''
+cd /opt/tennis && /opt/tennis/venv/bin/python -c "
+import sqlite3
+conn = sqlite3.connect('coordinator.db')
+c = conn.cursor()
+c.execute('UPDATE jobs SET status=\"pending\", claimed_at=NULL WHERE status=\"claimed\" AND claimed_at < datetime(\"now\", \"-{minutes} minutes\")')
+conn.commit()
+print(f'{{c.rowcount}} stale jobs reset')
+"
+    ''')
+    return out if ok else None
+
+
+def restart_worker():
+    """Restart the worker service."""
+    ok, _, _ = ssh_cmd("systemctl restart tennis-worker")
+    return ok
+
+
+def get_recent_errors() -> list:
+    """Get recent error messages from journal."""
+    ok, out, _ = ssh_cmd("journalctl -u tennis-worker --since '5 minutes ago' --no-pager 2>/dev/null | grep -E 'Error|Traceback|failed|Failed' | tail -5")
+    return out.split('\n') if ok and out else []
+
+
+def diagnose_error(error_lines: list) -> tuple:
+    """Analyze error and return (error_type, suggested_fix)."""
+    text = '\n'.join(error_lines)
+
+    if "AttributeError" in text and "NoneType" in text:
+        return "null_handling", "API returned None - need defensive coding"
+    if "Connection refused" in text:
+        return "ssh_connect", "SSH not ready - pod still starting"
+    if "CUDA out of memory" in text:
+        return "oom", "GPU OOM - reduce batch size"
+    if "No such file" in text:
+        return "missing_file", "File not found - check R2 upload"
+    if "timeout" in text.lower():
+        return "timeout", "Operation timed out - will retry"
+
+    return "unknown", text[:150] if text else "No details"
+
+
+def self_heal(url: str):
+    """Self-healing monitor mode - auto-fixes common issues."""
+    print(CLEAR_SCREEN, end="")
+
+    last_completed = 0
+    consecutive_failures = 0
+
+    while True:
+        print("\033[H", end="")  # Move to top
+
+        print(f"{BOLD}{CYAN}{'═' * 60}{RESET}")
+        print(f"{BOLD}{CYAN}  🔧 TENNIS PIPELINE - SELF-HEALING MONITOR{RESET}")
+        print(f"{BOLD}{CYAN}{'═' * 60}{RESET}")
+        now = datetime.now().strftime("%H:%M:%S")
+        print(f"{GRAY}Time: {now} | Coordinator: {url}{RESET}")
+        print()
+
+        # Get stats
+        stats = api_get(url, "/stats")
+        if "error" in stats:
+            print(f"{RED}✗ Coordinator offline{RESET}")
+            print(f"  Attempting to restart services...")
+            ssh_cmd("systemctl restart tennis-coordinator tennis-worker")
+            time.sleep(10)
+            continue
+
+        pending = stats.get("pending", 0)
+        processing = stats.get("processing", 0) + stats.get("claimed", 0)
+        completed = stats.get("completed", 0)
+        failed = stats.get("failed", 0)
+
+        # Status line
+        worker_ok, worker_out, _ = ssh_cmd("systemctl is-active tennis-worker")
+        worker_icon = f"{GREEN}●{RESET}" if worker_ok else f"{RED}○{RESET}"
+
+        print(f"{BOLD}Status:{RESET} Worker: {worker_icon}")
+        print(f"  {YELLOW}○{RESET} Pending: {pending}    "
+              f"{GREEN}●{RESET} Processing: {processing}    "
+              f"{CYAN}✓{RESET} Completed: {completed}    "
+              f"{RED}✗{RESET} Failed: {failed}")
+        print()
+
+        actions = []
+
+        # Check for progress
+        if completed > last_completed:
+            print(f"{GREEN}🎉 {completed - last_completed} job(s) completed!{RESET}")
+            consecutive_failures = 0
+            last_completed = completed
+
+        # Handle failures
+        if failed > 0:
+            errors = get_recent_errors()
+            if errors and errors[0]:
+                error_type, detail = diagnose_error(errors)
+                print(f"{YELLOW}⚠️  Detected error: {error_type}{RESET}")
+                print(f"   {GRAY}{detail[:60]}...{RESET}")
+
+            result = reset_failed_jobs()
+            if result:
+                actions.append(f"Reset failed jobs: {result}")
+
+        # Reset stale claimed
+        result = reset_stale_claimed(30)
+        if result and "0 stale" not in result:
+            actions.append(result)
+
+        # Restart dead worker
+        if not worker_ok:
+            print(f"{RED}⚠️  Worker not running!{RESET}")
+            if restart_worker():
+                actions.append("Restarted worker service")
+                consecutive_failures += 1
+            else:
+                actions.append("Failed to restart worker")
+
+        # Show active jobs
+        active = api_get(url, "/jobs/active")
+        active_jobs = active.get("jobs", [])
+
+        print(f"{BOLD}Active Jobs:{RESET}")
+        if active_jobs:
+            for job in active_jobs:
+                print(format_job(job, verbose=True))
+                print()
+        else:
+            print(f"  {GRAY}No active jobs{RESET}")
+
+        # Show actions taken
+        if actions:
+            print(f"{BOLD}Actions:{RESET}")
+            for action in actions:
+                print(f"  {CYAN}→{RESET} {action}")
+        print()
+
+        # Alert on repeated failures
+        if consecutive_failures >= 3:
+            print(f"{RED}🚨 Multiple consecutive failures - may need manual intervention{RESET}")
+            consecutive_failures = 0
+
+        print(f"{GRAY}{'─' * 60}{RESET}")
+        print(f"{GRAY}Auto-heal interval: 30s | Ctrl+C to exit{RESET}")
+        print(CLEAR_LINE, end="")
+
+        try:
+            time.sleep(30)
+        except KeyboardInterrupt:
+            print(f"\n{GRAY}Self-healing monitor stopped.{RESET}")
+            break
+
+
 def main():
     parser = argparse.ArgumentParser(description="Tennis Pipeline Cloud Monitor")
     parser.add_argument("--url", default=DEFAULT_URL,
@@ -298,12 +481,16 @@ def main():
                         help="Stream logs from Hetzner instead of dashboard")
     parser.add_argument("--status", action="store_true",
                         help="Quick status check and exit")
+    parser.add_argument("--heal", action="store_true",
+                        help="Self-healing mode: auto-fixes common issues")
     args = parser.parse_args()
 
     if args.logs:
         stream_logs()
     elif args.status:
         display_status(args.url)
+    elif args.heal:
+        self_heal(args.url)
     else:
         display_dashboard(args.url)
 

@@ -11,9 +11,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from .state import StateBackend, VideoJob, VideoStatus, ProcessingStage
+
+# R2 Configuration
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "https://media.playfullife.com")
 from .state_sqlite import SQLiteStateBackend
 
 # Configuration
@@ -56,7 +60,7 @@ class ClaimResponse(BaseModel):
 
 
 class CompleteRequest(BaseModel):
-    youtube_url: Optional[str] = None
+    highlights_url: Optional[str] = None
     error_message: Optional[str] = None
     success: bool = True
 
@@ -191,7 +195,7 @@ async def complete_job(video_id: str, worker_id: str, request: CompleteRequest):
         await state.update_status(
             video_id,
             VideoStatus.COMPLETED,
-            youtube_url=request.youtube_url,
+            highlights_url=request.highlights_url,
         )
     else:
         await state.update_status(
@@ -201,6 +205,62 @@ async def complete_job(video_id: str, worker_id: str, request: CompleteRequest):
         )
 
     return {"status": "ok"}
+
+
+@app.post("/jobs/{video_id}/reset")
+async def reset_job(video_id: str, force: bool = False):
+    """
+    Reset a job back to pending status for reprocessing.
+    Clears claimed_by and error_message.
+
+    Args:
+        force: If True, reset even if job is claimed/processing (use for stuck jobs)
+    """
+    job = await state.get_job(video_id)
+
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    if job.status == VideoStatus.COMPLETED and not force:
+        raise HTTPException(400, "Cannot reset completed job (use force=true)")
+
+    if job.status == VideoStatus.PENDING:
+        raise HTTPException(400, "Job already pending")
+
+    await state.update_status(
+        video_id,
+        VideoStatus.PENDING,
+        error_message=None,
+    )
+    # Clear claimed_by
+    await state.unclaim_job(video_id)
+
+    return {"status": "ok", "message": f"Job {video_id} reset to pending"}
+
+
+@app.get("/jobs/active")
+async def list_active_jobs():
+    """List all currently processing jobs with their stages."""
+    jobs = await state.get_active_jobs()
+    return {
+        "count": len(jobs),
+        "jobs": [
+            {
+                "video_id": j.video_id,
+                "filename": j.filename,
+                "status": j.status.value,
+                "claimed_by": j.claimed_by,
+                "claimed_at": j.claimed_at.isoformat() if j.claimed_at else None,
+                "current_stage": j.current_stage.value if j.current_stage else None,
+                "stage_progress": j.stage_progress,
+                "stage_message": j.stage_message,
+                "stage_updated_at": j.stage_updated_at.isoformat() if j.stage_updated_at else None,
+                "pod_id": j.pod_id,
+                "pod_status": j.pod_status,
+            }
+            for j in jobs
+        ],
+    }
 
 
 @app.get("/jobs/{video_id}")
@@ -219,7 +279,7 @@ async def get_job(video_id: str):
         "claimed_by": job.claimed_by,
         "claimed_at": job.claimed_at.isoformat() if job.claimed_at else None,
         "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-        "youtube_url": job.youtube_url,
+        "highlights_url": job.highlights_url,
         "error_message": job.error_message,
         "retry_count": job.retry_count,
         "album_name": job.album_name,
@@ -241,7 +301,7 @@ async def list_jobs(status: Optional[str] = None, limit: int = 100):
                 "filename": j.filename,
                 "status": j.status.value,
                 "claimed_by": j.claimed_by,
-                "youtube_url": j.youtube_url,
+                "highlights_url": j.highlights_url,
                 "created_at": j.created_at.isoformat() if j.created_at else None,
             }
             for j in jobs
@@ -268,6 +328,27 @@ async def release_stale_claims():
     """Release jobs that have been claimed too long without completing."""
     count = await state.release_stale_claims(STALE_CLAIM_SECONDS)
     return {"released": count}
+
+
+# ── R2 Media Proxy ────────────────────────────────────────────
+
+
+@app.get("/thumbs/{filename:path}")
+async def proxy_thumbnail(filename: str):
+    """Proxy thumbnail requests to R2."""
+    return RedirectResponse(f"{R2_PUBLIC_URL}/thumbs/{filename}")
+
+
+@app.get("/highlights/{filename:path}")
+async def proxy_highlights(filename: str):
+    """Proxy highlight video requests to R2."""
+    return RedirectResponse(f"{R2_PUBLIC_URL}/highlights/{filename}")
+
+
+@app.get("/raw/{filename:path}")
+async def proxy_raw(filename: str):
+    """Proxy raw video requests to R2."""
+    return RedirectResponse(f"{R2_PUBLIC_URL}/raw/{filename}")
 
 
 # ── Stage & Progress Tracking ────────────────────────────────
@@ -306,31 +387,6 @@ async def update_pod(video_id: str, worker_id: str, request: PodUpdateRequest):
 
     await state.update_pod_info(video_id, request.pod_id, request.pod_status)
     return {"status": "ok"}
-
-
-@app.get("/jobs/active")
-async def list_active_jobs():
-    """List all currently processing jobs with their stages."""
-    jobs = await state.get_active_jobs()
-    return {
-        "count": len(jobs),
-        "jobs": [
-            {
-                "video_id": j.video_id,
-                "filename": j.filename,
-                "status": j.status.value,
-                "claimed_by": j.claimed_by,
-                "claimed_at": j.claimed_at.isoformat() if j.claimed_at else None,
-                "current_stage": j.current_stage.value if j.current_stage else None,
-                "stage_progress": j.stage_progress,
-                "stage_message": j.stage_message,
-                "stage_updated_at": j.stage_updated_at.isoformat() if j.stage_updated_at else None,
-                "pod_id": j.pod_id,
-                "pod_status": j.pod_status,
-            }
-            for j in jobs
-        ],
-    }
 
 
 # ── Web Dashboard ────────────────────────────────────────────
@@ -482,7 +538,7 @@ DASHBOARD_HTML = """
             if (job.claimed_by) details += `<div>Worker: <span class="worker">${job.claimed_by}</span></div>`;
             if (job.current_stage) details += `<div>Stage: <span class="stage">${stageDisplay}${progressText}</span></div>`;
             if (job.pod_id) details += `<div>Pod: <span class="pod">${job.pod_id}</span> (${job.pod_status || 'unknown'})</div>`;
-            if (job.youtube_url) details += `<div>YouTube: <a class="youtube-link" href="${job.youtube_url}" target="_blank">${job.youtube_url}</a></div>`;
+            if (job.highlights_url) details += `<div>YouTube: <a class="youtube-link" href="${job.highlights_url}" target="_blank">${job.highlights_url}</a></div>`;
             if (job.error_message) details += `<div style="color: #ff6b6b;">Error: ${job.error_message}</div>`;
 
             return `
@@ -735,30 +791,26 @@ VIDEO_GALLERY_HTML = """
             });
         }
 
-        function getYouTubeId(url) {
-            if (!url) return null;
-            const match = url.match(/(?:youtu\\.be\\/|youtube\\.com\\/watch\\?v=)([^&]+)/);
-            return match ? match[1] : null;
+        function getBasename(filename) {
+            // Remove extension from filename
+            return filename ? filename.replace(/\\.[^.]+$/, '') : '';
         }
 
         function renderVideo(job) {
-            const ytId = getYouTubeId(job.youtube_url);
-            const thumbnail = ytId
-                ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`
-                : null;
-
-            const link = job.youtube_url || '#';
-            const target = job.youtube_url ? '_blank' : '';
+            const basename = getBasename(job.filename);
+            // Use local proxy routes for thumbnails and highlights
+            const thumbnail = `/thumbs/${basename}.jpg`;
+            const hasHighlight = job.highlights_url && job.status === 'completed';
+            const link = hasHighlight ? `/${job.highlights_url}` : '#';
+            const target = hasHighlight ? '_blank' : '';
 
             return `
                 <div class="video-card">
                     <a href="${link}" target="${target}">
                         <div class="video-thumbnail">
-                            ${thumbnail
-                                ? `<img src="${thumbnail}" alt="${job.filename}">`
-                                : `<div style="color: #444; font-size: 3em;">🎾</div>`
-                            }
-                            ${job.youtube_url ? '<div class="play-icon"></div>' : ''}
+                            <img src="${thumbnail}" alt="${job.filename}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            <div style="display:none; color: #444; font-size: 3em; justify-content: center; align-items: center; height: 100%;">🎾</div>
+                            ${hasHighlight ? '<div class="play-icon"></div>' : ''}
                             ${job.status === 'processing' || job.status === 'claimed'
                                 ? '<div class="processing-badge">Processing...</div>'
                                 : ''

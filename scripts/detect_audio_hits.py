@@ -41,10 +41,12 @@ def extract_audio(video_path: str, sample_rate: int = 16000) -> np.ndarray:
 
 def detect_peaks(audio: np.ndarray, sample_rate: int,
                  threshold_percentile: float = 95,
-                 min_gap_ms: float = 300) -> list:
+                 min_gap_ms: float = 300,
+                 return_amplitudes: bool = False) -> list:
     """Find audio peaks that likely represent ball hits.
 
     Returns list of peak times in seconds.
+    If return_amplitudes=True, returns list of (time, rms_amplitude) tuples.
     """
     # Compute envelope using RMS in short windows
     window_ms = 10
@@ -80,13 +82,64 @@ def detect_peaks(audio: np.ndarray, sample_rate: int,
             end = i
             # Find max in this region
             peak_idx = start + np.argmax(envelope[start:end])
-            peaks.append(times[peak_idx])
+            if return_amplitudes:
+                peaks.append((times[peak_idx], float(envelope[peak_idx])))
+            else:
+                peaks.append(times[peak_idx])
             # Skip min_gap
             i = end + min_gap_samples
         else:
             i += 1
 
     return peaks
+
+
+def detect_spectral_onsets(audio: np.ndarray, sample_rate: int,
+                           percentile_threshold: float = 92,
+                           min_gap_ms: float = 300) -> list:
+    """Detect audio onsets using spectral flux (STFT-based).
+
+    Spectral flux = L2 norm of positive differences in STFT magnitude
+    between consecutive frames. Catches broadband transients (ball strikes)
+    even when RMS amplitude is low.
+
+    Returns list of (onset_time, flux_value) tuples.
+    """
+    from scipy.signal import stft, find_peaks
+
+    # STFT parameters: 32ms window, 8ms hop
+    nperseg = 512
+    hop = 128
+    noverlap = nperseg - hop
+
+    _, _, Zxx = stft(audio, fs=sample_rate, nperseg=nperseg,
+                     noverlap=noverlap, window='hann')
+    mag = np.abs(Zxx)  # shape: (freq_bins, time_frames)
+
+    # Half-wave rectified spectral flux (onset-only: positive differences)
+    diff = np.diff(mag, axis=1)
+    diff_rectified = np.maximum(diff, 0.0)
+    flux = np.sqrt(np.sum(diff_rectified ** 2, axis=0))  # L2 norm per frame
+
+    if len(flux) == 0:
+        return []
+
+    # Time axis for flux values (offset by 1 STFT frame due to diff)
+    hop_sec = hop / sample_rate
+    flux_times = np.arange(len(flux)) * hop_sec + (nperseg / sample_rate)
+
+    # Adaptive threshold
+    threshold = np.percentile(flux, percentile_threshold)
+
+    # Find peaks
+    min_gap_samples = max(1, int(min_gap_ms / 1000.0 / hop_sec))
+    peak_indices, _ = find_peaks(flux, height=threshold, distance=min_gap_samples)
+
+    onsets = []
+    for idx in peak_indices:
+        onsets.append((float(flux_times[idx]), float(flux[idx])))
+
+    return onsets
 
 
 def get_video_fps(video_path: str) -> float:

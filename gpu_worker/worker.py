@@ -529,10 +529,10 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
         return f"file://{highlight_path}"
 
     report_stage(video_id, "uploading", 0, "Uploading to YouTube")
-    youtube_url = upload_to_youtube(highlight_path, dry_run=youtube_dry_run)
-    report_stage(video_id, "done", 100, f"Complete: {youtube_url}")
-    log(f"Completed: {youtube_url}")
-    return youtube_url
+    highlights_url = upload_to_youtube(highlight_path, dry_run=youtube_dry_run)
+    report_stage(video_id, "done", 100, f"Complete: {highlights_url}")
+    log(f"Completed: {highlights_url}")
+    return highlights_url
 
 
 def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
@@ -567,11 +567,11 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
 
             if job:
                 try:
-                    youtube_url = process_job(job, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
+                    highlights_url = process_job(job, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
                     api_request(
                         "POST",
                         f"/jobs/{job['video_id']}/complete?worker_id={WORKER_ID}",
-                        {"success": True, "youtube_url": youtube_url},
+                        {"success": True, "highlights_url": highlights_url},
                     )
                 except Exception as e:
                     log(f"Job failed: {e}", "ERROR")

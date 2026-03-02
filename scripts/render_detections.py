@@ -15,12 +15,16 @@ from config.settings import POSES_DIR, PREPROCESSED_DIR, PROJECT_ROOT
 
 # Colors (BGR)
 COLORS = {
-    "serve":    (0, 100, 255),   # orange
-    "neutral":  (180, 180, 180), # gray
-    "forehand": (0, 200, 0),     # green
-    "backhand": (255, 100, 0),   # blue
+    "serve":           (0, 100, 255),   # orange
+    "neutral":         (180, 180, 180), # gray
+    "forehand":        (0, 200, 0),     # green
+    "backhand":        (255, 100, 0),   # blue
+    "forehand_volley": (0, 255, 200),   # teal
+    "false_positive":  (0, 0, 200),     # red
+    "missed":          (0, 200, 255),   # yellow
 }
 TIMELINE_H = 36
+LEGEND_H = 28
 LABEL_H = 48
 
 
@@ -79,6 +83,31 @@ def draw_timeline(frame, segments, frame_idx, total_frames, w, h):
     cv2.line(frame, (px, y0), (px, h), (255, 255, 255), 2)
 
 
+def draw_legend(frame, segment_types, w, h):
+    """Draw a small color legend above the timeline bar."""
+    # Only draw types that actually appear in the segments
+    items = [(st, COLORS[st]) for st in segment_types if st in COLORS]
+    if not items:
+        return
+
+    y0 = h - TIMELINE_H - LEGEND_H
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (0, y0), (w, y0 + LEGEND_H), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+
+    x = 10
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    for label, color in items:
+        # Color swatch
+        cv2.rectangle(frame, (x, y0 + 6), (x + 16, y0 + 22), color, -1)
+        x += 22
+        # Label text
+        cv2.putText(frame, label, (x, y0 + 20), font, 0.45,
+                    (220, 220, 220), 1, cv2.LINE_AA)
+        (tw, _), _ = cv2.getTextSize(label, font, 0.45, 1)
+        x += tw + 18
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render video with shot detection overlay")
     parser.add_argument("--detections", default=os.path.join(PROJECT_ROOT, "shots_detected.json"),
@@ -86,6 +115,8 @@ def main():
     parser.add_argument("--video", help="Source video (default: preprocessed or skeleton)")
     parser.add_argument("-o", "--output", help="Output video path")
     parser.add_argument("--skeleton", action="store_true", help="Use skeleton video instead of preprocessed")
+    parser.add_argument("--no-label", action="store_true", help="Skip text label bar at top (timeline only)")
+    parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0=all)")
     args = parser.parse_args()
 
     # Load detections
@@ -113,7 +144,9 @@ def main():
 
     output_path = args.output or os.path.join(PROJECT_ROOT, "clips",
                                                f"{video_name}_detected.mp4")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     print(f"Source:     {os.path.basename(video_path)}")
     print(f"Detections: {len(segments)} segments")
@@ -137,22 +170,29 @@ def main():
 
     lookup = build_frame_lookup(segments, total_frames)
 
+    # Collect unique segment types for legend
+    segment_types = list(dict.fromkeys(s["shot_type"] for s in segments))
+
+    stop_at = args.max_frames if args.max_frames > 0 else frame_count
+
     idx = 0
-    while True:
+    while idx < stop_at:
         ret, frame = cap.read()
         if not ret:
             break
 
         seg = lookup[idx] if idx < len(lookup) else None
-        draw_label_bar(frame, seg, idx, fps, w)
+        if not args.no_label:
+            draw_label_bar(frame, seg, idx, fps, w)
         draw_timeline(frame, segments, idx, total_frames, w, h)
+        draw_legend(frame, segment_types, w, h)
 
         out.write(frame)
         idx += 1
 
-        if idx % 500 == 0:
-            pct = idx / frame_count * 100
-            print(f"  {idx}/{frame_count} frames ({pct:.0f}%)")
+        if idx % 3000 == 0:
+            pct = idx / stop_at * 100
+            print(f"  {idx}/{stop_at} frames ({pct:.0f}%)")
 
     cap.release()
     out.release()
@@ -163,8 +203,18 @@ def main():
     # Re-encode with ffmpeg for better compression and compatibility
     final_path = output_path.replace(".mp4", "_final.mp4")
     print(f"  Re-encoding with ffmpeg...")
+    # Try NVENC first (Windows GPU), fall back to libx264
+    import subprocess
+    nvenc_check = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-encoders"],
+        capture_output=True, text=True
+    )
+    if "h264_nvenc" in nvenc_check.stdout:
+        enc = "h264_nvenc -preset p4 -cq 22"
+    else:
+        enc = "libx264 -crf 20 -preset medium"
     ret = os.system(
-        f'ffmpeg -y -i "{output_path}" -c:v libx264 -crf 20 -preset medium '
+        f'ffmpeg -y -i "{output_path}" -c:v {enc} '
         f'-pix_fmt yuv420p -movflags +faststart "{final_path}" 2>/dev/null'
     )
     if ret == 0 and os.path.exists(final_path):

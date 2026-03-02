@@ -352,6 +352,15 @@ def get_available_machines(machines, max_wake_attempts=3, wake_wait_seconds=20):
     return available
 
 
+def _win_escape(path):
+    """Escape a path for use in Windows SSH commands.
+
+    When passing commands through SSH to Windows cmd.exe, double quotes
+    need to be escaped with backslash to survive the shell parsing.
+    """
+    return f'\\\"{path}\\\"'
+
+
 def _run_ssh(host, cmd, timeout=3600):
     """Run a command on a remote machine via SSH (or locally if host is local)."""
     if _is_local_machine(host):
@@ -459,7 +468,7 @@ def process_on_gpu(filename, machine, ordering="chronological", parallel=False,
     log.info("[STAGE:preprocess] Starting NVENC preprocessing on %s", host)
     ok, output = _run_ssh(
         host,
-        f"cd {project} && {py} preprocess_nvenc.py \"{filename}\"",
+        f"cd {project} && {py} preprocess_nvenc.py {_win_escape(filename)}",
         timeout=1800,
     )
     if not ok:
@@ -482,7 +491,7 @@ def process_on_gpu(filename, machine, ordering="chronological", parallel=False,
         skip_flag = "--skip-dead" if skip_dead else ""
         ok, output = _run_ssh(
             host,
-            f"cd {project} && {py} scripts/extract_poses.py \"preprocessed/{base}.mp4\" {skip_flag}",
+            f"cd {project} && {py} scripts/extract_poses.py {_win_escape(f'preprocessed/{base}.mp4')} {skip_flag}",
             timeout=10800,
         )
         if not ok:
@@ -495,7 +504,7 @@ def process_on_gpu(filename, machine, ordering="chronological", parallel=False,
     shots_file = f"shots_detected_{base}.json"
     ok, output = _run_ssh(
         host,
-        f"cd {project} && {py} scripts/detect_shots.py \"poses/{base}.json\" -o \"{shots_file}\"",
+        f"cd {project} && {py} scripts/detect_shots.py {_win_escape(f'poses/{base}.json')} -o {_win_escape(shots_file)}",
         timeout=1800,
     )
     if not ok:
@@ -505,7 +514,7 @@ def process_on_gpu(filename, machine, ordering="chronological", parallel=False,
 
     # 5. Extract clips + highlights
     log.info("[STAGE:clips] Extracting clips and highlights on %s", host)
-    extract_cmd = f"cd {project} && {py} scripts/extract_clips.py -i \"{shots_file}\" --highlights"
+    extract_cmd = f"cd {project} && {py} scripts/extract_clips.py -i {_win_escape(shots_file)} --highlights"
     if ordering == "type":
         extract_cmd += " --group-by-type"
     ok, output = _run_ssh(
@@ -1015,9 +1024,9 @@ def process_single_video(asset, state, machine, ordering="chronological",
 
     # Get actual view angle after pose extraction
     view_angle = get_view_angle_auto(base)
-    youtube_url = upload_to_youtube(highlight_path, creation_date, count, view_angle, order_label)
+    highlights_url = upload_to_youtube(highlight_path, creation_date, count, view_angle, order_label)
 
-    if youtube_url:
+    if highlights_url:
         # Send email with stats
         stats = {
             "shot_counts": {},  # TODO: load from shots_detected.json
@@ -1038,7 +1047,7 @@ def process_single_video(asset, state, machine, ordering="chronological",
                 stats["total_clips"] = sum(stats["shot_counts"].values())
             except:
                 pass
-        notify_upload_complete(filename, youtube_url, stats, view_angle, order_label)
+        notify_upload_complete(filename, highlights_url, stats, view_angle, order_label)
     else:
         notify_processing_failed(filename, host, "YouTube upload failed")
 
@@ -1047,7 +1056,7 @@ def process_single_video(asset, state, machine, ordering="chronological",
     state.setdefault("processed", {})[asset_id] = {
         "filename": filename,
         "date": date_str,
-        "youtube_url": youtube_url,
+        "highlights_url": highlights_url,
         "processed_at": datetime.now().isoformat(),
         "machine": host,
         "size": asset_size,
@@ -1056,7 +1065,7 @@ def process_single_video(asset, state, machine, ordering="chronological",
     save_state(state)
 
     log.info("Finished processing %s on %s", filename, host)
-    return youtube_url
+    return highlights_url
 
 
 def main_loop(once=False, debug=False, parallel=False, skip_dead=True):

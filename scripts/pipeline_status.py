@@ -68,7 +68,7 @@ STAGE_PATTERNS = {
     "slowmo": [r"\[STAGE:slowmo\]", r"[Ss]low-?mo", r"setpts"],
     "combined": [r"\[STAGE:combined\]", r"[Cc]ombined", r"concatenat"],
     "transfer_back": [r"\[STAGE:transfer_back\]", r"SCP from", r"Transfer.*from"],
-    "upload": [r"\[STAGE:upload\]", r"[Uu]pload.*YouTube", r"youtube_url"],
+    "upload": [r"\[STAGE:upload\]", r"[Uu]pload.*YouTube", r"highlights_url"],
 }
 
 

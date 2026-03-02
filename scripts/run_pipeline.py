@@ -99,7 +99,8 @@ def step_extract_poses(preprocessed_path):
     return pose_path
 
 
-def step_fused_detect(preprocessed_path, pose_path, dominant_hand="right"):
+def step_fused_detect(preprocessed_path, pose_path, dominant_hand="right",
+                      audio_min_gap=800):
     """Step 3: Run fused audio + heuristic detection.
 
     Returns fused detection result dict, or None on failure.
@@ -109,6 +110,7 @@ def step_fused_detect(preprocessed_path, pose_path, dominant_hand="right"):
     result = fused_detect(
         preprocessed_path, pose_path,
         dominant_hand=dominant_hand,
+        audio_min_gap=audio_min_gap,
     )
 
     if not result or not result.get("detections"):
@@ -369,6 +371,8 @@ def main():
                         help="Skip clip extraction (detection only)")
     parser.add_argument("--skip-classify", action="store_true",
                         help="Skip GRU classification step")
+    parser.add_argument("--tier-filter", type=str, default="high,medium",
+                        help="Comma-separated tiers to keep (default: high,medium)")
     parser.add_argument("-o", "--output", help="Output JSON path for detections")
     args = parser.parse_args()
 
@@ -435,6 +439,7 @@ def main():
     fused_result = step_fused_detect(
         preprocessed_path, pose_path,
         dominant_hand=args.dominant_hand,
+        audio_min_gap=800,
     )
     if not fused_result:
         print("[ABORT] Detection failed")
@@ -450,6 +455,17 @@ def main():
     else:
         fused_result = step_classify_shots(pose_path, fused_result)
     step_times["classify"] = time.time() - t0
+    print()
+
+    # ── Tier filter ─────────────────────────────────────────
+    allowed_tiers = set(t.strip().lower() for t in args.tier_filter.split(","))
+    before_tier = len(fused_result["detections"])
+    fused_result["detections"] = [
+        d for d in fused_result["detections"] if d["tier"] in allowed_tiers
+    ]
+    tier_removed = before_tier - len(fused_result["detections"])
+    if tier_removed:
+        print(f"    Tier filter ({args.tier_filter}): removed {tier_removed} detections")
     print()
 
     # ── Step 5: Filter ───────────────────────────────────────

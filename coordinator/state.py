@@ -46,7 +46,7 @@ class VideoJob:
     claimed_by: Optional[str] = None  # hostname of GPU machine
     claimed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    youtube_url: Optional[str] = None
+    highlights_url: Optional[str] = None
     error_message: Optional[str] = None
     retry_count: int = 0
     album_name: Optional[str] = None  # "Tennis Videos" or "Tennis Videos Group By Shot Type"
@@ -93,11 +93,16 @@ class StateBackend(ABC):
         pass
 
     @abstractmethod
+    async def unclaim_job(self, video_id: str) -> None:
+        """Clear claimed_by and claimed_at for a job."""
+        pass
+
+    @abstractmethod
     async def update_status(
         self,
         video_id: str,
         status: VideoStatus,
-        youtube_url: Optional[str] = None,
+        highlights_url: Optional[str] = None,
         error_message: Optional[str] = None,
     ) -> None:
         """Update job status and optional metadata."""

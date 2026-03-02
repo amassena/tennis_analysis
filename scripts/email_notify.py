@@ -127,11 +127,11 @@ def sms_processing_started(video_name: str, host: str):
     return send_sms(msg)
 
 
-def sms_upload_complete(video_name: str, youtube_url: str):
+def sms_upload_complete(video_name: str, highlights_url: str):
     """Send SMS when upload completes."""
     # Shorten for SMS
     short_name = video_name.replace("IMG_", "").replace(".mov", "").replace(".MOV", "")
-    msg = f"Tennis uploaded: {short_name}\n{youtube_url}"
+    msg = f"Tennis uploaded: {short_name}\n{highlights_url}"
     return send_sms(msg)
 
 
@@ -265,13 +265,13 @@ You'll receive another email when processing completes.
     return send_email(subject, body, html_body)
 
 
-def notify_upload_complete(video_name: str, youtube_url: str, stats: dict,
+def notify_upload_complete(video_name: str, highlights_url: str, stats: dict,
                            view_angle: str, ordering: str):
     """Send email when video is uploaded to YouTube.
 
     Args:
         video_name: Name of the video file
-        youtube_url: YouTube URL of uploaded video
+        highlights_url: YouTube URL of uploaded video
         stats: Dict with shot counts, duration, etc.
         view_angle: Camera view angle used
         ordering: Clip ordering used
@@ -302,7 +302,7 @@ def notify_upload_complete(video_name: str, youtube_url: str, stats: dict,
     body = f"""Tennis Highlights Uploaded to YouTube
 
 Video: {video_name}
-YouTube: {youtube_url}
+YouTube: {highlights_url}
 Time: {timestamp}
 
 Details:
@@ -312,7 +312,7 @@ Details:
 - Shots: {shots_summary}
 - Duration: {duration_str}
 
-Watch now: {youtube_url}
+Watch now: {highlights_url}
 """
 
     html_body = f"""
@@ -321,7 +321,7 @@ Watch now: {youtube_url}
 <h2 style="color: #2e7d32;">✅ Tennis Highlights Uploaded!</h2>
 
 <p style="font-size: 18px;">
-<a href="{youtube_url}" style="color: #1976d2; text-decoration: none;">
+<a href="{highlights_url}" style="color: #1976d2; text-decoration: none;">
 ▶️ Watch on YouTube
 </a>
 </p>
@@ -342,7 +342,7 @@ Watch now: {youtube_url}
 </table>
 
 <p style="margin-top: 20px;">
-<a href="{youtube_url}" style="background: #c62828; color: white; padding: 12px 24px;
+<a href="{highlights_url}" style="background: #c62828; color: white; padding: 12px 24px;
    text-decoration: none; border-radius: 4px; display: inline-block;">
 Watch on YouTube
 </a>
@@ -353,7 +353,7 @@ Watch on YouTube
 """
 
     # Send both email and SMS
-    sms_upload_complete(video_name, youtube_url)
+    sms_upload_complete(video_name, highlights_url)
     return send_email(subject, body, html_body)
 
 

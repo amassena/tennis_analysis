@@ -15,6 +15,9 @@ CLIPS_DIR = os.path.join(PROJECT_ROOT, "training", "clips")
 LABELS_DIR = os.path.join(PROJECT_ROOT, "labels")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 HIGHLIGHTS_DIR = os.path.join(PROJECT_ROOT, "highlights")
+ANALYSIS_DIR = os.path.join(PROJECT_ROOT, "analysis")
+BALL_TRACKING_DIR = os.path.join(PROJECT_ROOT, "ball_tracking")
+RACKET_DETECTIONS_DIR = os.path.join(PROJECT_ROOT, "racket_detections")
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 
 SHOT_TYPES = ["forehand", "backhand", "serve", "neutral"]

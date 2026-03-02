@@ -62,18 +62,113 @@ def is_already_processed(video_name, poses_dir):
 # ── Pose Model ───────────────────────────────────────────────
 
 
+def _has_solutions_api():
+    """Check if old mp.solutions.pose API is available."""
+    import mediapipe as mp
+    return hasattr(mp, "solutions") and hasattr(mp.solutions, "pose")
+
+
+# Model file mapping: model_complexity -> task file name
+_TASK_MODEL_MAP = {
+    0: "pose_landmarker_lite.task",
+    1: "pose_landmarker_full.task",
+    2: "pose_landmarker_heavy.task",
+}
+
+
+class _TasksAPIWrapper:
+    """Wraps new mediapipe.tasks PoseLandmarker to match old solutions.pose API."""
+
+    def __init__(self, landmarker, running_mode):
+        self._landmarker = landmarker
+        self._running_mode = running_mode
+        self._frame_ts = 0
+
+    def process(self, rgb_frame):
+        """Process an RGB numpy frame. Returns result with pose_landmarks etc."""
+        import mediapipe as mp
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+
+        if self._running_mode == "VIDEO":
+            result = self._landmarker.detect_for_video(mp_image, self._frame_ts)
+            self._frame_ts += 1  # monotonically increasing, actual ms not required
+        else:
+            result = self._landmarker.detect(mp_image)
+
+        # Adapt: new API returns lists; wrap to match old API's single-person interface
+        return _TasksResult(result)
+
+    def close(self):
+        self._landmarker.close()
+
+
+class _TasksResult:
+    """Adapts PoseLandmarkerResult to look like old solutions.pose result."""
+
+    def __init__(self, result):
+        if result.pose_landmarks and len(result.pose_landmarks) > 0:
+            self.pose_landmarks = _LandmarkListAdapter(result.pose_landmarks[0])
+        else:
+            self.pose_landmarks = None
+
+        if result.pose_world_landmarks and len(result.pose_world_landmarks) > 0:
+            self.pose_world_landmarks = _LandmarkListAdapter(result.pose_world_landmarks[0])
+        else:
+            self.pose_world_landmarks = None
+
+
+class _LandmarkListAdapter:
+    """Makes new-style landmark list behave like old mp.solutions landmark list."""
+
+    def __init__(self, landmarks):
+        self.landmark = landmarks
+
+
 def init_pose_model(mp_config):
-    """Create MediaPipe Pose instance from MEDIAPIPE config dict."""
+    """Create MediaPipe Pose instance from MEDIAPIPE config dict.
+
+    Supports both old (solutions.pose) and new (tasks) APIs.
+    """
     import mediapipe as mp
 
-    return mp.solutions.pose.Pose(
-        static_image_mode=False,
-        model_complexity=mp_config["model_complexity"],
-        smooth_landmarks=mp_config["smooth_landmarks"],
-        enable_segmentation=mp_config.get("enable_segmentation", False),
-        min_detection_confidence=mp_config["min_detection_confidence"],
-        min_tracking_confidence=mp_config["min_tracking_confidence"],
+    if _has_solutions_api():
+        return mp.solutions.pose.Pose(
+            static_image_mode=False,
+            model_complexity=mp_config["model_complexity"],
+            smooth_landmarks=mp_config["smooth_landmarks"],
+            enable_segmentation=mp_config.get("enable_segmentation", False),
+            min_detection_confidence=mp_config["min_detection_confidence"],
+            min_tracking_confidence=mp_config["min_tracking_confidence"],
+        )
+
+    # New Tasks API
+    from mediapipe.tasks.python import vision, BaseOptions
+    complexity = mp_config.get("model_complexity", 2)
+    model_name = _TASK_MODEL_MAP.get(complexity, _TASK_MODEL_MAP[2])
+    model_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "models", "mediapipe"
     )
+    model_path = os.path.join(model_dir, model_name)
+
+    if not os.path.exists(model_path):
+        print(f"  [ERROR] Model not found: {model_path}")
+        print(f"  Download it with:")
+        url = f"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/{model_name}"
+        print(f"    curl -L -o {model_path} '{url}'")
+        sys.exit(1)
+
+    options = vision.PoseLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=model_path),
+        running_mode=vision.RunningMode.VIDEO,
+        num_poses=1,
+        min_pose_detection_confidence=mp_config["min_detection_confidence"],
+        min_pose_presence_confidence=mp_config.get("min_tracking_confidence", 0.5),
+        min_tracking_confidence=mp_config["min_tracking_confidence"],
+        output_segmentation_masks=mp_config.get("enable_segmentation", False),
+    )
+    landmarker = vision.PoseLandmarker.create_from_options(options)
+    return _TasksAPIWrapper(landmarker, "VIDEO")
 
 
 # ── Dead Section Detection ────────────────────────────────────
@@ -111,11 +206,14 @@ def prescan_dead_sections(video_path, sample_interval=10, min_dead_seconds=5.0,
     print(f"  Pre-scanning for dead sections (every {sample_interval} frames)...")
 
     # Use lightweight pose model for speed
-    pose = mp.solutions.pose.Pose(
-        static_image_mode=True,  # Faster for sparse sampling
-        model_complexity=0,  # Fastest model
-        min_detection_confidence=detection_confidence,
-    )
+    prescan_config = {
+        "model_complexity": 0,
+        "smooth_landmarks": False,
+        "enable_segmentation": False,
+        "min_detection_confidence": detection_confidence,
+        "min_tracking_confidence": detection_confidence,
+    }
+    pose = init_pose_model(prescan_config)
 
     # Sample frames
     detections = []  # List of (frame_idx, has_pose)
@@ -274,7 +372,11 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
         active_set = None  # Process all frames
 
     # Landmark names for reference
-    landmark_names = [lm.name for lm in mp.solutions.pose.PoseLandmark]
+    if _has_solutions_api():
+        landmark_names = [lm.name for lm in mp.solutions.pose.PoseLandmark]
+    else:
+        from mediapipe.tasks.python.vision import PoseLandmark
+        landmark_names = [lm.name for lm in PoseLandmark]
 
     # Skeleton video writer (optional) — disabled for partial ranges or skip mode
     skeleton_writer = None
@@ -288,8 +390,16 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
             skeleton_part_path, fourcc, fps, (width, height)
         )
 
-    mp_drawing = mp.solutions.drawing_utils
-    mp_pose = mp.solutions.pose
+    # Drawing utils (skeleton visualization)
+    mp_drawing = None
+    mp_pose_connections = None
+    if _has_solutions_api():
+        mp_drawing = mp.solutions.drawing_utils
+        mp_pose_connections = mp.solutions.pose.POSE_CONNECTIONS
+    elif visualize:
+        from mediapipe.tasks.python import vision as _vis
+        mp_drawing = _vis.drawing_utils
+        mp_pose_connections = _vis.PoseLandmarksConnections.POSE_LANDMARKS
 
     frames = []
     frames_detected = 0
@@ -355,13 +465,13 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
                 "world_landmarks": world_landmarks,
             })
 
-            if skeleton_writer is not None:
+            if skeleton_writer is not None and mp_drawing is not None:
                 rgb.flags.writeable = True
                 annotated = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
                 mp_drawing.draw_landmarks(
                     annotated,
                     result.pose_landmarks,
-                    mp_pose.POSE_CONNECTIONS,
+                    mp_pose_connections,
                 )
                 skeleton_writer.write(annotated)
         else:
@@ -632,11 +742,7 @@ def main():
 
     # ── Startup checks (heavy imports) ────────────────────────
     try:
-        import mediapipe as mp
-        test_pose = mp.solutions.pose.Pose(
-            static_image_mode=False,
-            model_complexity=MEDIAPIPE["model_complexity"],
-        )
+        test_pose = init_pose_model(MEDIAPIPE)
         test_pose.close()
     except Exception as e:
         print(f"[ERROR] MediaPipe initialization failed: {e}")

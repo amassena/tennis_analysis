@@ -29,7 +29,7 @@ class SQLiteStateBackend(StateBackend):
                 claimed_by TEXT,
                 claimed_at TEXT,
                 completed_at TEXT,
-                youtube_url TEXT,
+                highlights_url TEXT,
                 error_message TEXT,
                 retry_count INTEGER DEFAULT 0,
                 album_name TEXT,
@@ -96,7 +96,7 @@ class SQLiteStateBackend(StateBackend):
             claimed_by=row["claimed_by"],
             claimed_at=datetime.fromisoformat(row["claimed_at"]) if row["claimed_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
-            youtube_url=row["youtube_url"],
+            highlights_url=row["highlights_url"],
             error_message=row["error_message"],
             retry_count=row["retry_count"],
             album_name=row["album_name"],
@@ -155,11 +155,23 @@ class SQLiteStateBackend(StateBackend):
 
         return cursor.rowcount > 0
 
+    async def unclaim_job(self, video_id: str) -> None:
+        """Clear claimed_by and claimed_at for a job."""
+        await self._db.execute(
+            """
+            UPDATE jobs
+            SET claimed_by = NULL, claimed_at = NULL
+            WHERE video_id = ?
+            """,
+            (video_id,),
+        )
+        await self._db.commit()
+
     async def update_status(
         self,
         video_id: str,
         status: VideoStatus,
-        youtube_url: Optional[str] = None,
+        highlights_url: Optional[str] = None,
         error_message: Optional[str] = None,
     ) -> None:
         """Update job status."""
@@ -170,9 +182,9 @@ class SQLiteStateBackend(StateBackend):
             updates.append("completed_at = ?")
             params.append(datetime.now(timezone.utc).isoformat())
 
-        if youtube_url is not None:
-            updates.append("youtube_url = ?")
-            params.append(youtube_url)
+        if highlights_url is not None:
+            updates.append("highlights_url = ?")
+            params.append(highlights_url)
 
         if error_message is not None:
             updates.append("error_message = ?")

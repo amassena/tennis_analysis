@@ -1,0 +1,62 @@
+# Video: IMG_6665.mp4
+# Date labeled: 2026-02-25
+# Notes: Ground truth for pipeline verification. First ~13 min.
+#        Shots marked [offscreen] or [partial] may not have visible pose.
+
+0:28 forehand
+0:30 backhand
+1:26 backhand
+1:29 forehand
+1:55 forehand          # partially off screen
+2:20 forehand          # partially off screen
+2:23 backhand
+2:30 backhand
+3:02 forehand
+3:47 forehand          # partially off screen
+3:51 forehand
+3:54 forehand          # mostly off screen
+4:24 forehand          # off screen
+4:27 forehand
+4:30 forehand          # off screen
+4:33 forehand
+4:37 forehand
+5:01 backhand          # slice
+5:10 forehand          # partially off screen
+5:13 forehand
+5:30 forehand
+5:34 backhand
+6:26 serve
+6:28 forehand
+6:31 backhand          # slice
+6:42 serve
+6:45 forehand
+6:49 forehand
+7:28 serve
+7:36 serve
+7:39 forehand
+8:03 serve
+8:06 forehand
+8:30 serve
+8:32 forehand
+8:53 serve
+9:19 serve
+9:33 serve
+9:36 forehand
+9:51 serve
+9:59 serve
+10:02 forehand
+10:30 serve
+10:32 forehand
+10:35 forehand
+10:38 backhand
+10:55 serve
+11:01 serve
+11:11 serve
+11:22 serve             # was missed in initial labeling
+11:26 serve
+11:30 forehand_volley
+11:51 serve
+12:01 serve
+12:04 forehand         # partially off screen
+12:35 serve
+12:38 backhand         # partially off screen

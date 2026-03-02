@@ -90,6 +90,9 @@ def parse_label_file(label_path):
 
     with open(label_path) as f:
         for line_num, line in enumerate(f, 1):
+            # Strip inline comments before processing
+            if "#" in line and not line.strip().startswith("#"):
+                line = line[:line.index("#")]
             line = line.strip()
 
             # Skip empty lines
