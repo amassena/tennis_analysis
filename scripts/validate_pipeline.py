@@ -42,7 +42,7 @@ MATCH_TOLERANCE = 1.5
 # Videos with known ground truth (reviewed in shot_review.py)
 # Map: video_name → GT source file (detection JSON or label file)
 GT_VIDEOS = {
-    "IMG_6665": {"gt_file": "labels/IMG_6665_ground_truth.txt", "format": "label_file"},
+    "IMG_6665": {"gt_file": "detections/IMG_6665_fused_v5.json", "format": "detection_json"},
     "IMG_0864": {"gt_file": "detections/IMG_0864_fused.json", "format": "detection_json"},
     "IMG_0865": {"gt_file": "detections/IMG_0865_fused.json", "format": "detection_json"},
     "IMG_0866": {"gt_file": "detections/IMG_0866_fused.json", "format": "detection_json"},
