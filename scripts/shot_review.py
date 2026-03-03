@@ -1060,20 +1060,22 @@ function jumpTo(idx) {{
     if (idx < 0 || idx >= detections.length) return;
     player.currentTime = Math.max(0, detections[idx].timestamp - 0.5);
     player.play();
-    // pan zoom view so shot is at 10% from left (consistent with auto-pan)
+    // only pan if shot is outside visible range
     if (zoomLevel > 1.05) {{
         const frac = detections[idx].timestamp / videoDur;
-        const width = viewEnd - viewStart;
-        let newStart = frac - width * 0.10;
-        if (newStart < 0) newStart = 0;
-        if (newStart + width > 1) newStart = 1 - width;
-        viewStart = newStart;
-        viewEnd = newStart + width;
-        updateMinimapViewport();
-        renderZoomedTimeline(videoDur);
+        if (frac < viewStart || frac > viewEnd) {{
+            const width = viewEnd - viewStart;
+            let newStart = frac - width * 0.10;
+            if (newStart < 0) newStart = 0;
+            if (newStart + width > 1) newStart = 1 - width;
+            viewStart = newStart;
+            viewEnd = newStart + width;
+            updateMinimapViewport();
+            renderZoomedTimeline(videoDur);
+        }}
     }}
-    // suppress auto-pan for 500ms to prevent flicker
-    autoPanCooldown = Date.now() + 500;
+    // suppress auto-pan briefly to prevent flicker from pending timeupdate
+    autoPanCooldown = Date.now() + 300;
     setActive(idx, true);
 }}
 
@@ -1093,7 +1095,13 @@ function setActive(idx, force) {{
 }}
 
 // ── Playback tracking ──
+let lastSeekTarget = -1;
+player.addEventListener('seeking', () => {{ lastSeekTarget = player.currentTime; }});
+player.addEventListener('seeked', () => {{ lastSeekTarget = -1; }});
+
 player.addEventListener('timeupdate', () => {{
+    // skip stale timeupdate events fired before a seek completes
+    if (lastSeekTarget >= 0) return;
     const t = player.currentTime;
     const dur = player.duration || videoDur || 1;
     const globalPct = t / dur * 100;
@@ -1108,10 +1116,11 @@ player.addEventListener('timeupdate', () => {{
     const frac = t / dur;
     const zoomedPct = ((frac - viewStart) / vw) * 100;
     progress.style.width = Math.max(0, Math.min(100, zoomedPct)) + '%';
-    // auto-pan: keep playhead near left edge (10%) of zoomed view
+    // auto-pan: only scroll when playhead reaches right edge of visible range
     if (!tlDragging && zoomLevel > 1.05 && Date.now() > autoPanCooldown) {{
         const playheadPos = (frac - viewStart) / vw;
-        if (playheadPos > 0.25 || playheadPos < 0) {{
+        if (playheadPos > 0.90 || playheadPos < -0.05) {{
+            // snap so playhead is at 10% from left edge
             const targetStart = frac - vw * 0.10;
             const clampedStart = Math.max(0, Math.min(1 - vw, targetStart));
             viewStart = clampedStart;
