@@ -271,7 +271,8 @@ video {{
 #timeline-progress {{
     position: absolute;
     top: 0; left: 0; bottom: 0;
-    background: rgba(99,102,241,.15);
+    background: rgba(255,120,0,.25);
+    border-right: 2px solid #ff8800;
     border-radius: 4px 0 0 4px;
     pointer-events: none;
 }}
@@ -285,23 +286,25 @@ video {{
 }}
 .marker {{
     position: absolute;
-    top: 2px;
-    width: 20px;
-    height: 28px;
+    top: 1px;
+    width: 28px;
+    height: 30px;
     transform: translateX(-50%);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
-    border-radius: 3px;
+    border-radius: 4px;
     z-index: 2;
     transition: filter .15s;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    border: 1px solid rgba(0,0,0,0.25);
 }}
 .marker:hover {{ filter: brightness(1.3); z-index: 3; }}
-.marker.active {{ outline: 2px solid #fff; z-index: 4; }}
+.marker.active {{ box-shadow: 0 0 0 4px #ff6600, 0 0 20px 8px rgba(255,102,0,0.8); z-index: 4; transform: translateX(-50%) scale(1.25); }}
 .marker-serve    {{ background: #FF6400; }}
 .marker-forehand {{ background: #00C800; }}
 .marker-backhand {{ background: #0064FF; }}
@@ -310,8 +313,8 @@ video {{
 .marker-offscreen {{ background: #555; }}
 
 /* ── Confidence color coding ── */
-.marker.low-conf {{ outline: 2px solid #fbbf24; outline-offset: -1px; }}
-.marker.very-low-conf {{ outline: 2px solid #ef4444; outline-offset: -1px; }}
+.marker.low-conf {{ border: 2px solid #fbbf24; }}
+.marker.very-low-conf {{ border: 2px solid #ef4444; }}
 .conf-warn {{ color: #fbbf24; font-size: 10px; margin-left: 4px; }}
 .conf-danger {{ color: #ef4444; font-size: 10px; margin-left: 4px; }}
 .ml-info {{ color: #888; font-size: 11px; }}
@@ -589,6 +592,7 @@ let undoStack   = [];  // {{ action, idx, detection }} for undo
 // ── Zoom state ──
 let zoomLevel = 1;       // 1 = full view, higher = more zoomed
 let viewStart = 0;       // start of visible range as fraction (0-1)
+let autoPanCooldown = 0; // timestamp until which auto-pan is suppressed
 let viewEnd   = 1;       // end of visible range as fraction (0-1)
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 30;
@@ -1056,11 +1060,11 @@ function jumpTo(idx) {{
     if (idx < 0 || idx >= detections.length) return;
     player.currentTime = Math.max(0, detections[idx].timestamp - 0.5);
     player.play();
-    // auto-pan zoom view to show this shot
-    const frac = detections[idx].timestamp / videoDur;
-    if (frac < viewStart || frac > viewEnd) {{
+    // pan zoom view so shot is at 10% from left (consistent with auto-pan)
+    if (zoomLevel > 1.05) {{
+        const frac = detections[idx].timestamp / videoDur;
         const width = viewEnd - viewStart;
-        let newStart = frac - width * 0.3;
+        let newStart = frac - width * 0.10;
         if (newStart < 0) newStart = 0;
         if (newStart + width > 1) newStart = 1 - width;
         viewStart = newStart;
@@ -1068,6 +1072,8 @@ function jumpTo(idx) {{
         updateMinimapViewport();
         renderZoomedTimeline(videoDur);
     }}
+    // suppress auto-pan for 500ms to prevent flicker
+    autoPanCooldown = Date.now() + 500;
     setActive(idx, true);
 }}
 
@@ -1102,9 +1108,17 @@ player.addEventListener('timeupdate', () => {{
     const frac = t / dur;
     const zoomedPct = ((frac - viewStart) / vw) * 100;
     progress.style.width = Math.max(0, Math.min(100, zoomedPct)) + '%';
-    // auto-pan: if playback head goes past 80% of visible range, scroll forward
-    if (!tlDragging && frac > viewStart + vw * 0.85 && frac < 1) {{
-        panView(vw * 0.3);
+    // auto-pan: keep playhead near left edge (10%) of zoomed view
+    if (!tlDragging && zoomLevel > 1.05 && Date.now() > autoPanCooldown) {{
+        const playheadPos = (frac - viewStart) / vw;
+        if (playheadPos > 0.25 || playheadPos < 0) {{
+            const targetStart = frac - vw * 0.10;
+            const clampedStart = Math.max(0, Math.min(1 - vw, targetStart));
+            viewStart = clampedStart;
+            viewEnd = clampedStart + vw;
+            updateMinimapViewport();
+            renderZoomedTimeline(dur);
+        }}
     }}
     // find nearest shot within 2s
     let best = -1, bestDist = Infinity;
