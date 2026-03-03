@@ -215,20 +215,30 @@ def compute_calibrated_thresholds(cv_predictions):
     ho_mc = sorted([p['ml_confidence'] for p in heuristic_only_tp]) \
         if heuristic_only_tp else mc_values
 
+    # ns_* thresholds: "above what not_shot_prob should we reject?"
+    # Use TP percentile + margin: the Nth percentile is the not_shot value below
+    # which N% of real shots fall. We add a margin so real shots aren't rejected.
+    # E.g., 95th pct of TP not_shot = 0.08, + 0.15 margin = 0.23, clamp to [0.20, 0.50]
+    NS_MARGIN = 0.15  # safety margin above TP percentile
+
+    # mc_* thresholds: "below what ml_confidence should we doubt the classification?"
+    # Use low percentiles of TP ml_confidence (value below which few TPs fall).
+    # E.g., 5th pct = 0.35 means 95% of TPs have ml_conf > 0.35.
+
     thresholds = {
-        'ns_permissive':     _clamp(_percentile(ns_values, 95), 0.30, 0.50),
-        'ns_moderate':       _clamp(_percentile(ns_values, 90), 0.25, 0.45),
-        'ns_strict':         _clamp(_percentile(ns_values, 85), 0.20, 0.40),
-        'ns_first_pass':     _clamp(_percentile(ns_values, 80), 0.15, 0.38),
-        'ns_weak_jerk':      _clamp(_percentile(ns_values, 70), 0.15, 0.35),
-        'ns_weak_heuristic': _clamp(_percentile(ns_values, 65), 0.12, 0.32),
-        'mc_strong':      _clamp(_percentile(mc_values, 30), 0.40, 0.65),
-        'mc_moderate':    _clamp(_percentile(mc_values, 20), 0.30, 0.55),
-        'mc_weak':        _clamp(_percentile(mc_values, 10), 0.20, 0.45),
-        'mc_floor_audio_heuristic': _clamp(_percentile(ah_mc, 15), 0.30, 0.55),
-        'mc_floor_heuristic_only':  _clamp(_percentile(ho_mc, 25), 0.40, 0.65),
-        'mc_floor_jerk':            _clamp(_percentile(ho_mc, 30), 0.45, 0.70),
-        'mc_low_pass':    _clamp(_percentile(mc_values, 30), 0.40, 0.65),
+        'ns_permissive':     _clamp(_percentile(ns_values, 95) + NS_MARGIN, 0.30, 0.50),
+        'ns_moderate':       _clamp(_percentile(ns_values, 90) + NS_MARGIN, 0.25, 0.45),
+        'ns_strict':         _clamp(_percentile(ns_values, 85) + NS_MARGIN, 0.20, 0.40),
+        'ns_first_pass':     _clamp(_percentile(ns_values, 80) + NS_MARGIN, 0.15, 0.38),
+        'ns_weak_jerk':      _clamp(_percentile(ns_values, 70) + NS_MARGIN, 0.14, 0.35),
+        'ns_weak_heuristic': _clamp(_percentile(ns_values, 65) + NS_MARGIN, 0.12, 0.32),
+        'mc_strong':      _clamp(_percentile(mc_values, 5), 0.40, 0.65),
+        'mc_moderate':    _clamp(_percentile(mc_values, 3), 0.30, 0.55),
+        'mc_weak':        _clamp(_percentile(mc_values, 1), 0.20, 0.45),
+        'mc_floor_audio_heuristic': _clamp(_percentile(ah_mc, 3), 0.30, 0.55),
+        'mc_floor_heuristic_only':  _clamp(_percentile(ho_mc, 5), 0.40, 0.65),
+        'mc_floor_jerk':            _clamp(_percentile(ho_mc, 5), 0.45, 0.70),
+        'mc_low_pass':    _clamp(_percentile(mc_values, 5), 0.40, 0.65),
     }
 
     # Enforce not_shot hierarchy: permissive > moderate > strict > ...
@@ -263,6 +273,8 @@ def main():
                         help="Random seed (default: 42)")
     parser.add_argument("--skip-cv", action="store_true",
                         help="Skip leave-one-video-out CV (just train final model)")
+    parser.add_argument("--exclude-features", nargs="+", default=[],
+                        help="Feature names to exclude from training")
     parser.add_argument("--model-type", choices=["rf", "gb"], default="rf",
                         help="Model type: rf=RandomForest, gb=GradientBoosting")
     args = parser.parse_args()
@@ -277,6 +289,22 @@ def main():
 
     samples = data["samples"]
     feature_names = data["feature_names"]
+
+    # Exclude specified features
+    if args.exclude_features:
+        exclude_set = set(args.exclude_features)
+        excluded = [f for f in feature_names if f in exclude_set]
+        feature_names = [f for f in feature_names if f not in exclude_set]
+        for s in samples:
+            if isinstance(s["features"], dict):
+                s["features"] = {k: v for k, v in s["features"].items()
+                                 if k not in exclude_set}
+            else:
+                keep_idx = [i for i, f in enumerate(data["feature_names"])
+                            if f not in exclude_set]
+                s["features"] = [s["features"][i] for i in keep_idx]
+        print(f"Excluded {len(excluded)} features: {excluded}")
+
     print(f"Loaded {len(samples)} samples, {len(feature_names)} features")
     print(f"Labels: {data['label_counts']}")
 
