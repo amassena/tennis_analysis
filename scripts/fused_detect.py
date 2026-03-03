@@ -55,6 +55,28 @@ _cnn_loaded = False
 RF_WEIGHT = 0.6
 CNN_WEIGHT = 0.4
 
+# ── Calibrated pipeline thresholds ───────────────────────────
+# Default values (backward compatible with models lacking calibrated_thresholds)
+_DEFAULT_THRESHOLDS = {
+    'ns_permissive': 0.40, 'ns_moderate': 0.35, 'ns_strict': 0.32,
+    'ns_first_pass': 0.30, 'ns_weak_jerk': 0.25, 'ns_weak_heuristic': 0.24,
+    'mc_strong': 0.50, 'mc_moderate': 0.40, 'mc_weak': 0.30,
+    'mc_floor_audio_heuristic': 0.43, 'mc_floor_heuristic_only': 0.55,
+    'mc_floor_jerk': 0.60, 'mc_low_pass': 0.50,
+}
+
+
+class _ThresholdProxy:
+    """Lazy threshold lookup — returns calibrated values once classifier is loaded."""
+    def __getitem__(self, key):
+        if _classifier_meta and 'calibrated_thresholds' in _classifier_meta:
+            return _classifier_meta['calibrated_thresholds'].get(
+                key, _DEFAULT_THRESHOLDS[key])
+        return _DEFAULT_THRESHOLDS[key]
+
+
+T = _ThresholdProxy()
+
 
 def _load_classifier():
     """Lazy-load the trained shot classifier. Returns (model, meta) or (None, None)."""
@@ -407,7 +429,7 @@ def _second_pass_low_threshold(velocities, first_pass_times, frames, fps,
         not_shot_prob = ml_probs.get("not_shot", 0.0)
 
         # Stricter ML gate for low-threshold candidates
-        if not_shot_prob > 0.3:
+        if not_shot_prob > T['ns_first_pass']:
             if verbose:
                 print(f"      Rejected {spike_time:.1f}s: not_shot={not_shot_prob:.2f} "
                       f"vel={velocity:.1f}")
@@ -420,7 +442,7 @@ def _second_pass_low_threshold(velocities, first_pass_times, frames, fps,
             continue
 
         # Require decent shot type confidence
-        if ml_conf < 0.5:
+        if ml_conf < T['mc_low_pass']:
             if verbose:
                 print(f"      Rejected {spike_time:.1f}s: ml_conf={ml_conf:.2f} "
                       f"({ml_type}) vel={velocity:.1f}")
@@ -544,7 +566,7 @@ def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose):
                 continue
 
             # Keep the probe with highest confidence and low not_shot
-            if confidence > best_confidence and not_shot_prob < 0.35:
+            if confidence > best_confidence and not_shot_prob < T['ns_moderate']:
                 best_shot_type = shot_type
                 best_confidence = confidence
                 best_not_shot = not_shot_prob
@@ -554,7 +576,7 @@ def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose):
         # and dedup will catch bad ones downstream
         if best_shot_type is None:
             continue
-        if best_not_shot > 0.32:
+        if best_not_shot > T['ns_strict']:
             continue
         if best_confidence < 0.5:
             continue
@@ -823,7 +845,7 @@ def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose):
                     if shot_type == "not_shot" or shot_type is None:
                         continue
 
-                    if confidence > best_confidence and not_shot_prob < 0.40:
+                    if confidence > best_confidence and not_shot_prob < T['ns_permissive']:
                         best_shot_type = shot_type
                         best_confidence = confidence
                         best_not_shot = not_shot_prob
@@ -832,7 +854,7 @@ def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose):
                 # Relaxed thresholds for rhythm fill (strong rally-context prior)
                 if best_shot_type is None:
                     continue
-                if best_not_shot > 0.35:
+                if best_not_shot > T['ns_moderate']:
                     continue
                 if best_confidence < 0.4:
                     continue
@@ -1142,14 +1164,14 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
 
         # ML rejection gate: if model predicts not_shot with high probability, skip
         not_shot_prob = ml_probs.get("not_shot", 0.0)
-        if use_model and not_shot_prob > 0.4:
+        if use_model and not_shot_prob > T['ns_permissive']:
             if verbose:
                 print(f"    ML rejected: {spike_time:.1f}s not_shot={not_shot_prob:.2f} "
                       f"(vel={velocity:.1f})")
             continue
 
-        # ML confidence-based rejection: if best class confidence < 0.3, reject
-        if use_model and ml_type and ml_type != "not_shot" and ml_conf < 0.3:
+        # ML confidence-based rejection: if best class confidence < mc_weak, reject
+        if use_model and ml_type and ml_type != "not_shot" and ml_conf < T['mc_weak']:
             if verbose:
                 print(f"    Low-conf rejected: {spike_time:.1f}s "
                       f"ml:{ml_type}({ml_conf:.2f})")
@@ -1178,11 +1200,11 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             ml_conf = 0.0
 
         # Decide final shot_type: ML model wins if confident enough
-        if ml_type and ml_conf >= 0.5:
+        if ml_type and ml_conf >= T['mc_strong']:
             shot_type = ml_type
             trigger = f"ml:{ml_type}({ml_conf:.2f}) h:{trigger}"
-        elif ml_type and 0.4 <= ml_conf < 0.5 and has_pattern and ml_type != h_shot_type:
-            # ML has moderate signal (0.4-0.5) and disagrees with heuristic.
+        elif ml_type and T['mc_moderate'] <= ml_conf < T['mc_strong'] and has_pattern and ml_type != h_shot_type:
+            # ML has moderate signal and disagrees with heuristic.
             # If heuristic also has some pattern, trust ML type with reduced
             # confidence rather than punting to unknown_shot.
             if pattern_conf > 0.3:
@@ -1191,16 +1213,16 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             else:
                 shot_type = "unknown_shot"
                 trigger = f"ml:{ml_type}({ml_conf:.2f}) disagrees h:{trigger}"
-        elif ml_type and 0.3 <= ml_conf < 0.4 and has_pattern and ml_type != h_shot_type:
+        elif ml_type and T['mc_weak'] <= ml_conf < T['mc_moderate'] and has_pattern and ml_type != h_shot_type:
             # Very low ML confidence — still mark unknown
             shot_type = "unknown_shot"
             trigger = f"ml:{ml_type}({ml_conf:.2f}) disagrees h:{trigger}"
         else:
             shot_type = h_shot_type
 
-        if has_audio and (has_pattern or (ml_type and ml_conf >= 0.5)) and not pattern_failed:
+        if has_audio and (has_pattern or (ml_type and ml_conf >= T['mc_strong'])) and not pattern_failed:
             # BEST CASE: audio confirms + classified (ML or heuristic)
-            if ml_type and ml_conf >= 0.5:
+            if ml_type and ml_conf >= T['mc_strong']:
                 fused_conf = min(1.0, ml_conf * 0.6 + 0.4)
             else:
                 fused_conf = min(1.0, pattern_conf * 0.6 + 0.4)
@@ -1215,7 +1237,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             source = "audio+heuristic"
         elif has_audio and pattern_failed:
             # Audio hit near a velocity spike, but pose data was bad.
-            if ml_type and ml_conf >= 0.5:
+            if ml_type and ml_conf >= T['mc_strong']:
                 shot_type = ml_type
                 fused_conf = min(1.0, ml_conf * 0.5 + 0.3)
                 trigger = f"ml:{ml_type}({ml_conf:.2f}) pose_failed"
@@ -1224,9 +1246,9 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
                 fused_conf = 0.65
             tier = "high"
             source = "audio+spike_no_pose"
-        elif (has_pattern or (ml_type and ml_conf >= 0.5)) and not pattern_failed:
+        elif (has_pattern or (ml_type and ml_conf >= T['mc_strong'])) and not pattern_failed:
             # Clear stroke pattern but no audio confirmation
-            if ml_type and ml_conf >= 0.5:
+            if ml_type and ml_conf >= T['mc_strong']:
                 fused_conf = min(1.0, ml_conf * 0.5 + 0.15)
             else:
                 fused_conf = min(1.0, pattern_conf * 0.5 + 0.15)
@@ -1236,7 +1258,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             # Velocity spike only, no audio, no pattern — skip
             continue
 
-        effective_pattern_conf = ml_conf if (ml_type and ml_conf >= 0.5) else (pattern_conf if has_pattern else 0.0)
+        effective_pattern_conf = ml_conf if (ml_type and ml_conf >= T['mc_strong']) else (pattern_conf if has_pattern else 0.0)
 
         detections.append({
             "timestamp": round(spike_time, 3),
@@ -1299,7 +1321,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             audio_not_shot_prob = ml_probs.get("not_shot", 0.0)
 
             # ML rejection gate for audio-only peaks
-            if audio_not_shot_prob > 0.4:
+            if audio_not_shot_prob > T['ns_permissive']:
                 if verbose:
                     print(f"    ML rejected audio-only: {peak_time:.1f}s "
                           f"not_shot={audio_not_shot_prob:.2f}")
@@ -1421,7 +1443,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             )
 
             not_shot_prob = ml_probs.get("not_shot", 0.0)
-            if not_shot_prob > 0.35:
+            if not_shot_prob > T['ns_moderate']:
                 if verbose:
                     print(f"    Spectral rejected {onset_time:.1f}s: "
                           f"not_shot={not_shot_prob:.2f}")
@@ -1429,7 +1451,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
 
             if ml_type == "not_shot" or ml_type is None:
                 continue
-            if ml_conf < 0.5:
+            if ml_conf < T['mc_strong']:
                 continue
 
             fused_conf = min(1.0, ml_conf * 0.4 + 0.25)
@@ -1593,19 +1615,19 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
     detections = [
         d for d in detections
         if not (
-            # Heuristic-only with weak ML support (tightened ns from 0.35 to 0.24)
+            # Heuristic-only with weak ML support
             (d.get("source") == "heuristic_only"
-             and d.get("not_shot_prob", 0) > 0.24
-             and (d.get("ml_confidence") or 0) < 0.55)
+             and d.get("not_shot_prob", 0) > T['ns_weak_heuristic']
+             and (d.get("ml_confidence") or 0) < T['mc_floor_heuristic_only'])
             or
             # Jerk spike with weak ML support
             (d.get("source") == "jerk_spike_ml"
-             and d.get("not_shot_prob", 0) > 0.25
-             and (d.get("ml_confidence") or 0) < 0.60)
+             and d.get("not_shot_prob", 0) > T['ns_weak_jerk']
+             and (d.get("ml_confidence") or 0) < T['mc_floor_jerk'])
             or
             # Audio+heuristic with very low ML confidence floor
             (d.get("source") == "audio+heuristic"
-             and (d.get("ml_confidence") or 0) < 0.43)
+             and (d.get("ml_confidence") or 0) < T['mc_floor_audio_heuristic'])
         )
     ]
     weak_removed = before_weak - len(detections)

@@ -81,7 +81,8 @@ def leave_one_video_out_cv(samples, feature_names, clf_params, seed=42, clf_clas
     """Leave-one-video-out cross-validation.
 
     For each unique video, train on all other videos and evaluate on that one.
-    Returns per-fold results and aggregate predictions.
+    Returns per-fold results, aggregate predictions, and per-sample CV predictions
+    (used for threshold calibration).
     """
     if clf_class is None:
         clf_class = RandomForestClassifier
@@ -97,6 +98,7 @@ def leave_one_video_out_cv(samples, feature_names, clf_params, seed=42, clf_clas
     all_y_pred = []
     all_y_proba = []
     fold_results = []
+    cv_predictions = []
 
     print(f"\nLeave-one-video-out CV ({len(videos)} folds):")
     print(f"{'─'*70}")
@@ -124,6 +126,21 @@ def leave_one_video_out_cv(samples, feature_names, clf_params, seed=42, clf_clas
         y_proba = clf.predict_proba(X_val)
         acc = np.mean(y_pred == y_val)
 
+        # Collect per-sample predictions for threshold calibration
+        classes = list(clf.classes_)
+        ns_idx = classes.index("not_shot") if "not_shot" in classes else None
+        for i in range(len(y_val)):
+            proba = y_proba[i]
+            not_shot_prob = float(proba[ns_idx]) if ns_idx is not None else 0.0
+            ml_confidence = float(proba.max())
+            cv_predictions.append({
+                'true_label': str(y_val[i]),
+                'predicted_label': str(y_pred[i]),
+                'not_shot_prob': not_shot_prob,
+                'ml_confidence': ml_confidence,
+                'features': {f: float(X_val[i][j]) for j, f in enumerate(feature_names)},
+            })
+
         # Per-class breakdown for this fold
         val_counts = {}
         correct_counts = {}
@@ -149,7 +166,82 @@ def leave_one_video_out_cv(samples, feature_names, clf_params, seed=42, clf_clas
             "accuracy": round(float(acc), 4),
         })
 
-    return all_y_true, all_y_pred, all_y_proba, fold_results
+    return all_y_true, all_y_pred, all_y_proba, fold_results, cv_predictions
+
+
+def _percentile(sorted_values, p):
+    """Compute percentile (0-100 scale) from a pre-sorted list."""
+    if not sorted_values:
+        return 0.0
+    n = len(sorted_values)
+    k = (n - 1) * p / 100.0
+    f = int(k)
+    c = min(f + 1, n - 1)
+    d = k - f
+    return sorted_values[f] + d * (sorted_values[c] - sorted_values[f])
+
+
+def _clamp(val, lo, hi):
+    return max(lo, min(hi, val))
+
+
+def compute_calibrated_thresholds(cv_predictions):
+    """Derive pipeline thresholds from LOOCV probability distributions.
+
+    cv_predictions: list of dicts with keys:
+        true_label, predicted_label, not_shot_prob, ml_confidence, features
+    """
+    # Filter to true positives (correct non-not_shot predictions)
+    tp = [p for p in cv_predictions if p['true_label'] != 'not_shot'
+          and p['predicted_label'] == p['true_label']]
+
+    if len(tp) < 10:
+        print(f"  WARNING: Only {len(tp)} true positives — insufficient for calibration")
+        return None
+
+    ns_values = sorted([p['not_shot_prob'] for p in tp])
+    mc_values = sorted([p['ml_confidence'] for p in tp])
+
+    # Source-specific subsets for floor thresholds
+    # audio+heuristic: samples that had audio signal
+    audio_heuristic_tp = [p for p in tp
+                          if p['features'].get('audio_amplitude', 0) > 0.01]
+    # heuristic_only / jerk: samples without audio (motion-only detections)
+    heuristic_only_tp = [p for p in tp
+                         if p['features'].get('audio_amplitude', 0) <= 0.01]
+
+    ah_mc = sorted([p['ml_confidence'] for p in audio_heuristic_tp]) \
+        if audio_heuristic_tp else mc_values
+    ho_mc = sorted([p['ml_confidence'] for p in heuristic_only_tp]) \
+        if heuristic_only_tp else mc_values
+
+    thresholds = {
+        'ns_permissive':     _clamp(_percentile(ns_values, 95), 0.30, 0.50),
+        'ns_moderate':       _clamp(_percentile(ns_values, 90), 0.25, 0.45),
+        'ns_strict':         _clamp(_percentile(ns_values, 85), 0.20, 0.40),
+        'ns_first_pass':     _clamp(_percentile(ns_values, 80), 0.15, 0.38),
+        'ns_weak_jerk':      _clamp(_percentile(ns_values, 70), 0.15, 0.35),
+        'ns_weak_heuristic': _clamp(_percentile(ns_values, 65), 0.12, 0.32),
+        'mc_strong':      _clamp(_percentile(mc_values, 30), 0.40, 0.65),
+        'mc_moderate':    _clamp(_percentile(mc_values, 20), 0.30, 0.55),
+        'mc_weak':        _clamp(_percentile(mc_values, 10), 0.20, 0.45),
+        'mc_floor_audio_heuristic': _clamp(_percentile(ah_mc, 15), 0.30, 0.55),
+        'mc_floor_heuristic_only':  _clamp(_percentile(ho_mc, 25), 0.40, 0.65),
+        'mc_floor_jerk':            _clamp(_percentile(ho_mc, 30), 0.45, 0.70),
+        'mc_low_pass':    _clamp(_percentile(mc_values, 30), 0.40, 0.65),
+    }
+
+    # Enforce not_shot hierarchy: permissive > moderate > strict > ...
+    ns_keys = ['ns_permissive', 'ns_moderate', 'ns_strict',
+               'ns_first_pass', 'ns_weak_jerk', 'ns_weak_heuristic']
+    for i in range(1, len(ns_keys)):
+        if thresholds[ns_keys[i]] >= thresholds[ns_keys[i - 1]]:
+            thresholds[ns_keys[i]] = round(thresholds[ns_keys[i - 1]] - 0.01, 4)
+
+    # Round all values for clean JSON output
+    thresholds = {k: round(v, 4) for k, v in thresholds.items()}
+
+    return thresholds
 
 
 def main():
@@ -208,8 +300,9 @@ def main():
         clf_class = GradientBoostingClassifier
 
     # ── Leave-one-video-out CV ────────────────────────────────────
+    cv_predictions = []
     if not args.skip_cv:
-        all_y_true, all_y_pred, all_y_proba, fold_results = leave_one_video_out_cv(
+        all_y_true, all_y_pred, all_y_proba, fold_results, cv_predictions = leave_one_video_out_cv(
             samples, feature_names, clf_params, seed=args.seed,
             clf_class=clf_class,
         )
@@ -240,6 +333,30 @@ def main():
                   f"mean={np.mean(accs):.2f} std={np.std(accs):.2f}")
         else:
             print("  No CV results (insufficient data)")
+
+    # ── Calibrate pipeline thresholds from LOOCV ────────────────────
+    calibrated_thresholds = None
+    if cv_predictions:
+        print(f"\n{'='*50}")
+        print(f"THRESHOLD CALIBRATION")
+        print(f"{'='*50}")
+        calibrated_thresholds = compute_calibrated_thresholds(cv_predictions)
+        if calibrated_thresholds:
+            tp_count = sum(1 for p in cv_predictions
+                          if p['true_label'] != 'not_shot'
+                          and p['predicted_label'] == p['true_label'])
+            print(f"Calibrated from {tp_count} true positives:")
+            # not_shot thresholds
+            for key in ['ns_permissive', 'ns_moderate', 'ns_strict',
+                        'ns_first_pass', 'ns_weak_jerk', 'ns_weak_heuristic']:
+                print(f"  {key:<24s} = {calibrated_thresholds[key]:.4f}")
+            # ml_confidence thresholds
+            for key in ['mc_strong', 'mc_moderate', 'mc_weak',
+                        'mc_floor_audio_heuristic', 'mc_floor_heuristic_only',
+                        'mc_floor_jerk', 'mc_low_pass']:
+                print(f"  {key:<24s} = {calibrated_thresholds[key]:.4f}")
+        else:
+            print("  Calibration skipped (insufficient true positives)")
 
     # ── Train/val split for final evaluation ──────────────────────
     print(f"\n{'='*50}")
@@ -326,6 +443,8 @@ def main():
         "has_not_shot_class": "not_shot" in list(clf_final.classes_),
         "not_shot_rejection_threshold": 0.4,
     }
+    if calibrated_thresholds:
+        meta["calibrated_thresholds"] = calibrated_thresholds
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
