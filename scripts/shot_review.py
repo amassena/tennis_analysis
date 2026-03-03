@@ -1058,24 +1058,46 @@ function saveChanges() {{
 
 function jumpTo(idx) {{
     if (idx < 0 || idx >= detections.length) return;
-    player.currentTime = Math.max(0, detections[idx].timestamp - 0.5);
+    const targetTime = Math.max(0, detections[idx].timestamp - 0.5);
+    const dur = player.duration || videoDur || 1;
+
+    // Set seek guard BEFORE triggering seek — blocks stale timeupdate rendering
+    seekGuardTarget = targetTime;
+    seekGuardUntil = Date.now() + 600;
+
+    // Immediately render progress bars at target position (don't wait for timeupdate)
+    const globalPct = targetTime / dur * 100;
+    scrubFill.style.width = globalPct + '%';
+    scrubHdl.style.left = globalPct + '%';
+    timDisp.textContent = fmtTime(targetTime) + ' / ' + fmtTimeShort(dur);
+    minimapProg.style.width = globalPct + '%';
+    const vw = viewEnd - viewStart;
+    const frac = targetTime / dur;
+    const zoomedPct = ((frac - viewStart) / vw) * 100;
+    progress.style.width = Math.max(0, Math.min(100, zoomedPct)) + '%';
+
+    player.currentTime = targetTime;
     player.play();
+
     // only pan if shot is outside visible range
     if (zoomLevel > 1.05) {{
-        const frac = detections[idx].timestamp / videoDur;
-        if (frac < viewStart || frac > viewEnd) {{
+        const shotFrac = detections[idx].timestamp / videoDur;
+        if (shotFrac < viewStart || shotFrac > viewEnd) {{
             const width = viewEnd - viewStart;
-            let newStart = frac - width * 0.10;
+            let newStart = shotFrac - width * 0.10;
             if (newStart < 0) newStart = 0;
             if (newStart + width > 1) newStart = 1 - width;
             viewStart = newStart;
             viewEnd = newStart + width;
             updateMinimapViewport();
             renderZoomedTimeline(videoDur);
+            // re-render progress bar with updated view
+            const newZoomedPct = ((shotFrac - viewStart) / (viewEnd - viewStart)) * 100;
+            progress.style.width = Math.max(0, Math.min(100, newZoomedPct)) + '%';
         }}
     }}
     // suppress auto-pan briefly to prevent flicker from pending timeupdate
-    autoPanCooldown = Date.now() + 300;
+    autoPanCooldown = Date.now() + 600;
     setActive(idx, true);
 }}
 
@@ -1095,14 +1117,21 @@ function setActive(idx, force) {{
 }}
 
 // ── Playback tracking ──
-let lastSeekTarget = -1;
-player.addEventListener('seeking', () => {{ lastSeekTarget = player.currentTime; }});
-player.addEventListener('seeked', () => {{ lastSeekTarget = -1; }});
+// Seek guard: blocks stale timeupdate events during programmatic seeks.
+// Uses time+position check instead of seeking/seeked events (which fire unreliably).
+let seekGuardTarget = -1;   // expected currentTime after seek
+let seekGuardUntil = 0;     // timestamp (ms) when guard expires
 
 player.addEventListener('timeupdate', () => {{
-    // skip stale timeupdate events fired before a seek completes
-    if (lastSeekTarget >= 0) return;
     const t = player.currentTime;
+    // Block stale timeupdate events during a seek: if currentTime is far from
+    // the seek target, skip rendering to prevent the progress bar overshoot.
+    if (seekGuardUntil > 0) {{
+        if (Date.now() < seekGuardUntil && Math.abs(t - seekGuardTarget) > 1.0) return;
+        // Either guard expired or currentTime reached target — clear it
+        seekGuardUntil = 0;
+        seekGuardTarget = -1;
+    }}
     const dur = player.duration || videoDur || 1;
     const globalPct = t / dur * 100;
     // scrub bar (always full width)
