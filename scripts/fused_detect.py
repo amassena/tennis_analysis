@@ -1770,8 +1770,10 @@ def main():
         print(f"  Run extract_poses.py on the video first.")
         sys.exit(1)
 
+    det_dir = os.path.join(PROJECT_ROOT, "detections")
+    os.makedirs(det_dir, exist_ok=True)
     output_path = args.output or os.path.join(
-        PROJECT_ROOT, f"{video_name}_fused_detections.json"
+        det_dir, f"{video_name}_fused_detections.json"
     )
 
     print(f"Fused Detection: {video_name}")

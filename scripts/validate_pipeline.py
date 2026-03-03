@@ -148,31 +148,45 @@ def load_ground_truth(video_name, gt_override=None):
     return [e for e in entries if e["shot_type"] not in IGNORE_TYPES]
 
 
-def load_detections(video_name, det_path=None):
+def load_detections(video_name, det_path=None, gt_path=None):
     """Load pipeline detections for a video.
 
     Args:
         video_name: e.g. "IMG_6703"
         det_path: Optional specific detection file path
+        gt_path: GT file path to exclude (avoids comparing GT against itself)
 
     Returns list of {timestamp, shot_type, source, confidence} dicts.
     """
+    gt_abs = os.path.abspath(gt_path) if gt_path else None
+
     if det_path:
         path = det_path
     else:
-        # Find the latest fused detection file
+        # Find pipeline output file, excluding the GT file
+        # Priority: pipeline default output (_fused_detections), then other variants
         candidates = [
-            os.path.join(DETECTIONS_DIR, f"{video_name}_fused_v5.json"),
+            os.path.join(DETECTIONS_DIR, f"{video_name}_fused_detections.json"),
+            os.path.join(PROJECT_ROOT, f"{video_name}_fused_detections.json"),
             os.path.join(DETECTIONS_DIR, f"{video_name}_fused.json"),
+            os.path.join(DETECTIONS_DIR, f"{video_name}_fused_v5.json"),
         ]
         path = None
         for c in candidates:
             if os.path.exists(c):
+                if gt_abs and os.path.abspath(c) == gt_abs:
+                    continue  # Skip GT file
                 path = c
                 break
 
     if not path or not os.path.exists(path):
-        return []
+        return [], None
+
+    # Warn if detection and GT are the same file
+    if gt_abs and os.path.abspath(path) == gt_abs:
+        print(f"  WARNING: Detection file is same as GT file: {path}")
+        print(f"  Run fused_detect.py first to generate fresh pipeline output.")
+        return [], path
 
     with open(path) as f:
         data = json.load(f)
@@ -189,7 +203,7 @@ def load_detections(video_name, det_path=None):
             "confidence": det.get("confidence", 0.0),
             "not_shot_prob": det.get("not_shot_prob", 0.0),
         })
-    return entries
+    return entries, path
 
 
 def match_detections(gt_list, det_list, tolerance=MATCH_TOLERANCE):
@@ -249,11 +263,24 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
     Returns dict with metrics, per-type breakdown, per-source breakdown.
     """
     gt_list = load_ground_truth(video_name, gt_override)
-    det_list = load_detections(video_name, det_path)
+
+    # Resolve GT file path so we can exclude it from detection search
+    gt_file_path = None
+    if gt_override:
+        gt_file_path = os.path.join(PROJECT_ROOT, gt_override) if not os.path.isabs(gt_override) else gt_override
+    elif video_name in GT_VIDEOS:
+        gt_file_path = os.path.join(PROJECT_ROOT, GT_VIDEOS[video_name]["gt_file"])
+
+    det_list, det_file = load_detections(video_name, det_path, gt_path=gt_file_path)
 
     if not gt_list:
         if verbose:
             print(f"  {video_name}: No ground truth available, skipping")
+        return None
+
+    if not det_list and det_file is None:
+        if verbose:
+            print(f"  {video_name}: No pipeline output found (run fused_detect.py first)")
         return None
 
     tp_pairs, fp_dets, fn_gts = match_detections(gt_list, det_list)
@@ -350,6 +377,8 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
 
     result = {
         "video": video_name,
+        "gt_file": os.path.basename(gt_file_path) if gt_file_path else None,
+        "det_file": os.path.basename(det_file) if det_file else None,
         "overall": overall,
         "per_type": per_type,
         "per_source": per_source,
@@ -381,6 +410,10 @@ def _print_video_report(result):
     print(f"\n{'='*60}")
     print(f"  {v}")
     print(f"{'='*60}")
+    gt_f = result.get("gt_file", "?")
+    det_f = result.get("det_file", "?")
+    print(f"  GT file: {gt_f}")
+    print(f"  Det file: {det_f}")
     print(f"  GT: {o['gt_total']}  Det: {o['det_total']}  "
           f"TP: {o['tp']}  FP: {o['fp']}  FN: {o['fn']}")
     print(f"  P={o['precision']:.1%}  R={o['recall']:.1%}  F1={o['f1']:.1%}")
