@@ -237,8 +237,8 @@ def track_ball(video_path, output_path=None, model_path=None, batch_size=4):
     for i, (x, y) in enumerate(ball_track):
         entry = {
             "frame": i,
-            "x": round(x, 1) if x is not None else None,
-            "y": round(y, 1) if y is not None else None,
+            "x": round(float(x), 1) if x is not None else None,
+            "y": round(float(y), 1) if y is not None else None,
             "visible": x is not None,
         }
         frames_out.append(entry)
@@ -246,8 +246,8 @@ def track_ball(video_path, output_path=None, model_path=None, batch_size=4):
     result = {
         "video": video_name,
         "video_path": str(video_path),
-        "resolution": [orig_w, orig_h],
-        "fps": fps,
+        "resolution": [int(orig_w), int(orig_h)],
+        "fps": float(fps),
         "total_frames": len(ball_track),
         "detected_frames": detected_count,
         "detection_rate": round(detection_rate, 3),

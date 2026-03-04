@@ -226,19 +226,38 @@ def compute_calibrated_thresholds(cv_predictions):
     # E.g., 5th pct = 0.35 means 95% of TPs have ml_conf > 0.35.
 
     thresholds = {
-        'ns_permissive':     _clamp(_percentile(ns_values, 95) + NS_MARGIN, 0.30, 0.50),
-        'ns_moderate':       _clamp(_percentile(ns_values, 90) + NS_MARGIN, 0.25, 0.45),
-        'ns_strict':         _clamp(_percentile(ns_values, 85) + NS_MARGIN, 0.20, 0.40),
-        'ns_first_pass':     _clamp(_percentile(ns_values, 80) + NS_MARGIN, 0.15, 0.38),
-        'ns_weak_jerk':      _clamp(_percentile(ns_values, 70) + NS_MARGIN, 0.14, 0.35),
-        'ns_weak_heuristic': _clamp(_percentile(ns_values, 65) + NS_MARGIN, 0.12, 0.32),
-        'mc_strong':      _clamp(_percentile(mc_values, 5), 0.40, 0.65),
-        'mc_moderate':    _clamp(_percentile(mc_values, 3), 0.30, 0.55),
-        'mc_weak':        _clamp(_percentile(mc_values, 1), 0.20, 0.45),
-        'mc_floor_audio_heuristic': _clamp(_percentile(ah_mc, 3), 0.30, 0.55),
-        'mc_floor_heuristic_only':  _clamp(_percentile(ho_mc, 5), 0.40, 0.65),
-        'mc_floor_jerk':            _clamp(_percentile(ho_mc, 5), 0.45, 0.70),
-        'mc_low_pass':    _clamp(_percentile(mc_values, 5), 0.40, 0.65),
+        # not_shot gates (higher = more permissive)
+        'ns_permissive':     _clamp(_percentile(ns_values, 95) + NS_MARGIN, 0.35, 0.50),
+        'ns_moderate':       _clamp(_percentile(ns_values, 90) + NS_MARGIN, 0.30, 0.45),
+        'ns_strict':         _clamp(_percentile(ns_values, 85) + NS_MARGIN, 0.27, 0.40),
+        'ns_first_pass':     _clamp(_percentile(ns_values, 80) + NS_MARGIN, 0.25, 0.38),
+        'ns_weak_jerk':      _clamp(_percentile(ns_values, 70) + NS_MARGIN, 0.20, 0.35),
+        'ns_weak_heuristic': _clamp(_percentile(ns_values, 65) + NS_MARGIN, 0.19, 0.32),
+        # ML confidence floors (lower = more permissive)
+        'mc_strong':      _clamp(_percentile(mc_values, 10), 0.45, 0.65),
+        'mc_moderate':    _clamp(_percentile(mc_values, 5), 0.35, 0.55),
+        'mc_weak':        _clamp(_percentile(mc_values, 3), 0.25, 0.45),
+        'mc_floor_audio_heuristic': _clamp(_percentile(ah_mc, 5), 0.38, 0.55),
+        'mc_floor_heuristic_only':  _clamp(_percentile(ho_mc, 10), 0.50, 0.65),
+        'mc_floor_jerk':            _clamp(_percentile(ho_mc, 10), 0.55, 0.70),
+        'mc_low_pass':    _clamp(_percentile(mc_values, 10), 0.45, 0.65),
+        # Sliding window / rhythm fill confidence floors
+        'mc_sliding_window': _clamp(_percentile(mc_values, 10), 0.45, 0.65),
+        'mc_rhythm_fill':    _clamp(_percentile(mc_values, 5), 0.35, 0.55),
+        # Rescue scan (stricter — last resort detection)
+        'ns_rescue':        _clamp(_percentile(ns_values, 95) + NS_MARGIN, 0.35, 0.50),
+        'ns_rescue_reject': _clamp(_percentile(ns_values, 90) + NS_MARGIN, 0.30, 0.45),
+        'mc_rescue':        _clamp(_percentile(mc_values, 20), 0.55, 0.75),
+        # Jerk spike adaptive (high jerk >= 1500)
+        'ns_jerk_high':     _clamp(_percentile(ns_values, 95) + NS_MARGIN, 0.35, 0.50),
+        'mc_jerk_high':     _clamp(_percentile(mc_values, 5), 0.35, 0.55),
+        # Jerk spike adaptive (low jerk < 1500)
+        'ns_jerk_low':      _clamp(_percentile(ns_values, 80) + NS_MARGIN, 0.25, 0.38),
+        'mc_jerk_low':      _clamp(_percentile(mc_values, 10), 0.45, 0.65),
+        # Post-dedup weak filter (fused_conf thresholds — less model-dependent)
+        'fc_weak_jerk':     0.45,
+        'ns_weak_jerk_floor': 0.10,
+        'fc_weak_low':      0.52,
     }
 
     # Enforce not_shot hierarchy: permissive > moderate > strict > ...
@@ -277,6 +296,8 @@ def main():
                         help="Feature names to exclude from training")
     parser.add_argument("--model-type", choices=["rf", "gb"], default="rf",
                         help="Model type: rf=RandomForest, gb=GradientBoosting")
+    parser.add_argument("--save-calibrated", action="store_true",
+                        help="Save calibrated thresholds to meta.json (pipeline will use them)")
     args = parser.parse_args()
 
     if not os.path.exists(args.features):
@@ -471,8 +492,25 @@ def main():
         "has_not_shot_class": "not_shot" in list(clf_final.classes_),
         "not_shot_rejection_threshold": 0.4,
     }
+    # Save distribution stats for diagnostics (always)
     if calibrated_thresholds:
+        tp = [p for p in cv_predictions if p['true_label'] != 'not_shot'
+              and p['predicted_label'] == p['true_label']]
+        ns_vals = sorted([p['not_shot_prob'] for p in tp])
+        mc_vals = sorted([p['ml_confidence'] for p in tp])
+        meta["distribution_stats"] = {
+            "tp_count": len(tp),
+            "ns_median": round(float(ns_vals[len(ns_vals)//2]), 4) if ns_vals else 0,
+            "ns_p95": round(float(_percentile(ns_vals, 95)), 4) if ns_vals else 0,
+            "mc_median": round(float(mc_vals[len(mc_vals)//2]), 4) if mc_vals else 0,
+            "mc_p5": round(float(_percentile(mc_vals, 5)), 4) if mc_vals else 0,
+        }
+        # Reference thresholds (NOT loaded by pipeline — use search_thresholds.py
+        # for end-to-end optimization after retraining)
+        meta["reference_thresholds"] = calibrated_thresholds
+    if args.save_calibrated and calibrated_thresholds:
         meta["calibrated_thresholds"] = calibrated_thresholds
+        print("  ** Calibrated thresholds SAVED to meta.json (pipeline will use them) **")
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 

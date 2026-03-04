@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.settings import POSES_DIR, PREPROCESSED_DIR, PROJECT_ROOT, MODELS_DIR
+from config.settings import POSES_DIR, PREPROCESSED_DIR, PROJECT_ROOT, MODELS_DIR, RACKET_DETECTIONS_DIR
 
 from scripts.detect_audio_hits import extract_audio, detect_peaks, detect_spectral_onsets, get_video_fps
 from scripts.heuristic_detect import (
@@ -51,18 +51,27 @@ _cnn_model = None
 _cnn_device = None
 _cnn_loaded = False
 
-# Ensemble weights: RF primary (proven), CNN secondary
-RF_WEIGHT = 0.6
-CNN_WEIGHT = 0.4
-
 # ── Calibrated pipeline thresholds ───────────────────────────
 # Default values (backward compatible with models lacking calibrated_thresholds)
 _DEFAULT_THRESHOLDS = {
+    # not_shot gates (reject if not_shot_prob > threshold)
     'ns_permissive': 0.40, 'ns_moderate': 0.35, 'ns_strict': 0.32,
     'ns_first_pass': 0.30, 'ns_weak_jerk': 0.25, 'ns_weak_heuristic': 0.24,
+    # ML confidence floors (reject if ml_conf < threshold)
     'mc_strong': 0.50, 'mc_moderate': 0.40, 'mc_weak': 0.30,
     'mc_floor_audio_heuristic': 0.43, 'mc_floor_heuristic_only': 0.55,
     'mc_floor_jerk': 0.60, 'mc_low_pass': 0.50,
+    # Sliding window / rhythm fill ML confidence floors
+    'mc_sliding_window': 0.50, 'mc_rhythm_fill': 0.40,
+    # Rescue scan thresholds (stricter — last resort)
+    'ns_rescue': 0.40, 'ns_rescue_reject': 0.35, 'mc_rescue': 0.62,
+    # Jerk spike adaptive thresholds (high jerk >= 1500)
+    'ns_jerk_high': 0.40, 'mc_jerk_high': 0.40,
+    # Jerk spike adaptive thresholds (low jerk < 1500)
+    'ns_jerk_low': 0.30, 'mc_jerk_low': 0.50,
+    # Post-dedup weak filter (fused_conf thresholds)
+    'fc_weak_jerk': 0.45, 'ns_weak_jerk_floor': 0.10,
+    'fc_weak_low': 0.52,
 }
 
 
@@ -76,6 +85,31 @@ class _ThresholdProxy:
 
 
 T = _ThresholdProxy()
+
+
+# ── Racket detection data (optional, for post-dedup filtering) ───
+def _load_racket_data(video_name):
+    """Load racket detection JSON if available. Returns dict of frame→entry or None."""
+    path = os.path.join(RACKET_DETECTIONS_DIR, f"{video_name}.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        if data.get("total_frames", 0) == 0:
+            return None
+        return {f["frame"]: f for f in data.get("frames", [])}
+    except Exception:
+        return None
+
+
+def _racket_visibility(racket_frames, frame, window=10):
+    """Fraction of frames in [frame-window, frame+window] with racket detected."""
+    if racket_frames is None:
+        return None
+    count = sum(1 for i in range(frame - window, frame + window + 1)
+                if racket_frames.get(i, {}).get("detected"))
+    return count / (2 * window + 1)
 
 
 def _load_classifier():
@@ -127,7 +161,7 @@ def _load_cnn():
 
 def classify_with_model(frames, center_frame, fps, dominant_hand="right",
                         detection_meta=None, rally_context=None):
-    """Classify a shot using the trained ML model (RF + optional CNN ensemble).
+    """Classify a shot using the trained RF model.
 
     Returns (shot_type, confidence, class_probs) or (None, 0.0, {}).
     class_probs is a dict of class_name → probability.
@@ -156,35 +190,6 @@ def classify_with_model(frames, center_frame, fps, dominant_hand="right",
     # Build class probability dict from RF
     rf_probs = {cls: float(p) for cls, p in zip(rf_classes, rf_proba)}
 
-    # Attempt CNN ensemble
-    cnn_model, cnn_device = _load_cnn()
-    if cnn_model is not None:
-        try:
-            from scripts.sequence_model import predict_single, CLASSES as CNN_CLASSES
-            cnn_result = predict_single(cnn_model, cnn_device, frames, center_frame)
-            if cnn_result is not None:
-                cnn_probs = cnn_result["probabilities"]
-
-                # Weighted ensemble: merge probabilities
-                all_classes = sorted(set(rf_classes) | set(cnn_probs.keys()))
-                ensemble_probs = {}
-                for cls in all_classes:
-                    rf_p = rf_probs.get(cls, 0.0)
-                    cnn_p = cnn_probs.get(cls, 0.0)
-                    ensemble_probs[cls] = RF_WEIGHT * rf_p + CNN_WEIGHT * cnn_p
-
-                # Normalize
-                total = sum(ensemble_probs.values())
-                if total > 0:
-                    ensemble_probs = {c: p / total for c, p in ensemble_probs.items()}
-
-                pred_class = max(ensemble_probs, key=ensemble_probs.get)
-                confidence = ensemble_probs[pred_class]
-                return pred_class, float(confidence), ensemble_probs
-        except Exception:
-            pass  # Fall through to RF-only
-
-    # RF-only fallback
     pred_idx = rf_proba.argmax()
     shot_type = rf_classes[pred_idx]
     confidence = float(rf_proba[pred_idx])
@@ -578,7 +583,7 @@ def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose):
             continue
         if best_not_shot > T['ns_strict']:
             continue
-        if best_confidence < 0.5:
+        if best_confidence < T['mc_sliding_window']:
             continue
 
         best_time = best_probe_frame / fps
@@ -681,11 +686,11 @@ def _jerk_spike_pass(velocities, existing_times, frames, fps,
         # Jerk-adaptive ML gate: higher jerk = more lenient thresholds
         # Strong jerk (>1500) is reliable biomechanical signal
         if jerk_val >= 1500:
-            not_shot_limit = 0.40
-            min_conf = 0.40
+            not_shot_limit = T['ns_jerk_high']
+            min_conf = T['mc_jerk_high']
         else:
-            not_shot_limit = 0.30
-            min_conf = 0.50
+            not_shot_limit = T['ns_jerk_low']
+            min_conf = T['mc_jerk_low']
 
         if not_shot_prob > not_shot_limit:
             if verbose:
@@ -856,7 +861,7 @@ def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose):
                     continue
                 if best_not_shot > T['ns_moderate']:
                     continue
-                if best_confidence < 0.4:
+                if best_confidence < T['mc_rhythm_fill']:
                     continue
 
                 best_time = best_probe_frame / fps
@@ -992,7 +997,7 @@ def _post_dedup_rescue(pre_filter_dets, post_dedup_dets, frames, fps,
             if shot_type == "not_shot" or shot_type is None:
                 continue
 
-            if confidence > best_confidence and not_shot_prob < 0.40:
+            if confidence > best_confidence and not_shot_prob < T['ns_rescue']:
                 best_shot_type = shot_type
                 best_confidence = confidence
                 best_not_shot = not_shot_prob
@@ -1000,11 +1005,11 @@ def _post_dedup_rescue(pre_filter_dets, post_dedup_dets, frames, fps,
 
         if best_shot_type is None:
             continue
-        if best_not_shot > 0.35:
+        if best_not_shot > T['ns_rescue_reject']:
             continue
         # Higher confidence bar than other passes — rescue is a last resort,
         # need stronger ML signal to justify re-adding a removed detection
-        if best_confidence < 0.62:
+        if best_confidence < T['mc_rescue']:
             continue
 
         best_time = best_probe_frame / fps
@@ -1063,6 +1068,11 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         dict with detections list, metadata, and summary
     """
     video_name = os.path.splitext(os.path.basename(video_path))[0]
+
+    # ── Load optional racket detection data ──────────────────
+    racket_frames = _load_racket_data(video_name)
+    if racket_frames is not None:
+        print(f"  Loaded racket detection data ({len(racket_frames)} frames)")
 
     # ── Step 1: Audio detection ──────────────────────────────
     print(f"  Extracting audio...")
@@ -1201,6 +1211,11 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
 
         # Decide final shot_type: ML model wins if confident enough
         if ml_type and ml_conf >= T['mc_strong']:
+            shot_type = ml_type
+            trigger = f"ml:{ml_type}({ml_conf:.2f}) h:{trigger}"
+        elif ml_type and ml_conf >= T['mc_moderate'] and not has_pattern and not pattern_failed:
+            # Heuristic found no pattern but pose data was readable — ML
+            # with moderate confidence takes over since there's no competing opinion
             shot_type = ml_type
             trigger = f"ml:{ml_type}({ml_conf:.2f}) h:{trigger}"
         elif ml_type and T['mc_moderate'] <= ml_conf < T['mc_strong'] and has_pattern and ml_type != h_shot_type:
@@ -1610,6 +1625,8 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
     # Removes detections where multiple weak signals combine to suggest FP:
     #   - heuristic_only + elevated not_shot + low ML confidence
     #   - jerk_spike_ml + elevated not_shot + low ML confidence
+    #   - jerk_spike_ml + low fused confidence + any not_shot signal
+    #   - low_threshold_ml with low fused confidence
     #   - audio+heuristic with very low ML confidence (borderline model rejection)
     before_weak = len(detections)
     detections = [
@@ -1620,10 +1637,19 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
              and d.get("not_shot_prob", 0) > T['ns_weak_heuristic']
              and (d.get("ml_confidence") or 0) < T['mc_floor_heuristic_only'])
             or
-            # Jerk spike with weak ML support
+            # Jerk spike with weak ML support (high not_shot + low ml_confidence)
             (d.get("source") == "jerk_spike_ml"
              and d.get("not_shot_prob", 0) > T['ns_weak_jerk']
              and (d.get("ml_confidence") or 0) < T['mc_floor_jerk'])
+            or
+            # Jerk spike with low fused confidence + any not_shot signal
+            (d.get("source") == "jerk_spike_ml"
+             and d.get("confidence", 1.0) < T['fc_weak_jerk']
+             and d.get("not_shot_prob", 0) > T['ns_weak_jerk_floor'])
+            or
+            # Low-threshold pass with low fused confidence
+            (d.get("source") == "low_threshold_ml"
+             and d.get("confidence", 1.0) < T['fc_weak_low'])
             or
             # Audio+heuristic with very low ML confidence floor
             (d.get("source") == "audio+heuristic"
@@ -1634,6 +1660,28 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
     if weak_removed:
         print(f"    Weak detection filter: removed {weak_removed} "
               f"(low-confidence heuristic/jerk detections)")
+
+    # ── Step 5d: Racket visibility filter ──────────────────────
+    # When racket detection data is available, remove heuristic-only
+    # detections where the racket is barely visible (player likely off-camera).
+    if racket_frames is not None:
+        before_racket = len(detections)
+        filtered_dets = []
+        for d in detections:
+            frame = int(round(d["timestamp"] * fps))
+            rk_vis = _racket_visibility(racket_frames, frame)
+            if (d.get("source") == "heuristic_only"
+                    and rk_vis is not None and rk_vis < 0.30):
+                if verbose:
+                    print(f"    Racket filter: removing {d['timestamp']:.1f}s "
+                          f"(heuristic_only, racket_vis={rk_vis:.2f})")
+                continue
+            filtered_dets.append(d)
+        racket_removed = before_racket - len(filtered_dets)
+        if racket_removed:
+            print(f"    Racket visibility filter: removed {racket_removed} "
+                  f"(heuristic_only with racket_vis < 0.30)")
+        detections = filtered_dets
 
     # ── Step 6: Build summary ────────────────────────────────
     tier_counts = {"high": 0, "medium": 0, "low": 0}
