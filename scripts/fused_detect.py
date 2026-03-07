@@ -1691,6 +1691,36 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         print(f"    Weak detection filter: removed {weak_removed} "
               f"(low-confidence heuristic/jerk detections)")
 
+    # ── Step 5c2: Heuristic-only serve pattern filter ─────────
+    # Serve detections from heuristic_only are disproportionately FP (40% FP rate).
+    # Safe to reject specific weak patterns validated on 12 GT videos, 15 serve detections:
+    #   - "no pattern" serves: heuristic found no biomechanical serve signature → 2 FP, 0 TP
+    #   - Trophy height < 0.28m: too low to be real trophy position → 1 FP, 0 TP
+    #   - "downward swing" + fused_conf < 0.64: arm already descending, marginal detection → 3 FP, 0 TP
+    #     (only TP with downswing has fused_conf=0.650, safely above 0.64)
+    before_serve_filter = len(detections)
+    def _serve_pattern_reject(d):
+        if d.get("source") != "heuristic_only" or d.get("shot_type") != "serve":
+            return False
+        trigger = d.get("trigger", "")
+        # No biomechanical serve pattern detected
+        if "h:no pattern" in trigger:
+            return True
+        # Trophy position too low to be genuine
+        import re
+        m = re.search(r'trophy position: ([\d.]+)m', trigger)
+        if m and float(m.group(1)) < 0.28:
+            return True
+        # Downward swing (follow-through, not the serve itself) with low fused confidence
+        if "downward swing" in trigger and d.get("confidence", 1.0) < 0.64:
+            return True
+        return False
+    detections = [d for d in detections if not _serve_pattern_reject(d)]
+    serve_removed = before_serve_filter - len(detections)
+    if serve_removed:
+        print(f"    Serve pattern filter: removed {serve_removed} "
+              f"(heuristic-only serves with weak biomechanical patterns)")
+
     # ── Step 5d: Racket visibility filter ──────────────────────
     # When racket detection data is available, remove heuristic-only
     # detections where the racket is barely visible (player likely off-camera).
