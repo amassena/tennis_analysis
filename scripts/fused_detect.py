@@ -1721,6 +1721,27 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         print(f"    Serve pattern filter: removed {serve_removed} "
               f"(heuristic-only serves with weak biomechanical patterns)")
 
+    # ── Step 5c3: High wrist non-serve filter ─────────────────
+    # Non-serve heuristic_only detections with wrist very high above hip
+    # (wah >= 0.80) and moderate ML confidence (>= 0.50) are FPs.
+    # Real groundstrokes don't have wrist that high; this catches
+    # serve-like motions misclassified as FH/BH.
+    # Validated: 2 FP, 0 TP on 12 GT videos.
+    before_wah = len(detections)
+    detections = [
+        d for d in detections
+        if not (
+            d.get("source") == "heuristic_only"
+            and d.get("shot_type") not in ("serve", None)
+            and d.get("wrist_above_hip", 0) >= 0.80
+            and (d.get("ml_confidence") or 0) >= 0.50
+        )
+    ]
+    wah_removed = before_wah - len(detections)
+    if wah_removed:
+        print(f"    High-wrist filter: removed {wah_removed} "
+              f"(non-serve heuristic detections with extreme wrist height)")
+
     # ── Step 5d: Racket visibility filter ──────────────────────
     # When racket detection data is available, remove heuristic-only
     # detections where the racket is barely visible (player likely off-camera).
