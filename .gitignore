@@ -40,8 +40,11 @@ training_data/
 shots_detected*.json
 *_labels.csv
 
-# Model metadata
+# Model weights (large/experimental models excluded, production models tracked)
 models/
+# But track production model files (small enough for git, critical to recover)
+!models/shot_classifier.pkl
+!models/shot_classifier_meta.json
 
 # Skeleton videos
 poses/*.mp4
