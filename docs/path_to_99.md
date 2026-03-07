@@ -2,24 +2,25 @@
 
 ## Current State
 
-**After meta-ensemble (Mar 7 2026):** F1=94.8% (P=94.9%, R=94.7%) on 12 GT videos, 546 shots.
+**After post-filters (Mar 7 2026):** F1=95.7% (P=96.8%, R=94.7%) on 12 GT videos, 546 shots.
 
-| Metric | Value | Previous |
-|--------|-------|----------|
-| TP | 517 | 498 |
-| FP | 28 | 27 |
-| FN | 29 | 48 |
-| Total errors | 57 | 75 |
+| Metric | Value | Previous | Backup baseline |
+|--------|-------|----------|----------------|
+| TP | 517 | 517 | 498 |
+| FP | 17 | 28 | 27 |
+| FN | 29 | 29 | 48 |
+| Total errors | 46 | 57 | 75 |
 
-**99% F1 requires:** FP+FN ≤ 11. Must eliminate 46 of 57 errors (81% reduction).
+**99% F1 requires:** FP+FN ≤ 11. Must eliminate 35 of 46 errors (76% reduction).
 
 ## Error Concentration
 
 | Video | FP | FN | Total | % of Errors | Root Cause |
 |-------|----|----|-------|-------------|------------|
-| IMG_6713 | 8 | 12 | 20 | 35% | Left-side camera. 2D features are camera-angle dependent. Meta-ensemble recovered 6 TPs. |
-| IMG_0929 | 4 | 11 | 15 | 26% | Fast net-baseliner rallies — rapid shot exchanges common in normal play. Meta-ensemble recovered 7 TPs. |
-| Other 10 | 16 | 6 | 22 | 39% | Scattered edge cases. |
+| IMG_6713 | 3 | 12 | 15 | 33% | Left-side camera. 2D features are camera-angle dependent. Meta-ensemble recovered 6 TPs, post-filters removed 4 FPs. |
+| IMG_0929 | 2 | 11 | 13 | 28% | Fast net-baseliner rallies — rapid shot exchanges common in normal play. Meta-ensemble recovered 7 TPs. |
+| IMG_6711 | 4 | 0 | 4 | 9% | Heuristic-only FPs with high ML confidence — model confidently wrong. |
+| Other 9 | 8 | 6 | 14 | 30% | Scattered edge cases. |
 
 ## What We've Tried and Learned
 
@@ -35,13 +36,17 @@ The pipeline has 9 detection stages with 22 hardcoded thresholds, all co-tuned w
 
 **Lesson:** Cannot improve the model in isolation. Model + thresholds must be co-optimized, or the pipeline must be redesigned to be threshold-insensitive.
 
-### What Actually Worked (+0.9% total)
+### What Actually Worked (+2.7% total, F1: 93.0% → 95.7%)
 
-Only post-processing filters that don't interact with the cascade:
+Only post-processing filters and the meta-ensemble — nothing that touches the cascade:
 
 1. **Post-dedup weak filters** (+0.3%) — surgically remove specific FP patterns after cascade completes
 2. **unknown_shot promotion** (+0.2%) — trust ML when heuristic has no opinion
 3. **Racket visibility filter** (+0.4%) — YOLOv8 racket detection to filter off-camera FPs
+4. **Meta-ensemble classifier** (+1.8%) — RF meta-classifier learns which window-only detections to trust. Recovered 19 FNs with 1 FP. Key features: min_baseline_dist (31%), has_baseline_match (25%).
+5. **ns >= 0.25 rejection** (+0.2%) — heuristic_only and audio+heuristic with not_shot >= 0.25 are always FP
+6. **Serve pattern filter** (+0.6%) — reject heuristic-only serves with no biomechanical pattern, trophy < 0.28m, or downswing + low fused confidence
+7. **High-wrist non-serve filter** (+0.1%) — reject non-serve heuristic_only with wah >= 0.80 and ml >= 0.50
 
 ### Window Detector: Complementary but Unusable via Simple Ensemble
 
@@ -143,12 +148,13 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 
 | After | Errors | F1 | Status |
 |-------|--------|-----|--------|
-| Backup baseline | 75 | 93.0% | Current model |
+| Backup baseline | 75 | 93.0% | Done |
 | R4: Meta-ensemble | 57 | 94.8% | **DONE** |
-| R1: Camera invariance | ~42 | ~96.1% | 3D uniform failed, need alternative |
-| R2: Fast-sequence detection | ~32 | ~97.0% | |
-| R3: Audio shape features | ~27 | ~97.5% | |
-| R5: Edge case filters | ~23 | ~97.9% | |
+| Post-filters (ns, serve, wrist) | 46 | 95.7% | **DONE** |
+| R1: Camera invariance | ~33 | ~97.0% | 3D uniform failed, need alternative |
+| R2: Fast-sequence detection | ~24 | ~97.8% | |
+| R3: Audio shape features | ~19 | ~98.3% | |
+| R5: Edge case filters | ~15 | ~98.6% | |
 | R6: Temporal architecture | ~11 | ~99.0% | |
 
 ## Execution Order
