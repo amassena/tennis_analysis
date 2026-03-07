@@ -2,26 +2,24 @@
 
 ## Current State
 
-**Production baseline (Mar 3 2026):** F1=93.9% (P=96.2%, R=91.8%) on 12 GT videos, 546 shots.
+**After meta-ensemble (Mar 7 2026):** F1=94.8% (P=94.9%, R=94.7%) on 12 GT videos, 546 shots.
 
-| Metric | Value |
-|--------|-------|
-| TP | 501 |
-| FP | 20 |
-| FN | 45 |
-| Total errors | 65 |
+| Metric | Value | Previous |
+|--------|-------|----------|
+| TP | 517 | 498 |
+| FP | 28 | 27 |
+| FN | 29 | 48 |
+| Total errors | 57 | 75 |
 
-**99% F1 requires:** FP+FN ≤ 11. Must eliminate 54 of 65 errors (83% reduction).
+**99% F1 requires:** FP+FN ≤ 11. Must eliminate 46 of 57 errors (81% reduction).
 
 ## Error Concentration
 
-Two videos account for 74% of all errors:
-
 | Video | FP | FN | Total | % of Errors | Root Cause |
 |-------|----|----|-------|-------------|------------|
-| IMG_6713 | 7 | 17 | 24 | 37% | Left-side camera. 2D features are camera-angle dependent. Model is blind to this viewing angle. |
-| IMG_0929 | 3 | 21 | 24 | 37% | Wall drill backhands at fast pace. Features overlap with not_shot. Rapid repetitive strokes. |
-| Other 10 | 10 | 7 | 17 | 26% | Scattered edge cases. These videos average F1=97.4%. |
+| IMG_6713 | 8 | 12 | 20 | 35% | Left-side camera. 2D features are camera-angle dependent. Meta-ensemble recovered 6 TPs. |
+| IMG_0929 | 4 | 11 | 15 | 26% | Wall drill backhands at fast pace. Meta-ensemble recovered 7 TPs. |
+| Other 10 | 16 | 6 | 22 | 39% | Scattered edge cases. |
 
 ## What We've Tried and Learned
 
@@ -68,15 +66,19 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 
 ### R1: Camera Angle Invariance
 
-**Problem:** IMG_6713 (left-side camera) contributes 24 errors (37% of total). 2D pose features are completely different from back-court training data.
+**Problem:** IMG_6713 (left-side camera) contributes 20 errors (35% of total, down from 24 after R4). 2D pose features are completely different from back-court training data.
 
 **Required outcome:** Features that produce consistent classification regardless of camera position.
 
-**Approaches:**
-- **3D pose lifting + threshold co-tuning.** Infrastructure exists. Retrain model on 3D features, then systematic grid search over the 6 most sensitive thresholds (ns_permissive, ns_moderate, mc_strong, mc_weak, mc_floor_heuristic_only, mc_floor_jerk) against full 12-video set.
-- **Per-angle models.** Train separate models per camera position, auto-detect angle from pose geometry. Limited by having only 1 left-side video.
+**Attempted (Mar 7):** MotionBERT Lite 3D pose lifting. Trained RF on 3D features (LOOCV=83.9%, +0.5% vs 2D). With threshold sweep (ns=-0.15, mc=+0.05), best 3D F1=91.9% vs 2D baseline 95.3% on 3 key videos. IMG_6713 improved only marginally (61.3% → 62.9%) while back-court videos regressed. **Uniform 3D replacement is a dead end** with MotionBERT Lite — the 3D output is not sufficiently camera-invariant.
 
-**Expected recovery:** 15-20 of 24 IMG_6713 errors.
+**Remaining approaches:**
+- **Better 3D lifting model.** MotionBERT Full (vs Lite), or MotionBERT fine-tuned on sports data. The Lite model may lack capacity for tennis-specific poses.
+- **Hybrid features.** Use 3D features only for camera-dependent measurements (x-offset, shoulder rotation) while keeping 2D for camera-independent ones (velocity, wrist height relative to body).
+- **Per-angle models.** Train separate models per camera position, auto-detect angle from pose geometry. Limited by having only 1 left-side video.
+- **Camera angle normalization.** Detect camera angle from pose geometry, then rotate 2D features to canonical "back-court" view.
+
+**Expected recovery:** 10-15 of 20 remaining IMG_6713 errors.
 
 ### R2: Fast-Sequence Detection
 
@@ -99,19 +101,17 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 
 **Expected recovery:** 5-8 errors (fewer audio-triggered FPs, recover FNs with distinctive audio shape but low amplitude).
 
-### R4: Meta-Classifier Ensemble
+### R4: Meta-Classifier Ensemble [DONE]
 
 **Problem:** 28 shots only the window detector finds. 22 shots only the baseline finds. Simple confidence thresholding can't distinguish window-only TPs from FPs.
 
-**Required outcome:** A meta-classifier that takes both systems' features and predictions as input, and learns which disagreements to trust.
+**Result:** Meta-classifier (RF, 17 features) learns which window-only detections to trust. At threshold=0.3: recovered 19 FNs with 1 additional FP. F1: 93.0% → 94.8%.
 
-**Input features for meta-classifier:**
-- Baseline confidence, detection source, not_shot probability
-- Window detector confidence, top feature values
-- Agreement/disagreement signal
-- Temporal context (nearby detections)
+**Key features:** min_baseline_dist (31%), has_baseline_match (25%), w_conf (16%) — the model learned that window detections far from any baseline detection are likely genuine new finds.
 
-**Expected recovery:** 8-12 errors (capture most of the 28 window-only TPs while filtering the 74 window FPs).
+**Actual recovery:** 18 net errors recovered (19 TP - 1 FP). Exceeded expected 8-12.
+
+**Scripts:** `scripts/meta_ensemble.py` (train + `--apply` mode), `models/meta_ensemble.pkl`.
 
 ### R5: Remaining Edge Cases
 
@@ -141,22 +141,22 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 
 ## Expected Progression
 
-| After | Expected Errors | Expected F1 |
-|-------|----------------|-------------|
-| Current baseline | 65 | 93.9% |
-| R1: Camera invariance | ~47 | ~95.7% |
-| R2: Fast-sequence detection | ~35 | ~96.7% |
-| R3: Audio shape features | ~30 | ~97.2% |
-| R4: Meta-classifier ensemble | ~22 | ~97.9% |
-| R5: Edge case filters | ~18 | ~98.3% |
-| R6: Temporal architecture | ~11 | ~99.0% |
+| After | Errors | F1 | Status |
+|-------|--------|-----|--------|
+| Backup baseline | 75 | 93.0% | Current model |
+| R4: Meta-ensemble | 57 | 94.8% | **DONE** |
+| R1: Camera invariance | ~42 | ~96.1% | 3D uniform failed, need alternative |
+| R2: Fast-sequence detection | ~32 | ~97.0% | |
+| R3: Audio shape features | ~27 | ~97.5% | |
+| R5: Edge case filters | ~23 | ~97.9% | |
+| R6: Temporal architecture | ~11 | ~99.0% | |
 
 ## Execution Order
 
-1. R1 — Camera angle invariance (3D + threshold co-tuning)
-2. R3 — Audio shape features (independent of R1, can parallelize)
-3. R2 — Fast-sequence detection (benefits from R3's audio features)
-4. R4 — Meta-classifier ensemble (benefits from R1-R3 improving both systems)
+1. ~~R4 — Meta-classifier ensemble~~ **DONE** (F1: 93.0% → 94.8%)
+2. R1 — Camera angle invariance (3D uniform replacement failed; try per-angle models or better 3D lifting)
+3. R3 — Audio shape features (independent, can parallelize)
+4. R2 — Fast-sequence detection (benefits from R3's audio features)
 5. R5 — Edge case filters (mop up remaining errors)
 6. R6 — Temporal architecture (only if R1-R5 plateau below 99%)
 
