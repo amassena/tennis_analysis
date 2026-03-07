@@ -54,6 +54,8 @@ GT_VIDEOS = {
     "IMG_6711": {"gt_file": "detections/IMG_6711_fused_v5.json", "format": "detection_json"},
     "IMG_6713": {"gt_file": "detections/IMG_6713_fused.json", "format": "detection_json"},
     "IMG_0929": {"gt_file": "detections/IMG_0929_fused_v5.json", "format": "detection_json"},
+    "IMG_0991": {"gt_file": "detections/IMG_0991_fused.json", "format": "detection_json"},
+    "IMG_0993": {"gt_file": "detections/IMG_0993_fused.json", "format": "detection_json"},
 }
 
 # Shot types to ignore in metrics (not real player shots)

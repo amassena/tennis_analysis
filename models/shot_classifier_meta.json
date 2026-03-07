@@ -36,48 +36,15 @@
   "n_estimators": 300,
   "max_depth": 12,
   "min_samples_leaf": 5,
-  "train_samples": 930,
-  "val_samples": 206,
+  "train_samples": 741,
+  "val_samples": 248,
   "val_videos": [
-    "IMG_6703"
+    "IMG_6703",
+    "IMG_6711"
   ],
-  "train_accuracy": 0.9409,
-  "val_accuracy": 0.7379,
+  "train_accuracy": 0.9325,
+  "val_accuracy": 0.7661,
   "seed": 42,
   "has_not_shot_class": true,
-  "not_shot_rejection_threshold": 0.4,
-  "distribution_stats": {
-    "tp_count": 633,
-    "ns_median": 0.0491,
-    "ns_p95": 0.2122,
-    "mc_median": 0.8438,
-    "mc_p5": 0.4691
-  },
-  "reference_thresholds": {
-    "ns_permissive": 0.3622,
-    "ns_moderate": 0.3022,
-    "ns_strict": 0.2726,
-    "ns_first_pass": 0.2536,
-    "ns_weak_jerk": 0.2284,
-    "ns_weak_heuristic": 0.2182,
-    "mc_strong": 0.5261,
-    "mc_moderate": 0.4691,
-    "mc_weak": 0.4407,
-    "mc_floor_audio_heuristic": 0.5213,
-    "mc_floor_heuristic_only": 0.5,
-    "mc_floor_jerk": 0.55,
-    "mc_low_pass": 0.5261,
-    "mc_sliding_window": 0.5261,
-    "mc_rhythm_fill": 0.4691,
-    "ns_rescue": 0.3622,
-    "ns_rescue_reject": 0.3022,
-    "mc_rescue": 0.6511,
-    "ns_jerk_high": 0.3622,
-    "mc_jerk_high": 0.4691,
-    "ns_jerk_low": 0.2536,
-    "mc_jerk_low": 0.5261,
-    "fc_weak_jerk": 0.45,
-    "ns_weak_jerk_floor": 0.1,
-    "fc_weak_low": 0.52
-  }
+  "not_shot_rejection_threshold": 0.4
 }

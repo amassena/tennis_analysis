@@ -18,6 +18,7 @@ HIGHLIGHTS_DIR = os.path.join(PROJECT_ROOT, "highlights")
 ANALYSIS_DIR = os.path.join(PROJECT_ROOT, "analysis")
 BALL_TRACKING_DIR = os.path.join(PROJECT_ROOT, "ball_tracking")
 RACKET_DETECTIONS_DIR = os.path.join(PROJECT_ROOT, "racket_detections")
+POSES_3D_DIR = os.path.join(PROJECT_ROOT, "poses_3d")
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 
 SHOT_TYPES = ["forehand", "backhand", "serve", "neutral"]

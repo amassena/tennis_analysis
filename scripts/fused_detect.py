@@ -160,11 +160,14 @@ def _load_cnn():
 
 
 def classify_with_model(frames, center_frame, fps, dominant_hand="right",
-                        detection_meta=None, rally_context=None):
+                        detection_meta=None, rally_context=None,
+                        frames_3d=None):
     """Classify a shot using the trained RF model.
 
     Returns (shot_type, confidence, class_probs) or (None, 0.0, {}).
-    class_probs is a dict of class_name → probability.
+    class_probs is a dict of class_name -> probability.
+    If frames_3d is provided, uses 3D poses for feature extraction
+    (camera-invariant classification) while detection uses 2D frames.
     """
     model, meta = _load_classifier()
     if model is None or meta is None:
@@ -172,7 +175,9 @@ def classify_with_model(frames, center_frame, fps, dominant_hand="right",
 
     from scripts.extract_training_features import extract_features
 
-    features = extract_features(frames, center_frame, fps, dominant_hand,
+    # Use 3D poses for ML features if available, else use 2D
+    ml_frames = frames_3d if frames_3d is not None else frames
+    features = extract_features(ml_frames, center_frame, fps, dominant_hand,
                                 detection_meta=detection_meta,
                                 rally_context=rally_context)
     if features is None:
@@ -379,7 +384,7 @@ def merge_slomo_clusters(detections, cluster_window=4.0):
 
 
 def _second_pass_low_threshold(velocities, first_pass_times, frames, fps,
-                               dominant_hand, verbose):
+                               dominant_hand, verbose, frames_3d=None):
     """Find shots missed by strict heuristic using lower velocity thresholds + ML.
 
     The first pass uses min_vel=12.0 and spike_ratio=3.0 plus a rigid biomechanical
@@ -429,6 +434,7 @@ def _second_pass_low_threshold(velocities, first_pass_times, frames, fps,
         ml_type, ml_conf, ml_probs = classify_with_model(
             frames, spike_frame, fps, dominant_hand,
             detection_meta=spike_meta,
+            frames_3d=frames_3d,
         )
 
         not_shot_prob = ml_probs.get("not_shot", 0.0)
@@ -479,7 +485,8 @@ def _second_pass_low_threshold(velocities, first_pass_times, frames, fps,
     return detections
 
 
-def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose):
+def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose,
+                         frames_3d=None):
     """Scan entire video at 0.5s intervals, using ML to detect shots from pose alone.
 
     For shots with no velocity spike and no audio — pure pose-based detection.
@@ -549,8 +556,9 @@ def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose):
                 "audio_amplitude": 0.0,
                 "velocity": 0.0,
             }
+            ml_frames = frames_3d if frames_3d is not None else frames
             features = extract_features(
-                frames, probe_frame, fps, dominant_hand,
+                ml_frames, probe_frame, fps, dominant_hand,
                 detection_meta=window_meta,
             )
             if features is None:
@@ -624,7 +632,7 @@ def _sliding_window_scan(existing_times, frames, fps, dominant_hand, verbose):
 
 
 def _jerk_spike_pass(velocities, existing_times, frames, fps,
-                     dominant_hand, verbose):
+                     dominant_hand, verbose, frames_3d=None):
     """Find shots via wrist jerk spikes (d³pos/dt³) + ML classification.
 
     Jerk captures the instantaneous "snap" at ball contact and is immune
@@ -679,6 +687,7 @@ def _jerk_spike_pass(velocities, existing_times, frames, fps,
         ml_type, ml_conf, ml_probs = classify_with_model(
             frames, spike_frame, fps, dominant_hand,
             detection_meta=spike_meta,
+            frames_3d=frames_3d,
         )
 
         not_shot_prob = ml_probs.get("not_shot", 0.0)
@@ -736,7 +745,8 @@ def _jerk_spike_pass(velocities, existing_times, frames, fps,
     return detections
 
 
-def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose):
+def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose,
+                       frames_3d=None):
     """Fill gaps in rally rhythm using temporal pattern + ML classification.
 
     Tennis rallies have predictable rhythm (1.5-4s between shots). A gap of
@@ -829,8 +839,9 @@ def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose):
                         "audio_amplitude": 0.0,
                         "velocity": 0.0,
                     }
+                    ml_frames = frames_3d if frames_3d is not None else frames
                     features = extract_features(
-                        frames, probe_frame, fps, dominant_hand,
+                        ml_frames, probe_frame, fps, dominant_hand,
                         detection_meta=window_meta,
                     )
                     if features is None:
@@ -901,7 +912,7 @@ def _rally_rhythm_fill(existing_times, frames, fps, dominant_hand, verbose):
 
 
 def _post_dedup_rescue(pre_filter_dets, post_dedup_dets, frames, fps,
-                       dominant_hand, verbose):
+                       dominant_hand, verbose, frames_3d=None):
     """Rescue real shots orphaned by dedup/cluster merge.
 
     When early pipeline stages create an intermediate detection that blocks
@@ -976,8 +987,9 @@ def _post_dedup_rescue(pre_filter_dets, post_dedup_dets, frames, fps,
                 "audio_amplitude": orphan.get("audio_amplitude", 0.0),
                 "velocity": orphan.get("velocity", 0.0),
             }
+            ml_frames = frames_3d if frames_3d is not None else frames
             features = extract_features(
-                frames, probe_frame, fps, dominant_hand,
+                ml_frames, probe_frame, fps, dominant_hand,
                 detection_meta=rescue_meta,
             )
             if features is None:
@@ -1047,7 +1059,8 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
                  audio_threshold=98.5, audio_min_gap=800,
                  audio_min_amplitude=AUDIO_MIN_AMPLITUDE,
                  window_sec=AUDIO_POSE_WINDOW,
-                 use_model=True, verbose=False):
+                 use_model=True, verbose=False,
+                 poses_3d_path=None):
     """Run fused audio + heuristic detection.
 
     Strategy: anchor on heuristic velocity spikes (fewer, higher quality),
@@ -1124,6 +1137,13 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
     fps = pose_fps or video_fps
     print(f"    {total_frames} frames at {fps} fps")
 
+    # Load 3D poses for ML classification (if available)
+    frames_3d = None
+    if poses_3d_path and os.path.exists(poses_3d_path):
+        print(f"  Loading 3D poses for classification...")
+        frames_3d, _, _ = load_pose_frames(poses_3d_path)
+        print(f"    3D poses loaded ({sum(1 for f in frames_3d if f.get('_3d_lifted'))} lifted frames)")
+
     # ── Step 3: Heuristic velocity spikes ────────────────────
     wrist_idx = RIGHT_WRIST if dominant_hand == "right" else LEFT_WRIST
     velocities = compute_wrist_velocities(frames, wrist_idx, fps)
@@ -1170,6 +1190,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             ml_type, ml_conf, ml_probs = classify_with_model(
                 frames, spike_frame, fps, dominant_hand,
                 detection_meta=spike_meta,
+                frames_3d=frames_3d,
             )
 
         # ML rejection gate: if model predicts not_shot with high probability, skip
@@ -1332,6 +1353,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             ml_type, ml_conf, ml_probs = classify_with_model(
                 frames, peak_frame, fps, dominant_hand,
                 detection_meta=audio_meta,
+                frames_3d=frames_3d,
             )
             audio_not_shot_prob = ml_probs.get("not_shot", 0.0)
 
@@ -1422,7 +1444,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         print(f"  Running jerk spike pass...")
         jerk_hits = _jerk_spike_pass(
             velocities, first_pass_times_jerk, frames, fps,
-            dominant_hand, verbose,
+            dominant_hand, verbose, frames_3d=frames_3d,
         )
         if jerk_hits:
             print(f"    Jerk pass found {len(jerk_hits)} additional detections")
@@ -1455,6 +1477,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             ml_type, ml_conf, ml_probs = classify_with_model(
                 frames, onset_frame, fps, dominant_hand,
                 detection_meta=onset_meta,
+                frames_3d=frames_3d,
             )
 
             not_shot_prob = ml_probs.get("not_shot", 0.0)
@@ -1501,7 +1524,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         print(f"  Running second pass (low-threshold + ML)...")
         second_pass = _second_pass_low_threshold(
             velocities, first_pass_times, frames, fps,
-            dominant_hand, verbose,
+            dominant_hand, verbose, frames_3d=frames_3d,
         )
         if second_pass:
             print(f"    Second pass found {len(second_pass)} additional detections")
@@ -1513,6 +1536,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         print(f"  Running sliding window scan...")
         window_hits = _sliding_window_scan(
             existing_times, frames, fps, dominant_hand, verbose,
+            frames_3d=frames_3d,
         )
         if window_hits:
             print(f"    Sliding window found {len(window_hits)} additional detections")
@@ -1524,6 +1548,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         print(f"  Running rally rhythm fill...")
         rhythm_hits = _rally_rhythm_fill(
             existing_times_rhythm, frames, fps, dominant_hand, verbose,
+            frames_3d=frames_3d,
         )
         if rhythm_hits:
             print(f"    Rhythm fill found {len(rhythm_hits)} additional detections")
@@ -1612,7 +1637,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
     if use_model:
         rescue_hits = _post_dedup_rescue(
             pre_filter_detections, detections, frames, fps,
-            dominant_hand, verbose,
+            dominant_hand, verbose, frames_3d=frames_3d,
         )
         if rescue_hits:
             print(f"    Post-dedup rescue: recovered {len(rescue_hits)} detections")
@@ -1789,6 +1814,10 @@ def main():
                         help="Minimum confidence to include (default: 0.0)")
     parser.add_argument("--no-model", action="store_true",
                         help="Disable ML classifier, use heuristic only")
+    parser.add_argument("--poses-dir", default=None,
+                        help="Directory with pose JSONs (overrides default POSES_DIR)")
+    parser.add_argument("--poses-3d-dir", default=None,
+                        help="Directory with 3D-lifted pose JSONs for ML classification")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Log rejected detections (not_shot, low-confidence)")
     args = parser.parse_args()
@@ -1802,14 +1831,15 @@ def main():
         sys.exit(1)
 
     # Auto-discover pose file
+    poses_dir = args.poses_dir or POSES_DIR
     video_name = os.path.splitext(os.path.basename(video_path))[0]
     if args.poses:
         pose_path = args.poses
     else:
-        pose_path = os.path.join(POSES_DIR, video_name + ".json")
+        pose_path = os.path.join(poses_dir, video_name + ".json")
         if not os.path.exists(pose_path):
             # Try without _poses suffix
-            alt = os.path.join(POSES_DIR, video_name + "_poses.json")
+            alt = os.path.join(poses_dir, video_name + "_poses.json")
             if os.path.exists(alt):
                 pose_path = alt
 
@@ -1824,9 +1854,20 @@ def main():
         det_dir, f"{video_name}_fused_detections.json"
     )
 
+    # Auto-discover 3D pose file for ML classification
+    poses_3d_path = None
+    if args.poses_3d_dir:
+        p3d = os.path.join(args.poses_3d_dir, video_name + ".json")
+        if os.path.exists(p3d):
+            poses_3d_path = p3d
+        else:
+            print(f"  [WARN] 3D pose file not found: {p3d}, using 2D only")
+
     print(f"Fused Detection: {video_name}")
     print(f"  Video: {os.path.basename(video_path)}")
     print(f"  Poses: {os.path.basename(pose_path)}")
+    if poses_3d_path:
+        print(f"  3D Poses: {os.path.basename(poses_3d_path)} (for ML classification)")
     print()
 
     result = fused_detect(
@@ -1838,6 +1879,7 @@ def main():
         window_sec=args.window,
         use_model=not args.no_model,
         verbose=args.verbose,
+        poses_3d_path=poses_3d_path,
     )
 
     # Filter by confidence

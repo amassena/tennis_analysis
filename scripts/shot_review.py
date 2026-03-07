@@ -5,7 +5,9 @@ import argparse
 import json
 import os
 import re
+import signal
 import socketserver
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -38,7 +40,9 @@ def find_detections(video_path: str) -> str | None:
     return str(best.resolve())
 
 
-def build_html(video_filename: str, duration: float) -> str:
+def build_html(video_filename: str, duration: float, video_url: str = "/video",
+               video_path: str = "", det_path: str = "", fps: float = 0,
+               num_shots: int = 0) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,6 +116,37 @@ video {{
     max-width: 100%;
     max-height: 100%;
     display: block;
+}}
+/* ── Video loading overlay ── */
+#video-loading {{
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,.85);
+    z-index: 10;
+    gap: 12px;
+}}
+#video-loading.hidden {{ display: none; }}
+#load-bar-wrap {{
+    width: 280px;
+    height: 6px;
+    background: #2a2a35;
+    border-radius: 3px;
+    overflow: hidden;
+}}
+#load-bar {{
+    height: 100%;
+    width: 0%;
+    background: #6366f1;
+    border-radius: 3px;
+    transition: width .15s;
+}}
+#load-text {{
+    color: #888;
+    font-size: 13px;
 }}
 
 /* ── Scrub bar ── */
@@ -501,9 +536,11 @@ tr.active .nudge-btn {{ color: #888; }}
 </div>
 
 <div id="video-wrap">
-    <video id="player" preload="auto">
-        <source src="/video" type="video/mp4">
-    </video>
+    <div id="video-loading">
+        <div id="load-bar-wrap"><div id="load-bar"></div></div>
+        <div id="load-text">Loading video...</div>
+    </div>
+    <video id="player" preload="none"></video>
 </div>
 
 <div id="scrub-wrap">
@@ -525,6 +562,15 @@ tr.active .nudge-btn {{ color: #888; }}
         <button data-speed="8">8x</button>
     </div>
     <span id="save-status"></span>
+</div>
+
+<div id="info-bar" style="background:#1a1a2e; color:#888; font-size:0.8em; padding:4px 12px; font-family:monospace; display:flex; gap:20px; flex-wrap:wrap;">
+    <span style="color:#e0e0e0; font-weight:bold; font-size:1.1em;">{video_filename}</span>
+    <span>{video_path}</span>
+    <span>det: {det_path}</span>
+    <span>{fps:.1f} fps</span>
+    <span>{num_shots} shots</span>
+    <span>{duration:.1f}s</span>
 </div>
 
 <div id="minimap-wrap">
@@ -618,8 +664,50 @@ function fmtTimeShort(s) {{
     return m + ':' + String(sec).padStart(2, '0');
 }}
 
+// ── Pre-download entire video as blob to eliminate streaming speed issues ──
+const VIDEO_SRC = '{video_url}';
+let videoReady = false;
+(async function preloadVideo() {{
+    const loadEl = document.getElementById('video-loading');
+    const loadBar = document.getElementById('load-bar');
+    const loadText = document.getElementById('load-text');
+    try {{
+        const resp = await fetch(VIDEO_SRC);
+        const total = parseInt(resp.headers.get('Content-Length') || '0', 10);
+        const reader = resp.body.getReader();
+        const chunks = [];
+        let received = 0;
+        while (true) {{
+            const {{done, value}} = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            received += value.length;
+            if (total > 0) {{
+                const pct = Math.min(100, received / total * 100);
+                loadBar.style.width = pct.toFixed(1) + '%';
+                const mb = (received / 1048576).toFixed(0);
+                const totalMb = (total / 1048576).toFixed(0);
+                loadText.textContent = 'Loading video... ' + mb + ' / ' + totalMb + ' MB';
+            }}
+        }}
+        const blob = new Blob(chunks, {{type: 'video/mp4'}});
+        player.src = URL.createObjectURL(blob);
+        player.load();
+        videoReady = true;
+        loadEl.classList.add('hidden');
+    }} catch (e) {{
+        // Fallback to streaming if blob download fails
+        loadText.textContent = 'Blob download failed, using stream...';
+        player.src = VIDEO_SRC;
+        player.load();
+        videoReady = true;
+        setTimeout(() => loadEl.classList.add('hidden'), 1000);
+    }}
+}})();
+
 // ── Play/Pause button ──
 playBtn.addEventListener('click', () => {{
+    if (!videoReady) return;
     player.paused ? player.play() : player.pause();
 }});
 player.addEventListener('play',  () => {{ playBtn.innerHTML = '&#9646;&#9646;'; }});
@@ -1076,8 +1164,9 @@ function jumpTo(idx) {{
     const zoomedPct = ((frac - viewStart) / vw) * 100;
     progress.style.width = Math.max(0, Math.min(100, zoomedPct)) + '%';
 
+    const wasPaused = player.paused;
     player.currentTime = targetTime;
-    player.play();
+    if (!wasPaused) player.play();
 
     // only pan if shot is outside visible range
     if (zoomLevel > 1.05) {{
@@ -1137,7 +1226,23 @@ player.addEventListener('timeupdate', () => {{
     // scrub bar (always full width)
     scrubFill.style.width = globalPct + '%';
     scrubHdl.style.left = globalPct + '%';
-    timDisp.textContent = fmtTime(t) + ' / ' + fmtTimeShort(dur);
+    // Speed monitor: measure actual playback speed from currentTime
+    const now = performance.now();
+    if (typeof _lastT !== 'undefined' && !player.paused && (now - _lastWall) > 200) {{
+        const dtVideo = t - _lastT;
+        const dtWall = (now - _lastWall) / 1000;
+        const actualSpeed = dtWall > 0 ? (dtVideo / dtWall) : 0;
+        const setSpeed = player.playbackRate;
+        const ratio = setSpeed > 0 ? actualSpeed / setSpeed : 0;
+        const speedStr = ratio.toFixed(2) + 'x';
+        const color = (ratio > 0.85 && ratio < 1.15) ? '#4f4' : '#f44';
+        timDisp.textContent = fmtTime(t) + ' / ' + fmtTimeShort(dur) + '  [' + speedStr + ']';
+        timDisp.style.color = color;
+    }} else {{
+        timDisp.textContent = fmtTime(t) + ' / ' + fmtTimeShort(dur);
+        timDisp.style.color = '#ccc';
+    }}
+    _lastT = t; _lastWall = now;
     // minimap progress
     minimapProg.style.width = globalPct + '%';
     // zoomed timeline progress
@@ -1216,6 +1321,14 @@ document.addEventListener('keydown', (e) => {{
         case ']':
             e.preventDefault();
             if (activeIdx >= 0) nudgeTime(activeIdx, e.shiftKey ? 0.5 : 0.1);
+            break;
+        case '+': case '=':
+            e.preventDefault();
+            setZoom(zoomLevel * 1.5, 0.5);
+            break;
+        case '-': case '_':
+            e.preventDefault();
+            setZoom(zoomLevel / 1.5, 0.5);
             break;
     }}
 }});
@@ -1321,7 +1434,7 @@ class RangeHTTPRequestHandler(SimpleHTTPRequestHandler):
         with open(fpath, "rb") as f:
             f.seek(start)
             remaining = length
-            buf_size = 256 * 1024
+            buf_size = 2 * 1024 * 1024  # 2 MB chunks for fast transfer
             while remaining > 0:
                 chunk = f.read(min(buf_size, remaining))
                 if not chunk:
@@ -1357,16 +1470,55 @@ def make_handler(video_path, detections_json_ref, det_path, html_content):
     return Handler
 
 
+def kill_port(port):
+    """Kill any process listening on the given port. Returns True if something was killed."""
+    import time
+    try:
+        if sys.platform == "win32":
+            # Windows: use netstat + taskkill
+            result = subprocess.run(
+                ["netstat", "-ano"], capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTENING" in line:
+                    pid = line.strip().split()[-1]
+                    subprocess.run(["taskkill", "/F", "/PID", pid],
+                                   capture_output=True, timeout=5)
+            time.sleep(0.3)
+            return True
+        else:
+            # macOS/Linux: use lsof
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            pids = result.stdout.strip().split()
+            if pids:
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), signal.SIGKILL)
+                    except (ProcessLookupError, ValueError):
+                        pass
+                time.sleep(0.3)
+                return True
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Interactive shot review player")
-    parser.add_argument("video", help="Path to the video file (mp4)")
+    parser.add_argument("video", help="Path to the video file (mp4), or video name when using --video-url")
     parser.add_argument("--detections", "-d", help="Path to detection JSON (auto-discovered if omitted)")
+    parser.add_argument("--video-url", help="Remote URL for video (e.g. http://windows:9000/IMG_0994.mp4)")
     parser.add_argument("--port", "-p", type=int, default=8765, help="HTTP port (default 8765)")
     parser.add_argument("--no-open", action="store_true", help="Don't auto-open browser")
     args = parser.parse_args()
 
+    video_url = args.video_url  # None means serve locally
     video_path = os.path.abspath(args.video)
-    if not os.path.isfile(video_path):
+
+    if not video_url and not os.path.isfile(video_path):
         print(f"Error: video not found: {video_path}", file=sys.stderr)
         sys.exit(1)
 
@@ -1384,21 +1536,33 @@ def main():
 
     detections_json_ref = [json.dumps(det_data)]
     duration = det_data.get("duration", 0)
-    video_filename = os.path.basename(video_path)
-    html = build_html(video_filename, duration)
+    fps = det_data.get("fps", 0)
+    num_shots = len(det_data.get("detections", []))
+    video_filename = os.path.basename(args.video)
+    html = build_html(video_filename, duration, video_url=video_url or "/video",
+                      video_path=video_path, det_path=det_path, fps=fps,
+                      num_shots=num_shots)
 
     handler_class = make_handler(video_path, detections_json_ref, det_path, html)
 
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("127.0.0.1", args.port), handler_class) as httpd:
-        url = f"http://127.0.0.1:{args.port}"
+    # Kill any stale process on the port before starting
+    if kill_port(args.port):
+        print(f"Killed stale process on port {args.port}")
+
+    # Bind to 0.0.0.0 on Windows (accessible from network), 127.0.0.1 on Mac (local only)
+    bind_addr = "0.0.0.0" if sys.platform == "win32" else "127.0.0.1"
+    class ThreadedServer(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+    with ThreadedServer((bind_addr, args.port), handler_class) as httpd:
+        url = f"http://localhost:{args.port}"
         print(f"Shot Review: {video_filename}")
         print(f"Detections:  {os.path.basename(det_path)} ({len(det_data.get('detections', []))} shots)")
         print(f"Serving at:  {url}")
         print(f"Press Ctrl+C to stop.\n")
 
         if not args.no_open:
-            threading.Timer(0.3, lambda: webbrowser.open(url)).start()
+            threading.Timer(0.5, lambda: webbrowser.open(url)).start()
 
         try:
             httpd.serve_forever()

@@ -62,6 +62,7 @@ pipeline_state.json
 
 # Pose data (full video, large JSON files)
 poses_full_videos/
+poses_3d/
 
 # Virtual environment (alternate name)
 .venv/
