@@ -18,7 +18,7 @@
 | Video | FP | FN | Total | % of Errors | Root Cause |
 |-------|----|----|-------|-------------|------------|
 | IMG_6713 | 8 | 12 | 20 | 35% | Left-side camera. 2D features are camera-angle dependent. Meta-ensemble recovered 6 TPs. |
-| IMG_0929 | 4 | 11 | 15 | 26% | Wall drill backhands at fast pace. Meta-ensemble recovered 7 TPs. |
+| IMG_0929 | 4 | 11 | 15 | 26% | Fast net-baseliner rallies — rapid shot exchanges common in normal play. Meta-ensemble recovered 7 TPs. |
 | Other 10 | 16 | 6 | 22 | 39% | Scattered edge cases. |
 
 ## What We've Tried and Learned
@@ -82,9 +82,9 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 
 ### R2: Fast-Sequence Detection
 
-**Problem:** IMG_0929 (wall drills) contributes 24 errors (37% of total). 21 FNs are rapid repetitive backhands rejected because `not_shot > 0.30-0.40`.
+**Problem:** IMG_0929 (fast net-baseliner rallies) contributes 15 errors (26% of total, down from 24 after R4). Rapid shot exchanges between net player and baseliner — a common tennis pattern, not an edge case.
 
-**Required outcome:** Detect rapid repetitive strokes during confirmed rally/drill sequences.
+**Required outcome:** Detect fast-exchange rally shots that currently get rejected by not_shot gate.
 
 **Approaches:**
 - **Rally-aware threshold relaxation.** During confirmed rally clusters, lower the not_shot gate (e.g., from 0.40 to 0.55). Risk: may add FPs in non-rally sections.
