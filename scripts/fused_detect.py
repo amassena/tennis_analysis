@@ -1662,6 +1662,11 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
              and d.get("not_shot_prob", 0) > T['ns_weak_heuristic']
              and (d.get("ml_confidence") or 0) < T['mc_floor_heuristic_only'])
             or
+            # Heuristic-only or audio+heuristic with moderate not_shot
+            # (no TP from these sources has ns >= 0.25; validated on 12 GT videos)
+            (d.get("source") in ("heuristic_only", "audio+heuristic")
+             and d.get("not_shot_prob", 0) >= 0.25)
+            or
             # Jerk spike with weak ML support (high not_shot + low ml_confidence)
             (d.get("source") == "jerk_spike_ml"
              and d.get("not_shot_prob", 0) > T['ns_weak_jerk']
