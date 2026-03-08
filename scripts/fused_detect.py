@@ -1979,6 +1979,24 @@ def main():
         det_dir, f"{video_name}_fused_detections.json"
     )
 
+    # Protect user-labeled files from being overwritten
+    if os.path.exists(output_path):
+        try:
+            with open(output_path) as _f:
+                _existing = json.load(_f)
+            _has_user_edits = (
+                _existing.get("last_saved")
+                or any(d.get("source") == "manual" for d in _existing.get("detections", []))
+            )
+            if _has_user_edits:
+                from datetime import datetime
+                _backup = output_path.replace(".json", f"_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                import shutil
+                shutil.copy2(output_path, _backup)
+                print(f"  [BACKUP] User-labeled file backed up to {os.path.basename(_backup)}")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     # Auto-discover 3D pose file for ML classification
     poses_3d_path = None
     if args.poses_3d_dir:
