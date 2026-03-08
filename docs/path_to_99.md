@@ -2,25 +2,25 @@
 
 ## Current State
 
-**After post-filters (Mar 7 2026):** F1=95.7% (P=96.8%, R=94.7%) on 12 GT videos, 546 shots.
+**After improved meta-ensemble (Mar 7 2026):** F1=95.9% (P=96.0%, R=95.8%) on 12 GT videos, 546 shots.
 
 | Metric | Value | Previous | Backup baseline |
 |--------|-------|----------|----------------|
-| TP | 517 | 517 | 498 |
-| FP | 17 | 28 | 27 |
-| FN | 29 | 29 | 48 |
-| Total errors | 46 | 57 | 75 |
+| TP | 523 | 517 | 498 |
+| FP | 22 | 17 | 27 |
+| FN | 23 | 29 | 48 |
+| Total errors | 45 | 46 | 75 |
 
-**99% F1 requires:** FP+FN ≤ 11. Must eliminate 35 of 46 errors (76% reduction).
+**99% F1 requires:** FP+FN ≤ 11. Must eliminate 34 of 45 errors (76% reduction).
 
 ## Error Concentration
 
 | Video | FP | FN | Total | % of Errors | Root Cause |
 |-------|----|----|-------|-------------|------------|
-| IMG_6713 | 3 | 12 | 15 | 33% | Left-side camera. 2D features are camera-angle dependent. Meta-ensemble recovered 6 TPs, post-filters removed 4 FPs. |
-| IMG_0929 | 2 | 11 | 13 | 28% | Fast net-baseliner rallies — rapid shot exchanges common in normal play. Meta-ensemble recovered 7 TPs. |
+| IMG_0929 | 5 | 11 | 16 | 36% | Fast net-baseliner rallies. Improved meta-ensemble recovered 7 TPs but added 3 FPs. |
+| IMG_6713 | 5 | 6 | 11 | 24% | Left-side camera. Baseline density feature let meta-ensemble recover 12 TPs total (was 6). |
 | IMG_6711 | 4 | 0 | 4 | 9% | Heuristic-only FPs with high ML confidence — model confidently wrong. |
-| Other 9 | 8 | 6 | 14 | 30% | Scattered edge cases. |
+| Other 9 | 8 | 6 | 14 | 31% | Scattered edge cases. |
 
 ## What We've Tried and Learned
 
@@ -110,11 +110,13 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 
 **Problem:** 28 shots only the window detector finds. 22 shots only the baseline finds. Simple confidence thresholding can't distinguish window-only TPs from FPs.
 
-**Result:** Meta-classifier (RF, 17 features) learns which window-only detections to trust. At threshold=0.3: recovered 19 FNs with 1 additional FP. F1: 93.0% → 94.8%.
+**Result:** Meta-classifier (RF, 19 features) learns which window-only detections to trust. With baseline density features (baseline_total, w_to_b_ratio), at threshold=0.2: recovered 25 FNs with 7 additional FPs. F1: 93.0% → 95.9%.
 
-**Key features:** min_baseline_dist (31%), has_baseline_match (25%), w_conf (16%) — the model learned that window detections far from any baseline detection are likely genuine new finds.
+**Key features:** min_baseline_dist (28%), has_baseline_match (25%), w_conf (20%), w_to_b_ratio (2.5%) — the model learned that window detections far from any baseline detection are likely genuine new finds, especially in videos with sparse baselines (side camera).
 
-**Actual recovery:** 18 net errors recovered (19 TP - 1 FP). Exceeded expected 8-12.
+**Key improvement:** Adding baseline density features let the model automatically trust window detections more for IMG_6713 (side camera, sparse baseline). IMG_6713 F1: 61.3% → 83.3%.
+
+**Actual recovery:** 30 net errors recovered from backup baseline. Exceeded expected 8-12.
 
 **Scripts:** `scripts/meta_ensemble.py` (train + `--apply` mode), `models/meta_ensemble.pkl`.
 
@@ -149,12 +151,13 @@ Camera-invariant features would fix IMG_6713's 24 errors. Requires threshold co-
 | After | Errors | F1 | Status |
 |-------|--------|-----|--------|
 | Backup baseline | 75 | 93.0% | Done |
-| R4: Meta-ensemble | 57 | 94.8% | **DONE** |
+| R4: Meta-ensemble (v1) | 57 | 94.8% | Done |
 | Post-filters (ns, serve, wrist) | 46 | 95.7% | **DONE** |
-| R1: Camera invariance | ~33 | ~97.0% | 3D uniform failed, need alternative |
-| R2: Fast-sequence detection | ~24 | ~97.8% | |
-| R3: Audio shape features | ~19 | ~98.3% | |
-| R5: Edge case filters | ~15 | ~98.6% | |
+| R4: Meta-ensemble (v2, density features) | 45 | 95.9% | **DONE** |
+| R1: Camera invariance | ~35 | ~96.8% | 3D uniform failed; density-aware meta-ensemble partially solved |
+| R2: Fast-sequence detection | ~25 | ~97.7% | |
+| R3: Audio shape features | ~20 | ~98.2% | |
+| R5: Edge case filters | ~16 | ~98.5% | |
 | R6: Temporal architecture | ~11 | ~99.0% | |
 
 ## Execution Order
