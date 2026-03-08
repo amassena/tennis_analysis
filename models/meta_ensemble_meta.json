@@ -1,0 +1,29 @@
+{
+  "feature_names": [
+    "w_conf",
+    "min_baseline_dist",
+    "has_baseline_match",
+    "baseline_within_5s",
+    "baseline_within_10s",
+    "baseline_within_30s",
+    "nearest_baseline_conf",
+    "nearest_baseline_ml",
+    "nearest_baseline_ns",
+    "window_within_5s",
+    "window_within_10s",
+    "min_window_neighbor",
+    "in_rally",
+    "is_forehand",
+    "is_backhand",
+    "is_serve",
+    "tier_val",
+    "baseline_total",
+    "w_to_b_ratio"
+  ],
+  "n_samples": 581,
+  "n_positive": 513,
+  "n_negative": 68,
+  "n_estimators": 200,
+  "max_depth": 8,
+  "best_threshold": 0.2
+}

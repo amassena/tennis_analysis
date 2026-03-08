@@ -230,6 +230,13 @@ def extract_meta_features(window_det, baseline_dets, window_dets, timestamp):
     # Has baseline within tolerance?
     has_baseline_match = 1 if min_baseline_dist <= MATCH_TOLERANCE else 0
 
+    # Video-level baseline quality — sparse baseline (e.g., side camera)
+    # means window detections should be trusted more
+    baseline_total = len(baseline_dets)
+    window_total = len(window_dets)
+    # Ratio: high = baseline is sparse relative to window (trust window more)
+    w_to_b_ratio = window_total / max(baseline_total, 1)
+
     return [
         w_conf,                    # Window confidence
         min_baseline_dist,         # Distance to nearest baseline
@@ -248,6 +255,8 @@ def extract_meta_features(window_det, baseline_dets, window_dets, timestamp):
         is_backhand,
         is_serve,
         tier_val,                  # Window tier
+        baseline_total,            # Video-level: total baseline detections
+        w_to_b_ratio,              # Video-level: window/baseline ratio
     ]
 
 
@@ -257,6 +266,7 @@ FEATURE_NAMES = [
     'nearest_baseline_conf', 'nearest_baseline_ml', 'nearest_baseline_ns',
     'window_within_5s', 'window_within_10s', 'min_window_neighbor',
     'in_rally', 'is_forehand', 'is_backhand', 'is_serve', 'tier_val',
+    'baseline_total', 'w_to_b_ratio',
 ]
 
 
