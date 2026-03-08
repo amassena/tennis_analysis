@@ -514,8 +514,10 @@ tr.active .nudge-btn {{ color: #888; }}
     <select id="camera-angle">
         <option value="">unset</option>
         <option value="back_court">back court (behind)</option>
-        <option value="front">front (facing player)</option>
-        <option value="side">side</option>
+        <option value="front_left">front left (ad side)</option>
+        <option value="front_right">front right (deuce side)</option>
+        <option value="side_left">side left</option>
+        <option value="side_right">side right</option>
     </select>
     <label>Session:</label>
     <select id="session-type">

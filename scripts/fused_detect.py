@@ -243,7 +243,7 @@ def detect_camera_angle(frames, sample_size=500):
     Analyzes shoulder orientation, nose depth, and eye width across many frames
     to determine if the camera is behind, in front of, or to the side of the player.
 
-    Returns one of: 'back_court', 'front', 'side'
+    Returns one of: 'back_court', 'front_left', 'front_right', 'side_left', 'side_right'
     """
     # MediaPipe indices
     NOSE, L_EYE, R_EYE = 0, 2, 5
@@ -265,6 +265,7 @@ def detect_camera_angle(frames, sample_size=500):
     img_sh_dx_vals = []
     wld_sh_dz_vals = []
     nose_behind_vals = []
+    img_nose_x_vals = []
 
     for fr in sample:
         lm = fr.get("landmarks", [])
@@ -275,12 +276,15 @@ def detect_camera_angle(frames, sample_size=500):
         # Image-coord shoulder dx (R - L)
         img_sh_dx_vals.append(lm[R_SHOULDER][0] - lm[L_SHOULDER][0])
 
-        # World-coord shoulder depth separation
+        # World-coord shoulder depth separation (signed: positive = R shoulder closer)
         wld_sh_dz_vals.append(wlm[R_SHOULDER][2] - wlm[L_SHOULDER][2])
 
         # Nose z-depth relative to shoulder plane (image coords)
         sh_z_avg = (lm[L_SHOULDER][2] + lm[R_SHOULDER][2]) / 2
         nose_behind_vals.append(lm[NOSE][2] - sh_z_avg)
+
+        # Nose x-position in image (0=left, 1=right) for left/right determination
+        img_nose_x_vals.append(lm[NOSE][0])
 
     if not img_sh_dx_vals:
         return "back_court"
@@ -289,14 +293,17 @@ def detect_camera_angle(frames, sample_size=500):
     mean_wld_sh_dz = statistics.mean(wld_sh_dz_vals) if wld_sh_dz_vals else 0
     pct_neg_dx = sum(1 for v in img_sh_dx_vals if v < 0) / len(img_sh_dx_vals)
     mean_nose_behind = statistics.mean(nose_behind_vals) if nose_behind_vals else 0
+    mean_nose_x = statistics.mean(img_nose_x_vals) if img_nose_x_vals else 0.5
 
     # Side view: massive world-coord shoulder depth separation
     # Threshold 0.20 avoids false positives from serve shoulder rotation (~0.17)
     if abs(mean_wld_sh_dz) > 0.20:
-        return "side"
+        # Left/right: player on left side of frame = camera is on the right, and vice versa
+        return "side_left" if mean_nose_x > 0.5 else "side_right"
     # Front-facing: R shoulder appears left of L in image (reversed), nose closer to camera
     elif pct_neg_dx > 0.55 and mean_nose_behind < 0.01:
-        return "front"
+        # Left/right: player on left of frame = ad side = front_left
+        return "front_left" if mean_nose_x < 0.5 else "front_right"
     else:
         return "back_court"
 

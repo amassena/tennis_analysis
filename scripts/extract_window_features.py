@@ -49,6 +49,17 @@ GT_VIDEOS = {
     "IMG_6711": "detections/IMG_6711_fused_v5.json",
     "IMG_6713": "detections/IMG_6713_fused.json",
     "IMG_0929": "detections/IMG_0929_fused_v5.json",
+    "IMG_0991": "detections/IMG_0991_fused.json",
+    "IMG_0994": "detections/IMG_0994_fused.json",
+    "IMG_0995": "detections/IMG_0995_fused.json",
+    "IMG_0996": "detections/IMG_0996_fused.json",
+    "IMG_0997": "detections/IMG_0997_fused.json",
+    "IMG_0999": "detections/IMG_0999_fused.json",
+    "IMG_1001": "detections/IMG_1001_fused.json",
+    "IMG_1003": "detections/IMG_1003_fused.json",
+    "IMG_1004": "detections/IMG_1004_fused.json",
+    "IMG_1005": "detections/IMG_1005_fused.json",
+    "IMG_1007": "detections/IMG_1007_fused.json",
 }
 
 IGNORE_TYPES = {"offscreen", "practice", "unknown_shot"}
