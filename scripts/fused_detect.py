@@ -237,6 +237,70 @@ CONFIDENCE_TIERS = {
 }
 
 
+def detect_camera_angle(frames, sample_size=500):
+    """Auto-detect camera angle from pose geometry.
+
+    Analyzes shoulder orientation, nose depth, and eye width across many frames
+    to determine if the camera is behind, in front of, or to the side of the player.
+
+    Returns one of: 'back_court', 'front', 'side'
+    """
+    # MediaPipe indices
+    NOSE, L_EYE, R_EYE = 0, 2, 5
+    L_SHOULDER, R_SHOULDER = 11, 12
+
+    # Sample frames from middle third of video (more representative)
+    detected = [f for f in frames if f.get("detected") and f.get("landmarks")]
+    if len(detected) < 50:
+        return "back_court"  # default if too few frames
+
+    n = len(detected)
+    start = n // 4
+    end = 3 * n // 4
+    sample = detected[start:end]
+    if len(sample) > sample_size:
+        step = len(sample) // sample_size
+        sample = sample[::step][:sample_size]
+
+    img_sh_dx_vals = []
+    wld_sh_dz_vals = []
+    nose_behind_vals = []
+
+    for fr in sample:
+        lm = fr.get("landmarks", [])
+        wlm = fr.get("world_landmarks", [])
+        if len(lm) < 13 or len(wlm) < 13:
+            continue
+
+        # Image-coord shoulder dx (R - L)
+        img_sh_dx_vals.append(lm[R_SHOULDER][0] - lm[L_SHOULDER][0])
+
+        # World-coord shoulder depth separation
+        wld_sh_dz_vals.append(wlm[R_SHOULDER][2] - wlm[L_SHOULDER][2])
+
+        # Nose z-depth relative to shoulder plane (image coords)
+        sh_z_avg = (lm[L_SHOULDER][2] + lm[R_SHOULDER][2]) / 2
+        nose_behind_vals.append(lm[NOSE][2] - sh_z_avg)
+
+    if not img_sh_dx_vals:
+        return "back_court"
+
+    import statistics
+    mean_wld_sh_dz = statistics.mean(wld_sh_dz_vals) if wld_sh_dz_vals else 0
+    pct_neg_dx = sum(1 for v in img_sh_dx_vals if v < 0) / len(img_sh_dx_vals)
+    mean_nose_behind = statistics.mean(nose_behind_vals) if nose_behind_vals else 0
+
+    # Side view: massive world-coord shoulder depth separation
+    # Threshold 0.20 avoids false positives from serve shoulder rotation (~0.17)
+    if abs(mean_wld_sh_dz) > 0.20:
+        return "side"
+    # Front-facing: R shoulder appears left of L in image (reversed), nose closer to camera
+    elif pct_neg_dx > 0.55 and mean_nose_behind < 0.01:
+        return "front"
+    else:
+        return "back_court"
+
+
 def load_pose_frames(pose_path):
     """Load pose JSON and return (frames_list, fps, total_frames).
 
@@ -1137,6 +1201,10 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
     fps = pose_fps or video_fps
     print(f"    {total_frames} frames at {fps} fps")
 
+    # ── Auto-detect camera angle ──────────────────────────
+    camera_angle = detect_camera_angle(frames)
+    print(f"    Camera angle: {camera_angle}")
+
     # Load 3D poses for ML classification (if available)
     frames_3d = None
     if poses_3d_path and os.path.exists(poses_3d_path):
@@ -1785,6 +1853,7 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         "total_frames": total_frames,
         "duration": round(audio_duration, 2),
         "dominant_hand": dominant_hand,
+        "camera_angle": camera_angle,
         "parameters": {
             "audio_threshold_percentile": audio_threshold,
             "audio_min_gap_ms": audio_min_gap,

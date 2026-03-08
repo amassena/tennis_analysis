@@ -513,11 +513,9 @@ tr.active .nudge-btn {{ color: #888; }}
     <label>Camera:</label>
     <select id="camera-angle">
         <option value="">unset</option>
-        <option value="behind">behind (back court)</option>
-        <option value="right_side">right side</option>
-        <option value="left_side">left side</option>
-        <option value="front">front (far court)</option>
-        <option value="above">above / overhead</option>
+        <option value="back_court">back court (behind)</option>
+        <option value="front">front (facing player)</option>
+        <option value="side">side</option>
     </select>
     <label>Session:</label>
     <select id="session-type">
@@ -743,9 +741,9 @@ fetch('/detections.json').then(r => r.json()).then(data => {{
     fullData = data;
     detections = data.detections || [];
     videoDur = data.duration || {duration};
-    // load video metadata
+    // load video metadata (check top-level camera_angle from auto-detect, then video_metadata)
     const meta = data.video_metadata || {{}};
-    cameraEl.value = meta.camera_angle || '';
+    cameraEl.value = data.camera_angle || meta.camera_angle || '';
     sessionEl.value = meta.session_type || '';
     handEl.value = data.dominant_hand || 'right';
     renderStats();
@@ -756,8 +754,8 @@ fetch('/detections.json').then(r => r.json()).then(data => {{
 // ── Video metadata changes ──
 [cameraEl, sessionEl, handEl].forEach(el => {{
     el.addEventListener('change', () => {{
+        fullData.camera_angle = cameraEl.value || null;
         if (!fullData.video_metadata) fullData.video_metadata = {{}};
-        fullData.video_metadata.camera_angle = cameraEl.value || null;
         fullData.video_metadata.session_type = sessionEl.value || null;
         fullData.dominant_hand = handEl.value;
         dirty = true;
