@@ -1212,7 +1212,101 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
         frames_3d, _, _ = load_pose_frames(poses_3d_path)
         print(f"    3D poses loaded ({sum(1 for f in frames_3d if f.get('_3d_lifted'))} lifted frames)")
 
-    # ── Step 3: Heuristic velocity spikes ────────────────────
+    # ── Front/side camera: window detector primary path ───────
+    if camera_angle != "back_court":
+        print(f"\n  Non-back-court camera ({camera_angle}) — using window detector as primary")
+        try:
+            from scripts.window_detect import detect_video, load_model as load_window_model
+            w_model, w_meta = load_window_model()
+            w_dets = detect_video(video_path, w_model, w_meta, step=0.2,
+                                  threshold=0.45, nms_gap=1.5, verbose=True)
+            print(f"  Window detector found {len(w_dets)} candidates")
+
+            # Classify each detection with ML model
+            ml_frames = frames_3d if frames_3d is not None else frames
+            detections = []
+            for wd in w_dets:
+                center_frame = wd.get("frame", int(wd["timestamp"] * fps))
+                shot_type, ml_conf, class_probs = classify_with_model(
+                    frames, center_frame, fps, dominant_hand,
+                    frames_3d=ml_frames,
+                )
+                not_shot_prob = class_probs.get("not_shot", 0)
+
+                # For non-back-court, trust window detector over ML not_shot
+                # The 2D model was trained on back-court and misclassifies front-facing shots
+                if not_shot_prob > 0.95:
+                    if verbose:
+                        print(f"    Rejected t={wd['timestamp']:.1f}s not_shot={not_shot_prob:.2f}")
+                    continue
+
+                detections.append({
+                    "timestamp": wd["timestamp"],
+                    "frame": center_frame,
+                    "shot_type": shot_type or "unknown_shot",
+                    "confidence": round(wd["confidence"] * 0.5 + ml_conf * 0.5, 3)
+                        if shot_type and shot_type != "not_shot" else round(wd["confidence"], 3),
+                    "tier": "medium" if wd["confidence"] > 0.6 else "low",
+                    "source": "window_detector",
+                    "trigger": f"window={wd['confidence']:.2f} ml:{shot_type}({ml_conf:.2f})",
+                    "ml_confidence": round(ml_conf, 3) if ml_conf else None,
+                    "not_shot_prob": round(not_shot_prob, 3),
+                    "wrist_above_hip": 0,
+                })
+
+            print(f"  After ML filtering: {len(detections)} detections")
+
+            # Also add any strong audio+heuristic detections the window detector missed
+            audio_peaks_list = [t for t, a in peaks_with_amp]
+            heuristic_spikes_for_result = []
+
+            # Build result and return early for non-back-court
+            from collections import defaultdict
+            tier_counts = defaultdict(int)
+            type_counts = {}
+            source_counts = {}
+            for det in detections:
+                tier_counts[det["tier"]] += 1
+                st = det["shot_type"]
+                type_counts[st] = type_counts.get(st, 0) + 1
+                src = det.get("source", "unknown")
+                source_counts[src] = source_counts.get(src, 0) + 1
+
+            return {
+                "version": 5,
+                "detector": "window_detector_primary",
+                "source_video": video_name,
+                "video_path": video_path,
+                "pose_path": pose_path,
+                "fps": fps,
+                "total_frames": total_frames,
+                "duration": round(audio_duration, 2),
+                "dominant_hand": dominant_hand,
+                "camera_angle": camera_angle,
+                "parameters": {
+                    "audio_threshold_percentile": audio_threshold,
+                    "audio_min_gap_ms": audio_min_gap,
+                    "audio_min_amplitude": audio_min_amplitude,
+                    "pose_window_sec": window_sec,
+                    "dedup_gap_sec": MIN_DEDUP_GAP,
+                },
+                "summary": {
+                    "total_detections": len(detections),
+                    "by_tier": dict(tier_counts),
+                    "by_type": type_counts,
+                    "by_source": source_counts,
+                    "audio_peaks": len(audio_peaks),
+                    "heuristic_spikes": 0,
+                },
+                "detections": detections,
+            }
+
+        except Exception as e:
+            print(f"  Window detector failed: {e}, falling back to standard pipeline")
+            import traceback
+            traceback.print_exc()
+
+    # ── Step 3: Heuristic velocity spikes (back-court pipeline) ──
     wrist_idx = RIGHT_WRIST if dominant_hand == "right" else LEFT_WRIST
     velocities = compute_wrist_velocities(frames, wrist_idx, fps)
     heuristic_spikes = find_velocity_spikes(
@@ -1889,9 +1983,9 @@ def print_results(result):
 
     summary = result["summary"]
     print(f"Total detections: {summary['total_detections']}")
-    print(f"  HIGH   (audio+heuristic): {summary['by_tier']['high']}")
-    print(f"  MEDIUM (audio only):      {summary['by_tier']['medium']}")
-    print(f"  LOW    (heuristic only):   {summary['by_tier']['low']}")
+    print(f"  HIGH   (audio+heuristic): {summary['by_tier'].get('high', 0)}")
+    print(f"  MEDIUM (audio only):      {summary['by_tier'].get('medium', 0)}")
+    print(f"  LOW    (heuristic only):   {summary['by_tier'].get('low', 0)}")
     print()
 
     print(f"By shot type:")
