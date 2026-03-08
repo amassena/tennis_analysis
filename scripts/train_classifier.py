@@ -298,6 +298,8 @@ def main():
                         help="Model type: rf=RandomForest, gb=GradientBoosting")
     parser.add_argument("--save-calibrated", action="store_true",
                         help="Save calibrated thresholds to meta.json (pipeline will use them)")
+    parser.add_argument("--model-name", default="shot_classifier",
+                        help="Model filename prefix (default: shot_classifier)")
     args = parser.parse_args()
 
     if not os.path.exists(args.features):
@@ -470,8 +472,8 @@ def main():
 
     # ── Save model ────────────────────────────────────────────────
     os.makedirs(args.output_dir, exist_ok=True)
-    model_path = os.path.join(args.output_dir, "shot_classifier.pkl")
-    meta_path = os.path.join(args.output_dir, "shot_classifier_meta.json")
+    model_path = os.path.join(args.output_dir, f"{args.model_name}.pkl")
+    meta_path = os.path.join(args.output_dir, f"{args.model_name}_meta.json")
 
     with open(model_path, "wb") as f:
         pickle.dump(clf_final, f)

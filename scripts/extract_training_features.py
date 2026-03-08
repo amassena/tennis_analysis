@@ -915,10 +915,13 @@ def main():
                         help="Number of random hard negatives to sample (default: 100)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for negative sampling (default: 42)")
+    parser.add_argument("--exclude-videos", nargs="+", default=[],
+                        help="Video names to exclude (e.g., IMG_0993 IMG_1001)")
     args = parser.parse_args()
 
     det_dir = args.detections_dir
     poses_dir = args.poses_dir
+    exclude_set = set(args.exclude_videos)
 
     # Find all detection files (skip versioned/variant files)
     det_files = sorted(
@@ -926,6 +929,7 @@ def main():
         if f.endswith("_fused.json")
         and "_v2" not in f
         and "_ml" not in f
+        and f.replace("_fused.json", "") not in exclude_set
     )
     if not det_files:
         print(f"No *_fused.json files found in {det_dir}")

@@ -46,6 +46,16 @@ _classifier = None
 _classifier_meta = None
 _classifier_loaded = False
 
+# ── 3D ML classifier (lazy-loaded) ──────────────────────────
+_classifier_3d = None
+_classifier_3d_meta = None
+_classifier_3d_loaded = False
+
+# ── Multi-angle ML classifier (lazy-loaded) ─────────────────
+_classifier_ma = None
+_classifier_ma_meta = None
+_classifier_ma_loaded = False
+
 # ── CNN sequence model (lazy-loaded) ────────────────────────
 _cnn_model = None
 _cnn_device = None
@@ -139,6 +149,63 @@ def _load_classifier():
     return _classifier, _classifier_meta
 
 
+def _load_classifier_3d():
+    """Lazy-load the 3D shot classifier (57 features, camera-invariant). Returns (model, meta) or (None, None)."""
+    global _classifier_3d, _classifier_3d_meta, _classifier_3d_loaded
+    if _classifier_3d_loaded:
+        return _classifier_3d, _classifier_3d_meta
+
+    _classifier_3d_loaded = True
+    model_path = os.path.join(MODELS_DIR, "shot_classifier_3d.pkl")
+    meta_path = os.path.join(MODELS_DIR, "shot_classifier_3d_meta.json")
+
+    if not os.path.exists(model_path) or not os.path.exists(meta_path):
+        print(f"  3D classifier not found at {model_path}")
+        return None, None
+
+    try:
+        with open(model_path, "rb") as f:
+            _classifier_3d = pickle.load(f)
+        with open(meta_path) as f:
+            _classifier_3d_meta = json.load(f)
+        print(f"  Loaded 3D ML classifier ({_classifier_3d_meta.get('val_accuracy', 0):.1%} val acc, "
+              f"{len(_classifier_3d_meta.get('feature_names', []))} features)")
+    except Exception as e:
+        print(f"  Warning: failed to load 3D classifier: {e}")
+        _classifier_3d = None
+        _classifier_3d_meta = None
+
+    return _classifier_3d, _classifier_3d_meta
+
+
+def _load_classifier_multiangle():
+    """Lazy-load the multi-angle shot classifier (46 features, all camera angles). Returns (model, meta) or (None, None)."""
+    global _classifier_ma, _classifier_ma_meta, _classifier_ma_loaded
+    if _classifier_ma_loaded:
+        return _classifier_ma, _classifier_ma_meta
+
+    _classifier_ma_loaded = True
+    model_path = os.path.join(MODELS_DIR, "shot_classifier_multiangle.pkl")
+    meta_path = os.path.join(MODELS_DIR, "shot_classifier_multiangle_meta.json")
+
+    if not os.path.exists(model_path) or not os.path.exists(meta_path):
+        return None, None
+
+    try:
+        with open(model_path, "rb") as f:
+            _classifier_ma = pickle.load(f)
+        with open(meta_path) as f:
+            _classifier_ma_meta = json.load(f)
+        print(f"  Loaded multi-angle classifier ({_classifier_ma_meta.get('val_accuracy', 0):.1%} val acc, "
+              f"{len(_classifier_ma_meta.get('feature_names', []))} features)")
+    except Exception as e:
+        print(f"  Warning: failed to load multi-angle classifier: {e}")
+        _classifier_ma = None
+        _classifier_ma_meta = None
+
+    return _classifier_ma, _classifier_ma_meta
+
+
 def _load_cnn():
     """Lazy-load the CNN sequence model. Returns (model, device) or (None, None)."""
     global _cnn_model, _cnn_device, _cnn_loaded
@@ -161,22 +228,41 @@ def _load_cnn():
 
 def classify_with_model(frames, center_frame, fps, dominant_hand="right",
                         detection_meta=None, rally_context=None,
-                        frames_3d=None):
+                        frames_3d=None, use_3d_model=False,
+                        use_multiangle_model=False):
     """Classify a shot using the trained RF model.
 
     Returns (shot_type, confidence, class_probs) or (None, 0.0, {}).
     class_probs is a dict of class_name -> probability.
     If frames_3d is provided, uses 3D poses for feature extraction
     (camera-invariant classification) while detection uses 2D frames.
+    If use_multiangle_model=True, loads shot_classifier_multiangle.pkl
+    (46 features, trained on all camera angles) for better classification.
+    If use_3d_model=True, loads shot_classifier_3d.pkl (57 features,
+    camera-invariant) instead of the default 2D model.
     """
-    model, meta = _load_classifier()
+    if use_multiangle_model:
+        model, meta = _load_classifier_multiangle()
+        if model is None or meta is None:
+            model, meta = _load_classifier()
+    elif use_3d_model and frames_3d is not None:
+        model, meta = _load_classifier_3d()
+        if model is None or meta is None:
+            model, meta = _load_classifier()
+    else:
+        model, meta = _load_classifier()
+
     if model is None or meta is None:
         return None, 0.0, {}
 
     from scripts.extract_training_features import extract_features
 
-    # Use 3D poses for ML features if available, else use 2D
-    ml_frames = frames_3d if frames_3d is not None else frames
+    # Only use 3D poses for feature extraction when using the 3D-trained model
+    # The standard 2D model and multi-angle model were trained on 2D features
+    if use_3d_model and frames_3d is not None:
+        ml_frames = frames_3d
+    else:
+        ml_frames = frames
     features = extract_features(ml_frames, center_frame, fps, dominant_hand,
                                 detection_meta=detection_meta,
                                 rally_context=rally_context)
@@ -1230,13 +1316,15 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
             print(f"  Window detector found {len(w_dets)} candidates")
 
             # Classify each detection with ML model
-            ml_frames = frames_3d if frames_3d is not None else frames
+            # Window detector handles DETECTION (when), ML handles CLASSIFICATION (FH/BH/S)
+            # Use multi-angle model trained on all camera angles
+            print(f"  Using multi-angle classifier for shot classification")
             detections = []
             for wd in w_dets:
                 center_frame = wd.get("frame", int(wd["timestamp"] * fps))
                 shot_type, ml_conf, class_probs = classify_with_model(
                     frames, center_frame, fps, dominant_hand,
-                    frames_3d=ml_frames,
+                    use_multiangle_model=True,
                 )
                 not_shot_prob = class_probs.get("not_shot", 0)
 
@@ -1246,6 +1334,17 @@ def fused_detect(video_path, pose_path, dominant_hand="right",
                     if verbose:
                         print(f"    Rejected t={wd['timestamp']:.1f}s not_shot={not_shot_prob:.2f}")
                     continue
+
+                # Window detector already decided this IS a shot — ML just classifies type
+                # Pick best shot class, excluding not_shot
+                if shot_type == "not_shot" or shot_type is None:
+                    shot_probs = {k: v for k, v in class_probs.items() if k != "not_shot"}
+                    if shot_probs:
+                        shot_type = max(shot_probs, key=shot_probs.get)
+                        ml_conf = shot_probs[shot_type]
+                    else:
+                        shot_type = "unknown_shot"
+                        ml_conf = 0.0
 
                 detections.append({
                     "timestamp": wd["timestamp"],
@@ -2100,12 +2199,16 @@ def main():
 
     # Auto-discover 3D pose file for ML classification
     poses_3d_path = None
-    if args.poses_3d_dir:
-        p3d = os.path.join(args.poses_3d_dir, video_name + ".json")
+    poses_3d_dirs = [args.poses_3d_dir] if args.poses_3d_dir else []
+    # Auto-check default poses_3d/ directory
+    default_3d_dir = os.path.join(PROJECT_ROOT, "poses_3d")
+    if default_3d_dir not in poses_3d_dirs and os.path.isdir(default_3d_dir):
+        poses_3d_dirs.append(default_3d_dir)
+    for p3d_dir in poses_3d_dirs:
+        p3d = os.path.join(p3d_dir, video_name + ".json")
         if os.path.exists(p3d):
             poses_3d_path = p3d
-        else:
-            print(f"  [WARN] 3D pose file not found: {p3d}, using 2D only")
+            break
 
     print(f"Fused Detection: {video_name}")
     print(f"  Video: {os.path.basename(video_path)}")
