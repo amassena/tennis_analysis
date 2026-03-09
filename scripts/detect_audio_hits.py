@@ -151,7 +151,7 @@ def get_video_fps(video_path: str) -> float:
         '-of', 'csv=p=0', video_path
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    fps_str = result.stdout.strip()
+    fps_str = result.stdout.strip().rstrip(',')
     if '/' in fps_str:
         num, den = fps_str.split('/')
         return float(num) / float(den)
