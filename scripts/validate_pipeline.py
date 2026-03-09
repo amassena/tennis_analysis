@@ -55,7 +55,13 @@ GT_VIDEOS = {
     "IMG_6713": {"gt_file": "detections/IMG_6713_fused.json", "format": "detection_json"},
     "IMG_0929": {"gt_file": "detections/IMG_0929_fused_v5.json", "format": "detection_json"},
     "IMG_0991": {"gt_file": "detections/IMG_0991_fused.json", "format": "detection_json"},
-    "IMG_0993": {"gt_file": "detections/IMG_0993_fused.json", "format": "detection_json"},
+    "IMG_0994": {"gt_file": "detections/IMG_0994_fused.json", "format": "detection_json"},
+    "IMG_0996": {"gt_file": "detections/IMG_0996_fused.json", "format": "detection_json"},
+    "IMG_1003": {"gt_file": "detections/IMG_1003_fused.json", "format": "detection_json"},
+    "IMG_1004": {"gt_file": "detections/IMG_1004_fused.json", "format": "detection_json"},
+    "IMG_1005": {"gt_file": "detections/IMG_1005_fused.json", "format": "detection_json"},
+    "IMG_1007": {"gt_file": "detections/IMG_1007_fused.json", "format": "detection_json"},
+    "IMG_1008": {"gt_file": "detections/IMG_1008_fused.json", "format": "detection_json"},
 }
 
 # Shot types to ignore in metrics (not real player shots)
