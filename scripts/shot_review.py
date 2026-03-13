@@ -643,14 +643,18 @@ let viewEnd   = 1;       // end of visible range as fraction (0-1)
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 30;
 
-const SHOT_TYPES = ['serve', 'forehand', 'backhand', 'forehand_volley', 'unknown_shot', 'practice', 'offscreen'];
+const SHOT_TYPES = ['serve', 'forehand', 'backhand', 'forehand_volley', 'backhand_volley', 'forehand_slice', 'backhand_slice', 'overhead', 'unknown_shot', 'practice', 'offscreen'];
 const TYPE_LABELS = {{
     serve: 'S', forehand: 'FH', backhand: 'BH',
-    forehand_volley: 'FV', unknown_shot: '?', neutral: 'N', practice: 'P', offscreen: 'X'
+    forehand_volley: 'FV', backhand_volley: 'BV',
+    forehand_slice: 'FS', backhand_slice: 'BS', overhead: 'OH',
+    unknown_shot: '?', neutral: 'N', practice: 'P', offscreen: 'X'
 }};
 const TYPE_CLASS = {{
     serve: 'serve', forehand: 'forehand', backhand: 'backhand',
-    forehand_volley: 'forehand', unknown_shot: 'unknown', neutral: 'unknown', practice: 'practice', offscreen: 'offscreen'
+    forehand_volley: 'forehand', backhand_volley: 'backhand',
+    forehand_slice: 'forehand', backhand_slice: 'backhand', overhead: 'serve',
+    unknown_shot: 'unknown', neutral: 'unknown', practice: 'practice', offscreen: 'offscreen'
 }};
 
 function fmtTime(s) {{
@@ -705,6 +709,18 @@ let videoReady = false;
     }}
 }})();
 
+// ── Sync videoDur from actual video metadata (fixes bad JSON duration) ──
+player.addEventListener('loadedmetadata', () => {{
+    const realDur = player.duration;
+    if (realDur && isFinite(realDur) && Math.abs(realDur - videoDur) > 2) {{
+        console.warn('Duration mismatch: JSON=' + videoDur.toFixed(1) + 's, video=' + realDur.toFixed(1) + 's. Using video duration.');
+        videoDur = realDur;
+        // Also fix the in-memory data so saves write the correct duration
+        if (fullData) fullData.duration = Math.round(realDur * 100) / 100;
+        renderTimeline(videoDur);
+    }}
+}});
+
 // ── Play/Pause button ──
 playBtn.addEventListener('click', () => {{
     if (!videoReady) return;
@@ -743,6 +759,18 @@ fetch('/detections.json').then(r => r.json()).then(data => {{
     fullData = data;
     detections = data.detections || [];
     videoDur = data.duration || {duration};
+    // Sanity check: if max detection timestamp exceeds stated duration, use frames/fps or max timestamp
+    const maxTs = detections.reduce((mx, d) => Math.max(mx, d.timestamp || 0), 0);
+    if (maxTs > videoDur * 1.05) {{
+        const frameDur = data.total_frames && data.fps ? data.total_frames / data.fps : 0;
+        const corrected = frameDur > maxTs ? frameDur : maxTs * 1.1;
+        console.warn('JSON duration (' + videoDur.toFixed(1) + 's) < max timestamp (' + maxTs.toFixed(1) + 's). Correcting to ' + corrected.toFixed(1) + 's');
+        videoDur = corrected;
+    }}
+    // Also prefer player.duration if already available and differs significantly
+    if (player.duration && isFinite(player.duration) && Math.abs(player.duration - videoDur) > 2) {{
+        videoDur = player.duration;
+    }}
     // load video metadata (check top-level camera_angle from auto-detect, then video_metadata)
     const meta = data.video_metadata || {{}};
     cameraEl.value = data.camera_angle || meta.camera_angle || '';
@@ -1296,6 +1324,10 @@ document.addEventListener('keydown', (e) => {{
         case 'b': if (activeIdx >= 0) changeType(activeIdx, 'backhand'); break;
         case 'u': if (activeIdx >= 0) changeType(activeIdx, 'unknown_shot'); break;
         case 'v': if (activeIdx >= 0) changeType(activeIdx, 'forehand_volley'); break;
+        case 'g': if (activeIdx >= 0) changeType(activeIdx, 'backhand_volley'); break;
+        case 'h': if (activeIdx >= 0) changeType(activeIdx, 'overhead'); break;
+        case '1': if (activeIdx >= 0) changeType(activeIdx, 'forehand_slice'); break;
+        case '2': if (activeIdx >= 0) changeType(activeIdx, 'backhand_slice'); break;
         case 'p': if (activeIdx >= 0) changeType(activeIdx, 'practice'); break;
         case 'm':
             e.preventDefault();
