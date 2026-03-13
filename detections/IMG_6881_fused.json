@@ -1,0 +1,534 @@
+{
+  "version": 6,
+  "detector": "sequence_cnn",
+  "source_video": "IMG_6881",
+  "video_path": "/Users/andrewhome/tennis_analysis/preprocessed/IMG_6881.mp4",
+  "pose_path": "/Users/andrewhome/tennis_analysis/poses_full_videos/IMG_6881.json",
+  "fps": 60,
+  "total_frames": 23895,
+  "duration": 398.25,
+  "parameters": {
+    "threshold": 0.9,
+    "nms_gap": 1.5,
+    "step_sec": 0.1,
+    "model": "sequence_detector.pt"
+  },
+  "summary": {
+    "total_detections": 33,
+    "by_tier": {
+      "high": 30,
+      "manual": 3
+    },
+    "by_type": {
+      "serve": 16,
+      "forehand": 9,
+      "backhand": 4,
+      "practice": 1,
+      "offscreen": 1,
+      "forehand_volley": 2
+    },
+    "inference_time": 12.42,
+    "windows_evaluated": 3665
+  },
+  "detections": [
+    {
+      "timestamp": 13.15,
+      "frame": 789,
+      "shot_type": "serve",
+      "confidence": 0.997,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9997,
+      "probabilities": {
+        "backhand": 0.0014,
+        "forehand": 0.0011,
+        "not_shot": 0.0003,
+        "serve": 0.9973
+      }
+    },
+    {
+      "timestamp": 15.95,
+      "frame": 957,
+      "shot_type": "forehand",
+      "confidence": 0.955,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9826,
+      "probabilities": {
+        "backhand": 0.01,
+        "forehand": 0.9551,
+        "not_shot": 0.0174,
+        "serve": 0.0175
+      }
+    },
+    {
+      "timestamp": 48.85,
+      "frame": 2931,
+      "shot_type": "serve",
+      "confidence": 0.996,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9996,
+      "probabilities": {
+        "backhand": 0.0011,
+        "forehand": 0.0021,
+        "not_shot": 0.0004,
+        "serve": 0.9964
+      }
+    },
+    {
+      "timestamp": 51.65,
+      "frame": 3099,
+      "shot_type": "backhand",
+      "confidence": 0.862,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9555,
+      "probabilities": {
+        "backhand": 0.8624,
+        "forehand": 0.047,
+        "not_shot": 0.0445,
+        "serve": 0.046
+      }
+    },
+    {
+      "timestamp": 64.95,
+      "frame": 3897,
+      "shot_type": "serve",
+      "confidence": 0.995,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9991,
+      "probabilities": {
+        "backhand": 0.0027,
+        "forehand": 0.0016,
+        "not_shot": 0.0009,
+        "serve": 0.9947
+      }
+    },
+    {
+      "timestamp": 83.85,
+      "frame": 5031,
+      "shot_type": "serve",
+      "confidence": 0.998,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9996,
+      "probabilities": {
+        "backhand": 0.0007,
+        "forehand": 0.001,
+        "not_shot": 0.0004,
+        "serve": 0.998
+      }
+    },
+    {
+      "timestamp": 86.85,
+      "frame": 5211,
+      "shot_type": "forehand",
+      "confidence": 0.812,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9213,
+      "probabilities": {
+        "backhand": 0.0784,
+        "forehand": 0.812,
+        "not_shot": 0.0787,
+        "serve": 0.0309
+      }
+    },
+    {
+      "timestamp": 107.85,
+      "frame": 6471,
+      "shot_type": "practice",
+      "confidence": 0.888,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9308,
+      "probabilities": {
+        "backhand": 0.0252,
+        "forehand": 0.0173,
+        "not_shot": 0.0692,
+        "serve": 0.8883
+      }
+    },
+    {
+      "timestamp": 113.95,
+      "frame": 6837,
+      "shot_type": "serve",
+      "confidence": 0.99,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9984,
+      "probabilities": {
+        "backhand": 0.0037,
+        "forehand": 0.005,
+        "not_shot": 0.0016,
+        "serve": 0.9897
+      }
+    },
+    {
+      "timestamp": 121.05,
+      "frame": 7263,
+      "shot_type": "serve",
+      "confidence": 0.994,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9989,
+      "probabilities": {
+        "backhand": 0.0024,
+        "forehand": 0.0024,
+        "not_shot": 0.0011,
+        "serve": 0.9941
+      }
+    },
+    {
+      "timestamp": 124.25,
+      "frame": 7455,
+      "shot_type": "forehand",
+      "confidence": 0.965,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9852,
+      "probabilities": {
+        "backhand": 0.0071,
+        "forehand": 0.9652,
+        "not_shot": 0.0148,
+        "serve": 0.0128
+      }
+    },
+    {
+      "timestamp": 128.12,
+      "frame": 7687,
+      "shot_type": "offscreen",
+      "confidence": 1,
+      "tier": "manual",
+      "source": "manual",
+      "audio_peak_time": null,
+      "audio_amplitude": 0,
+      "heuristic_frame": null,
+      "pattern_confidence": 0,
+      "trigger": "manually added",
+      "velocity": 0,
+      "opponent": false
+    },
+    {
+      "timestamp": 150.45,
+      "frame": 9027,
+      "shot_type": "serve",
+      "confidence": 0.993,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9978,
+      "probabilities": {
+        "backhand": 0.0032,
+        "forehand": 0.0015,
+        "not_shot": 0.0022,
+        "serve": 0.9931
+      }
+    },
+    {
+      "timestamp": 154.55,
+      "frame": 9273,
+      "shot_type": "forehand",
+      "confidence": 0.927,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9883,
+      "probabilities": {
+        "backhand": 0.0471,
+        "forehand": 0.927,
+        "not_shot": 0.0117,
+        "serve": 0.0143
+      }
+    },
+    {
+      "timestamp": 175.75,
+      "frame": 10545,
+      "shot_type": "serve",
+      "confidence": 0.995,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9994,
+      "probabilities": {
+        "backhand": 0.0029,
+        "forehand": 0.002,
+        "not_shot": 0.0006,
+        "serve": 0.9945
+      }
+    },
+    {
+      "timestamp": 179.25,
+      "frame": 10755,
+      "shot_type": "forehand",
+      "confidence": 0.845,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9767,
+      "probabilities": {
+        "backhand": 0.074,
+        "forehand": 0.8453,
+        "not_shot": 0.0233,
+        "serve": 0.0574
+      }
+    },
+    {
+      "timestamp": 182.556,
+      "frame": 10953,
+      "shot_type": "forehand_volley",
+      "confidence": 1,
+      "tier": "manual",
+      "source": "manual",
+      "audio_peak_time": null,
+      "audio_amplitude": 0,
+      "heuristic_frame": null,
+      "pattern_confidence": 0,
+      "trigger": "manually added",
+      "velocity": 0
+    },
+    {
+      "timestamp": 210.65,
+      "frame": 12639,
+      "shot_type": "serve",
+      "confidence": 0.992,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9985,
+      "probabilities": {
+        "backhand": 0.0043,
+        "forehand": 0.0026,
+        "not_shot": 0.0015,
+        "serve": 0.9916
+      }
+    },
+    {
+      "timestamp": 221.05,
+      "frame": 13263,
+      "shot_type": "serve",
+      "confidence": 0.994,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9994,
+      "probabilities": {
+        "backhand": 0.0031,
+        "forehand": 0.0019,
+        "not_shot": 0.0006,
+        "serve": 0.9943
+      }
+    },
+    {
+      "timestamp": 225.05,
+      "frame": 13503,
+      "shot_type": "forehand",
+      "confidence": 0.988,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9959,
+      "probabilities": {
+        "backhand": 0.0028,
+        "forehand": 0.9883,
+        "not_shot": 0.0041,
+        "serve": 0.0048
+      }
+    },
+    {
+      "timestamp": 229.15,
+      "frame": 13749,
+      "shot_type": "forehand",
+      "confidence": 0.966,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.993,
+      "probabilities": {
+        "backhand": 0.018,
+        "forehand": 0.9662,
+        "not_shot": 0.007,
+        "serve": 0.0089
+      }
+    },
+    {
+      "timestamp": 249.85,
+      "frame": 14991,
+      "shot_type": "serve",
+      "confidence": 0.993,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9997,
+      "probabilities": {
+        "backhand": 0.003,
+        "forehand": 0.004,
+        "not_shot": 0.0003,
+        "serve": 0.9926
+      }
+    },
+    {
+      "timestamp": 253.25,
+      "frame": 15195,
+      "shot_type": "backhand",
+      "confidence": 0.95,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.99,
+      "probabilities": {
+        "backhand": 0.9501,
+        "forehand": 0.0247,
+        "not_shot": 0.01,
+        "serve": 0.0153
+      }
+    },
+    {
+      "timestamp": 256.25,
+      "frame": 15375,
+      "shot_type": "backhand",
+      "confidence": 0.861,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9117,
+      "probabilities": {
+        "backhand": 0.8611,
+        "forehand": 0.0134,
+        "not_shot": 0.0883,
+        "serve": 0.0372
+      }
+    },
+    {
+      "timestamp": 260.433,
+      "frame": 15626,
+      "shot_type": "forehand_volley",
+      "confidence": 1,
+      "tier": "manual",
+      "source": "manual",
+      "audio_peak_time": null,
+      "audio_amplitude": 0,
+      "heuristic_frame": null,
+      "pattern_confidence": 0,
+      "trigger": "manually added",
+      "velocity": 0
+    },
+    {
+      "timestamp": 279.85,
+      "frame": 16791,
+      "shot_type": "serve",
+      "confidence": 0.978,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9949,
+      "probabilities": {
+        "backhand": 0.0094,
+        "forehand": 0.0075,
+        "not_shot": 0.0051,
+        "serve": 0.978
+      }
+    },
+    {
+      "timestamp": 286.65,
+      "frame": 17199,
+      "shot_type": "serve",
+      "confidence": 0.996,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9994,
+      "probabilities": {
+        "backhand": 0.0019,
+        "forehand": 0.001,
+        "not_shot": 0.0006,
+        "serve": 0.9965
+      }
+    },
+    {
+      "timestamp": 289.95,
+      "frame": 17397,
+      "shot_type": "forehand",
+      "confidence": 0.88,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9324,
+      "probabilities": {
+        "backhand": 0.0255,
+        "forehand": 0.8805,
+        "not_shot": 0.0676,
+        "serve": 0.0264
+      }
+    },
+    {
+      "timestamp": 312.85,
+      "frame": 18771,
+      "shot_type": "serve",
+      "confidence": 0.982,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9949,
+      "probabilities": {
+        "backhand": 0.0073,
+        "forehand": 0.0059,
+        "not_shot": 0.0051,
+        "serve": 0.9817
+      }
+    },
+    {
+      "timestamp": 338.35,
+      "frame": 20301,
+      "shot_type": "serve",
+      "confidence": 0.995,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9995,
+      "probabilities": {
+        "backhand": 0.0023,
+        "forehand": 0.0021,
+        "not_shot": 0.0005,
+        "serve": 0.9951
+      }
+    },
+    {
+      "timestamp": 344.05,
+      "frame": 20643,
+      "shot_type": "serve",
+      "confidence": 0.988,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9976,
+      "probabilities": {
+        "backhand": 0.0068,
+        "forehand": 0.0025,
+        "not_shot": 0.0024,
+        "serve": 0.9883
+      }
+    },
+    {
+      "timestamp": 347.45,
+      "frame": 20847,
+      "shot_type": "forehand",
+      "confidence": 0.936,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9752,
+      "probabilities": {
+        "backhand": 0.0165,
+        "forehand": 0.9359,
+        "not_shot": 0.0248,
+        "serve": 0.0228
+      }
+    },
+    {
+      "timestamp": 350.75,
+      "frame": 21045,
+      "shot_type": "backhand",
+      "confidence": 0.961,
+      "tier": "high",
+      "source": "sequence_cnn",
+      "p_shot": 0.9926,
+      "probabilities": {
+        "backhand": 0.9607,
+        "forehand": 0.0182,
+        "not_shot": 0.0074,
+        "serve": 0.0137
+      }
+    }
+  ],
+  "camera_angle": "front_left",
+  "video_metadata": {
+    "session_type": null
+  },
+  "dominant_hand": "right",
+  "last_saved": "2026-03-13T09:19:24.919999+00:00"
+}
