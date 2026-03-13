@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Train the 1D-CNN sequence classifier with leave-one-video-out CV.
 
-Loads pose data and detection labels, extracts 90-frame sequences,
-trains with augmentation, evaluates via LOOCV, and saves the final model.
+Supports two data loading modes:
+  1. NPZ file (fast): pre-extracted by prepare_sequence_data.py
+  2. Live extraction (slow): loads poses + GT on-the-fly
 
 IMPORTANT: Run this on Windows GPU machine (RTX 5080/4080), not on Mac.
 
 Usage:
-    python scripts/train_sequence_model.py
-    python scripts/train_sequence_model.py --epochs 30 --batch-size 64
-    python scripts/train_sequence_model.py --skip-cv  # just train final model
+    python scripts/train_sequence_model.py --npz training/sequence_data.npz
+    python scripts/train_sequence_model.py --npz training/sequence_data.npz --skip-cv
+    python scripts/train_sequence_model.py  # fallback: live extraction
 """
 
 import argparse
@@ -39,7 +40,6 @@ from scripts.sequence_model import (
     ShotClassifierCNN, extract_pose_sequence, augment_sequence,
     CLASSES, CLASS_TO_IDX, SEQUENCE_LENGTH, FEATURES_PER_FRAME,
 )
-from scripts.extract_training_features import load_pose_frames
 
 DETECTIONS_DIR = os.path.join(PROJECT_ROOT, "detections")
 
@@ -56,36 +56,63 @@ SERVE_ONLY_VIDEOS = {
 class PoseSequenceDataset(Dataset):
     """Dataset of pose sequences with augmentation."""
 
-    def __init__(self, samples, augment=False, jitter=5, dropout_rate=0.15):
-        self.samples = samples  # list of (sequence_array, label_idx, video_name)
+    def __init__(self, sequences, labels, videos=None,
+                 augment=False, jitter=5, dropout_rate=0.15):
+        self.sequences = sequences   # (N, 90, 99) array
+        self.labels = labels         # (N,) array
+        self.videos = videos         # (N,) array or None
         self.augment = augment
         self.jitter = jitter
         self.dropout_rate = dropout_rate
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.labels)
 
     def __getitem__(self, idx):
-        seq, label, _ = self.samples[idx]
+        seq = self.sequences[idx].copy()
+        label = int(self.labels[idx])
 
         if self.augment:
             mirror = np.random.random() < 0.5
+            temporal_scale = np.random.uniform(0.85, 1.15) if np.random.random() < 0.5 else None
+            noise_std = 0.01 if np.random.random() < 0.5 else 0.0
             seq = augment_sequence(
                 seq,
                 mirror=mirror,
                 jitter_frames=self.jitter,
                 dropout_rate=np.random.uniform(0.1, self.dropout_rate),
+                temporal_scale=temporal_scale,
+                noise_std=noise_std,
             )
 
         return torch.from_numpy(seq).float(), label
 
 
-def load_all_samples(poses_dir, det_dir):
-    """Load all labeled samples with their pose sequences.
+def load_from_npz(npz_path):
+    """Load pre-extracted data from NPZ file.
 
-    Returns list of (sequence_array, label_idx, video_name) tuples.
+    Returns list of (sequence_array, label_idx, video_name) tuples for
+    compatibility with existing LOOCV code.
     """
-    samples = []
+    data = np.load(npz_path, allow_pickle=True)
+    X = data["X"]
+    y = data["y"]
+    videos = data["videos"]
+    print(f"Loaded {len(X)} samples from {npz_path}")
+    print(f"  Shape: X={X.shape}, y={y.shape}")
+    return X, y, videos
+
+
+def load_all_samples_live(poses_dir, det_dir):
+    """Load all labeled samples with their pose sequences (legacy mode).
+
+    Returns (X, y, videos) arrays.
+    """
+    from scripts.extract_training_features import load_pose_frames
+
+    all_X = []
+    all_y = []
+    all_videos = []
     pose_cache = {}
 
     det_files = sorted(
@@ -95,7 +122,6 @@ def load_all_samples(poses_dir, det_dir):
         and "_pre" not in f and "_baseline" not in f
     )
 
-    # Also check for v5 versions
     for det_file in det_files:
         video_name = det_file.replace("_fused.json", "")
         v5_path = os.path.join(det_dir, f"{video_name}_fused_v5.json")
@@ -105,9 +131,7 @@ def load_all_samples(poses_dir, det_dir):
             det_data = json.load(f)
 
         is_serve_only = video_name in SERVE_ONLY_VIDEOS
-        dominant_hand = det_data.get("dominant_hand", "right")
 
-        # Load poses
         pose_path = os.path.join(poses_dir, f"{video_name}.json")
         if not os.path.exists(pose_path):
             continue
@@ -117,7 +141,6 @@ def load_all_samples(poses_dir, det_dir):
             pose_cache[video_name] = frames
         frames = pose_cache[video_name]
 
-        # Extract labeled shots
         positives = 0
         for det in det_data.get("detections", []):
             shot_type = det.get("shot_type", "")
@@ -135,13 +158,15 @@ def load_all_samples(poses_dir, det_dir):
             if label_idx is None:
                 continue
 
-            samples.append((seq, label_idx, video_name))
+            all_X.append(seq)
+            all_y.append(label_idx)
+            all_videos.append(video_name)
             positives += 1
 
-        # Extract not_shot negatives: random frames far from detections
+        # Negatives
         det_times = [d.get("timestamp", 0) for d in det_data.get("detections", [])]
         fps_val = det_data.get("fps", 60.0)
-        n_neg = max(5, positives // 3)  # ~1/3 ratio
+        n_neg = max(5, positives // 3)
         neg_count = 0
 
         for frame_idx in range(90, len(frames) - 90, int(fps_val * 3)):
@@ -150,19 +175,20 @@ def load_all_samples(poses_dir, det_dir):
             t = frame_idx / fps_val
             if any(abs(t - dt) < 3.0 for dt in det_times):
                 continue
-
             seq = extract_pose_sequence(frames, frame_idx)
             if seq is not None and np.sum(np.abs(seq)) > 1e-6:
-                samples.append((seq, CLASS_TO_IDX["not_shot"], video_name))
+                all_X.append(seq)
+                all_y.append(CLASS_TO_IDX["not_shot"])
+                all_videos.append(video_name)
                 neg_count += 1
 
         print(f"  {video_name}: {positives} shots + {neg_count} negatives")
 
-    return samples
+    return np.array(all_X), np.array(all_y), np.array(all_videos)
 
 
 def train_epoch(model, loader, optimizer, criterion, device):
-    """Train for one epoch. Returns average loss."""
+    """Train for one epoch. Returns (avg_loss, accuracy)."""
     model.train()
     total_loss = 0
     correct = 0
@@ -176,6 +202,7 @@ def train_epoch(model, loader, optimizer, criterion, device):
         logits = model(batch_x)
         loss = criterion(logits, batch_y)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
 
         total_loss += loss.item() * batch_x.size(0)
@@ -214,29 +241,74 @@ def evaluate(model, loader, device):
     return avg_loss, acc, np.array(all_preds), np.array(all_labels)
 
 
-def leave_one_video_out_cv(samples, args, device):
-    """Leave-one-video-out cross-validation."""
-    by_video = defaultdict(list)
-    for seq, label, video in samples:
-        by_video[video].append((seq, label, video))
+def make_criterion(train_labels, device, label_smoothing=0.05):
+    """Create weighted CrossEntropyLoss with label smoothing."""
+    label_counts = defaultdict(int)
+    for l in train_labels:
+        label_counts[int(l)] += 1
+    total = sum(label_counts.values())
+    weights = torch.tensor(
+        [total / (len(CLASSES) * label_counts.get(i, 1)) for i in range(len(CLASSES))],
+        dtype=torch.float32
+    ).to(device)
+    return nn.CrossEntropyLoss(weight=weights, label_smoothing=label_smoothing)
 
-    videos = sorted(by_video.keys())
+
+def train_with_early_stopping(model, train_loader, val_loader, optimizer, scheduler,
+                              criterion, device, epochs, patience=7):
+    """Train with early stopping on validation loss.
+
+    Returns best validation accuracy.
+    """
+    best_val_loss = float("inf")
+    best_state = None
+    patience_counter = 0
+
+    for epoch in range(epochs):
+        train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
+        scheduler.step()
+
+        if val_loader is not None:
+            val_loss, val_acc, _, _ = evaluate(model, val_loader, device)
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_state = {k: v.clone() for k, v in model.state_dict().items()}
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    break
+
+    # Restore best model
+    if best_state is not None:
+        model.load_state_dict(best_state)
+
+    return best_val_loss
+
+
+def leave_one_video_out_cv(X, y, videos, args, device):
+    """Leave-one-video-out cross-validation."""
+    unique_videos = sorted(set(videos))
     all_preds = []
     all_labels = []
     fold_results = []
 
-    print(f"\nLeave-one-video-out CV ({len(videos)} folds):")
+    print(f"\nLeave-one-video-out CV ({len(unique_videos)} folds):")
     print(f"{'-'*70}")
 
-    for fold_idx, held_out in enumerate(videos):
-        train_samples = [s for s in samples if s[2] != held_out]
-        val_samples = by_video[held_out]
+    for fold_idx, held_out in enumerate(unique_videos):
+        train_mask = videos != held_out
+        val_mask = videos == held_out
 
-        if not train_samples or not val_samples:
+        train_X, train_y = X[train_mask], y[train_mask]
+        val_X, val_y = X[val_mask], y[val_mask]
+
+        if len(train_X) == 0 or len(val_X) == 0:
             continue
 
-        train_dataset = PoseSequenceDataset(train_samples, augment=True)
-        val_dataset = PoseSequenceDataset(val_samples, augment=False)
+        train_dataset = PoseSequenceDataset(train_X, train_y, augment=True)
+        val_dataset = PoseSequenceDataset(val_X, val_y, augment=False)
 
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
                                   shuffle=True, num_workers=0)
@@ -245,24 +317,14 @@ def leave_one_video_out_cv(samples, args, device):
 
         model = ShotClassifierCNN(num_classes=len(CLASSES)).to(device)
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
-
-        # Class weights for imbalanced data
-        label_counts = defaultdict(int)
-        for _, l, _ in train_samples:
-            label_counts[l] += 1
-        total = sum(label_counts.values())
-        weights = torch.tensor(
-            [total / (len(CLASSES) * label_counts.get(i, 1)) for i in range(len(CLASSES))],
-            dtype=torch.float32
-        ).to(device)
-        criterion = nn.CrossEntropyLoss(weight=weights)
-
+        criterion = make_criterion(train_y, device, label_smoothing=0.05)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
-        best_val_acc = 0
-        for epoch in range(args.epochs):
-            train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
-            scheduler.step()
+        # Train with early stopping
+        train_with_early_stopping(
+            model, train_loader, val_loader, optimizer, scheduler,
+            criterion, device, args.epochs, patience=args.patience
+        )
 
         # Final evaluation
         val_loss, val_acc, preds, labels = evaluate(model, val_loader, device)
@@ -281,13 +343,13 @@ def leave_one_video_out_cv(samples, args, device):
         )
 
         print(f"  Fold {fold_idx:2d}: {held_out:<12s} "
-              f"acc={val_acc:.2f} ({len(val_samples):3d} samples) {detail}")
+              f"acc={val_acc:.2f} ({len(val_X):3d} samples) {detail}")
 
         all_preds.extend(preds)
         all_labels.extend(labels)
         fold_results.append({
             "video": held_out,
-            "n_samples": len(val_samples),
+            "n_samples": int(len(val_X)),
             "accuracy": round(float(val_acc), 4),
         })
 
@@ -305,10 +367,21 @@ def leave_one_video_out_cv(samples, args, device):
     print(f"{'':>12s}  " + "  ".join(f"{c:>10s}" for c in CLASSES))
     for i, true_class in enumerate(CLASSES):
         row = []
-        for j, pred_class in enumerate(CLASSES):
+        for j in range(len(CLASSES)):
             count = np.sum((all_labels == i) & (all_preds == j))
             row.append(count)
         print(f"{true_class:>12s}  " + "  ".join(f"{v:>10d}" for v in row))
+
+    # Per-class F1
+    print(f"\nPer-class metrics:")
+    for i, cls in enumerate(CLASSES):
+        tp = np.sum((all_preds == i) & (all_labels == i))
+        fp = np.sum((all_preds == i) & (all_labels != i))
+        fn = np.sum((all_preds != i) & (all_labels == i))
+        prec = tp / (tp + fp) if (tp + fp) > 0 else 0
+        rec = tp / (tp + fn) if (tp + fn) > 0 else 0
+        f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
+        print(f"  {cls:>12s}: P={prec:.3f} R={rec:.3f} F1={f1:.3f}")
 
     return overall_acc, fold_results
 
@@ -316,13 +389,18 @@ def leave_one_video_out_cv(samples, args, device):
 def main():
     parser = argparse.ArgumentParser(
         description="Train 1D-CNN sequence classifier")
+    parser.add_argument("--npz", default=None,
+                        help="Path to pre-extracted NPZ file (from prepare_sequence_data.py)")
     parser.add_argument("--poses-dir", default=POSES_DIR)
     parser.add_argument("--det-dir", default=DETECTIONS_DIR)
-    parser.add_argument("--epochs", type=int, default=30)
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=40)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--patience", type=int, default=7,
+                        help="Early stopping patience (epochs)")
+    parser.add_argument("--label-smoothing", type=float, default=0.05)
     parser.add_argument("--skip-cv", action="store_true")
-    parser.add_argument("--output", default=os.path.join(MODELS_DIR, "sequence_classifier.pt"))
+    parser.add_argument("--output", default=os.path.join(MODELS_DIR, "sequence_detector.pt"))
     args = parser.parse_args()
 
     # Select device
@@ -337,39 +415,49 @@ def main():
         print("Using CPU")
 
     # Load samples
-    print(f"\nLoading samples from {args.poses_dir}...")
-    samples = load_all_samples(args.poses_dir, args.det_dir)
+    t0 = time.time()
+    if args.npz:
+        npz_path = args.npz
+        if not os.path.isabs(npz_path):
+            npz_path = os.path.join(PROJECT_ROOT, npz_path)
+        X, y, videos = load_from_npz(npz_path)
+    else:
+        print(f"\nLoading samples from {args.poses_dir} (live extraction)...")
+        X, y, videos = load_all_samples_live(args.poses_dir, args.det_dir)
+    print(f"Loaded in {time.time() - t0:.1f}s")
 
     # Distribution
     label_counts = defaultdict(int)
-    for _, label, _ in samples:
-        label_counts[label] += 1
-    print(f"\nTotal: {len(samples)} samples")
+    for label in y:
+        label_counts[int(label)] += 1
+    print(f"\nTotal: {len(X)} samples")
     for idx in sorted(label_counts.keys()):
         print(f"  {CLASSES[idx]}: {label_counts[idx]}")
 
     # LOOCV
     if not args.skip_cv:
-        cv_acc, fold_results = leave_one_video_out_cv(samples, args, device)
+        cv_acc, fold_results = leave_one_video_out_cv(X, y, videos, args, device)
+
+        # Save CV results
+        cv_path = args.output.replace(".pt", "_cv.json")
+        with open(cv_path, "w") as f:
+            json.dump({
+                "overall_accuracy": round(float(cv_acc), 4),
+                "folds": fold_results,
+            }, f, indent=2)
+        print(f"CV results saved to {cv_path}")
 
     # Train final model on all data
     print(f"\n{'='*50}")
-    print(f"TRAINING FINAL MODEL on all {len(samples)} samples")
+    print(f"TRAINING FINAL MODEL on all {len(X)} samples")
     print(f"{'='*50}")
 
-    dataset = PoseSequenceDataset(samples, augment=True)
+    dataset = PoseSequenceDataset(X, y, augment=True)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
     model = ShotClassifierCNN(num_classes=len(CLASSES)).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
-
-    # Class weights
-    total = sum(label_counts.values())
-    weights = torch.tensor(
-        [total / (len(CLASSES) * label_counts.get(i, 1)) for i in range(len(CLASSES))],
-        dtype=torch.float32
-    ).to(device)
-    criterion = nn.CrossEntropyLoss(weight=weights)
+    criterion = make_criterion(y, device, label_smoothing=args.label_smoothing)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     for epoch in range(args.epochs):
@@ -386,14 +474,19 @@ def main():
     meta_path = args.output.replace(".pt", "_meta.json")
     meta = {
         "classes": CLASSES,
-        "num_samples": len(samples),
+        "num_samples": len(X),
         "label_counts": {CLASSES[k]: v for k, v in label_counts.items()},
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "lr": args.lr,
+        "patience": args.patience,
+        "label_smoothing": args.label_smoothing,
         "sequence_length": SEQUENCE_LENGTH,
         "features_per_frame": FEATURES_PER_FRAME,
+        "normalization": "hip_center + shoulder_width",
     }
+    if not args.skip_cv:
+        meta["loocv_accuracy"] = round(float(cv_acc), 4)
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 

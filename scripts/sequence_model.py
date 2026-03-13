@@ -52,6 +52,10 @@ SEQUENCE_LENGTH = 90  # frames (1.5s at 60fps)
 LEFT_HIP_IDX = 23
 RIGHT_HIP_IDX = 24
 
+# Shoulder indices for normalization
+LEFT_SHOULDER_IDX = 11
+RIGHT_SHOULDER_IDX = 12
+
 
 # Only define nn.Module subclass if torch is available
 _BaseClass = nn.Module if TORCH_AVAILABLE else object
@@ -178,10 +182,22 @@ def extract_pose_sequence(frames, center_frame, num_landmarks=33):
             start_idx = j * 3
             sequence[i, start_idx:start_idx + 3] -= hip_center
 
+    # Shoulder-width normalization: divide by shoulder distance for scale invariance
+    for i in range(SEQUENCE_LENGTH):
+        ls_start = LEFT_SHOULDER_IDX * 3
+        rs_start = RIGHT_SHOULDER_IDX * 3
+        ls = sequence[i, ls_start:ls_start + 3]
+        rs = sequence[i, rs_start:rs_start + 3]
+
+        shoulder_width = np.linalg.norm(ls - rs)
+        if shoulder_width > 0.01:
+            sequence[i] /= shoulder_width
+
     return sequence
 
 
-def augment_sequence(sequence, fps=60.0, mirror=False, jitter_frames=0, dropout_rate=0.0):
+def augment_sequence(sequence, fps=60.0, mirror=False, jitter_frames=0,
+                     dropout_rate=0.0, temporal_scale=None, noise_std=0.0):
     """Apply data augmentation to a pose sequence.
 
     Args:
@@ -189,11 +205,29 @@ def augment_sequence(sequence, fps=60.0, mirror=False, jitter_frames=0, dropout_
         mirror: If True, flip X coordinates (for handedness)
         jitter_frames: Random temporal shift (±frames)
         dropout_rate: Fraction of frames to zero out
+        temporal_scale: Scale factor for temporal stretch/compress (e.g. 0.8-1.2)
+        noise_std: Gaussian noise standard deviation
 
     Returns:
         Augmented sequence array.
     """
     seq = sequence.copy()
+
+    # Temporal scaling: stretch/compress via interpolation
+    if temporal_scale is not None and temporal_scale != 1.0:
+        orig_len = SEQUENCE_LENGTH
+        scaled_len = int(orig_len * temporal_scale)
+        if scaled_len > 2:
+            # Resample to scaled length then crop/pad back to original
+            indices = np.linspace(0, orig_len - 1, scaled_len).astype(np.float32)
+            new_seq = np.zeros_like(seq)
+            for feat in range(FEATURES_PER_FRAME):
+                new_seq[:, feat] = np.interp(
+                    np.arange(orig_len),
+                    np.linspace(0, orig_len - 1, scaled_len),
+                    seq[np.clip(np.round(np.linspace(0, orig_len - 1, scaled_len)).astype(int), 0, orig_len - 1), feat]
+                )
+            seq = new_seq
 
     # Temporal jitter: shift the sequence
     if jitter_frames > 0:
@@ -215,6 +249,11 @@ def augment_sequence(sequence, fps=60.0, mirror=False, jitter_frames=0, dropout_
     if mirror:
         for i in range(0, FEATURES_PER_FRAME, 3):
             seq[:, i] *= -1
+
+    # Gaussian noise
+    if noise_std > 0:
+        mask = np.any(seq != 0, axis=1, keepdims=True)  # only add to non-zero frames
+        seq += np.random.normal(0, noise_std, seq.shape).astype(np.float32) * mask
 
     return seq
 
