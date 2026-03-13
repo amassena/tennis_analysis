@@ -298,15 +298,34 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
 
 
 def run_threshold_sweep(model, device, videos, args):
-    """Sweep thresholds and report F1 for each."""
+    """Sweep thresholds efficiently: run inference once, vary peak finding."""
     from scripts.validate_pipeline import validate_video
 
-    thresholds = [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8]
+    thresholds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.92, 0.95]
+
+    # Step 1: Run inference ONCE per video, cache probability curves
+    print("\nRunning inference on all videos (one-time)...")
+    prob_cache = {}  # video_name -> (timestamps, probs, fps)
+    for video_path in videos:
+        video_name = Path(video_path).stem
+        pose_path = os.path.join(POSES_DIR, f"{video_name}.json")
+        if not os.path.exists(pose_path):
+            continue
+
+        frames, fps, total_frames = load_pose_frames(pose_path)
+        timestamps, probs = sliding_window_inference(
+            model, device, frames, fps, step_sec=args.step
+        )
+        if len(timestamps) > 0:
+            prob_cache[video_name] = (timestamps, probs, fps, total_frames, str(video_path), pose_path)
+            print(f"  {video_name}: {len(timestamps)} windows")
+
+    # Step 2: Sweep thresholds using cached probs
     print(f"\n{'='*60}")
-    print(f"THRESHOLD SWEEP")
+    print(f"THRESHOLD SWEEP ({len(prob_cache)} videos)")
     print(f"{'='*60}")
-    print(f"{'Thresh':>8s} {'TP':>5s} {'FP':>5s} {'FN':>5s} {'Prec':>7s} {'Rec':>7s} {'F1':>7s}")
-    print(f"{'-'*48}")
+    print(f"{'Thresh':>8s} {'TP':>5s} {'FP':>5s} {'FN':>5s} {'Prec':>7s} {'Rec':>7s} {'F1':>7s} {'Err':>5s}")
+    print(f"{'-'*55}")
 
     best_f1 = 0
     best_thresh = 0.5
@@ -314,34 +333,61 @@ def run_threshold_sweep(model, device, videos, args):
     for thresh in thresholds:
         total_tp = total_fp = total_fn = 0
 
-        for video_path in videos:
-            video_name = Path(video_path).stem
-            result = detect_video(
-                video_path, model, device,
-                threshold=thresh, nms_gap=args.nms_gap, step_sec=args.step,
-            )
-            if result is None:
-                continue
+        for video_name, (timestamps, probs, fps, total_frames, vpath, ppath) in prob_cache.items():
+            detections = find_shots(timestamps, probs, threshold=thresh, nms_gap=args.nms_gap)
 
-            # Save temporarily
+            # Build output
+            output_dets = []
+            for det in detections:
+                frame_idx = int(round(det["timestamp"] * fps))
+                output_dets.append({
+                    "timestamp": det["timestamp"],
+                    "frame": frame_idx,
+                    "shot_type": det["shot_type"],
+                    "confidence": det["confidence"],
+                    "tier": "high" if det["p_shot"] > 0.8 else ("medium" if det["p_shot"] > 0.6 else "low"),
+                    "source": "sequence_cnn",
+                    "p_shot": round(det["p_shot"], 4),
+                    "probabilities": det["probabilities"],
+                })
+
+            type_counts = {}
+            tier_counts = {"high": 0, "medium": 0, "low": 0}
+            for d in output_dets:
+                type_counts[d["shot_type"]] = type_counts.get(d["shot_type"], 0) + 1
+                tier_counts[d["tier"]] += 1
+
+            result = {
+                "version": 6, "detector": "sequence_cnn",
+                "source_video": video_name, "video_path": vpath,
+                "pose_path": ppath, "fps": fps,
+                "total_frames": total_frames,
+                "duration": round(total_frames / fps, 2),
+                "parameters": {"threshold": thresh, "nms_gap": args.nms_gap,
+                              "step_sec": args.step, "model": "sequence_detector.pt"},
+                "summary": {"total_detections": len(output_dets),
+                           "by_tier": tier_counts, "by_type": type_counts},
+                "detections": output_dets,
+            }
+
             out_path = os.path.join(DETECTIONS_DIR, f"{video_name}_fused_detections.json")
             with open(out_path, "w") as f:
                 json.dump(result, f, indent=2)
 
-            # Validate
             r = validate_video(video_name, verbose=False)
-            if r:
-                total_tp += r["metrics"]["tp"]
-                total_fp += r["metrics"]["fp"]
-                total_fn += r["metrics"]["fn"]
+            if r and r.get("overall"):
+                total_tp += r["overall"]["tp"]
+                total_fp += r["overall"]["fp"]
+                total_fn += r["overall"]["fn"]
 
         prec = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
         rec = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0
+        errors = total_fp + total_fn
 
         marker = " ***" if f1 > best_f1 else ""
         print(f"{thresh:>8.2f} {total_tp:>5d} {total_fp:>5d} {total_fn:>5d} "
-              f"{prec:>7.3f} {rec:>7.3f} {f1:>7.3f}{marker}")
+              f"{prec:>7.3f} {rec:>7.3f} {f1:>7.3f} {errors:>5d}{marker}")
 
         if f1 > best_f1:
             best_f1 = f1
