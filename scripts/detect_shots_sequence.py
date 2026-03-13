@@ -421,8 +421,8 @@ def main():
     parser = argparse.ArgumentParser(description="Detect shots with sequence CNN")
     parser.add_argument("video", nargs="?", help="Path to preprocessed video")
     parser.add_argument("--all", action="store_true", help="Run on all GT videos")
-    parser.add_argument("--threshold", type=float, default=0.5,
-                        help="P(shot) peak threshold (default: 0.5)")
+    parser.add_argument("--threshold", type=float, default=0.90,
+                        help="P(shot) peak threshold (default: 0.90)")
     parser.add_argument("--nms-gap", type=float, default=1.5,
                         help="NMS gap in seconds (default: 1.5)")
     parser.add_argument("--step", type=float, default=0.1,
