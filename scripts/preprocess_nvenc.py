@@ -264,36 +264,34 @@ def convert(src, dst_60, dst_240=None, skip_existing=True):
 
     For non-slo-mo, produces:
       - dst_60: 60fps CFR copy
+
+    VFR→CFR conversion preserves original timestamps — ffmpeg duplicates/drops
+    frames to hit the target rate. No setpts or atempo needed. Audio stays in
+    sync naturally since we're not changing the timeline.
     """
     native_fps = probe_max_fps(src)
     is_slomo = native_fps > 60
     duration = probe_duration(src)
     codec_args = _get_codec_args()
 
-    # Compute slo-mo normalization filters
-    vf_filters_base = []
+    # No video/audio filters needed — ffmpeg's -r + -vsync cfr handles
+    # VFR→CFR conversion while preserving real-time timestamps.
+    vf_filters = []
     af_filters = []
-    atempo_ratio = 1.0
 
     if is_slomo:
-        vf_filters_base.append(f"setpts=N/{native_fps}/TB")
-
         nb_frames = probe_nb_frames(src)
         if nb_frames > 0 and duration > 0:
-            video_duration = nb_frames / native_fps
-            atempo_ratio = duration / video_duration
-            if abs(atempo_ratio - 1.0) > 0.01:
-                af_filters = _compute_atempo_filters(atempo_ratio)
-                print(f"  Audio tempo: {atempo_ratio:.3f}x ({duration:.1f}s -> {video_duration:.1f}s)")
+            print(f"  Slo-mo: {nb_frames} frames over {duration:.1f}s")
 
     # --- 60fps version ---
     if skip_existing and os.path.exists(dst_60) and os.path.getsize(dst_60) > 0:
         size_mb = os.path.getsize(dst_60) / (1024 * 1024)
         print(f"  [SKIP] {os.path.basename(dst_60)} already exists ({size_mb:.1f} MB)")
     else:
-        label = f"60fps real-time" if is_slomo else "60fps CFR"
+        label = "60fps real-time" if is_slomo else "60fps CFR"
         print(f"  Encoding {label}...")
-        ok = _run_encode(src, dst_60, DEFAULT_FPS, list(vf_filters_base), list(af_filters),
+        ok = _run_encode(src, dst_60, DEFAULT_FPS, list(vf_filters), list(af_filters),
                          codec_args, duration)
         if not ok:
             return False
@@ -305,7 +303,7 @@ def convert(src, dst_60, dst_240=None, skip_existing=True):
             print(f"  [SKIP] {os.path.basename(dst_240)} already exists ({size_mb:.1f} MB)")
         else:
             print(f"  Encoding 240fps (all frames, real-time duration)...")
-            ok = _run_encode(src, dst_240, native_fps, list(vf_filters_base), list(af_filters),
+            ok = _run_encode(src, dst_240, native_fps, list(vf_filters), list(af_filters),
                              codec_args, duration)
             if not ok:
                 return False
