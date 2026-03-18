@@ -63,6 +63,7 @@ GT_VIDEOS = {
     "IMG_1007": {"gt_file": "detections/IMG_1007_fused.json", "format": "detection_json"},
     "IMG_1008": {"gt_file": "detections/IMG_1008_fused.json", "format": "detection_json"},
     "IMG_1026": {"gt_file": "detections/IMG_1026_fused.json", "format": "detection_json"},
+    "IMG_1027": {"gt_file": "detections/IMG_1027_fused.json", "format": "detection_json"},
     "IMG_1030": {"gt_file": "detections/IMG_1030_fused.json", "format": "detection_json"},
     "IMG_1031": {"gt_file": "detections/IMG_1031_fused.json", "format": "detection_json"},
     "IMG_6851": {"gt_file": "detections/IMG_6851_fused.json", "format": "detection_json"},
