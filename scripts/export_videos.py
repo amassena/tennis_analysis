@@ -397,35 +397,33 @@ def extract_segment(video_path, start, duration, output_path, fps=60, speed=1.0)
     speed: playback speed multiplier. 0.25 = 4x slow motion.
     """
     vf_filters = []
-    af_filters = []
+    drop_audio = False
 
     if speed != 1.0:
         # setpts: divide by speed (0.25x speed → multiply PTS by 4)
         vf_filters.append(f"setpts=PTS/{speed:.4f}")
-        # atempo only supports 0.5-2.0 range, chain for larger ratios
-        ratio = speed
-        while ratio < 0.5:
-            af_filters.append("atempo=0.5")
-            ratio /= 0.5
-        while ratio > 2.0:
-            af_filters.append("atempo=2.0")
-            ratio /= 2.0
-        if 0.5 <= ratio <= 2.0:
-            af_filters.append(f"atempo={ratio:.4f}")
+        # Drop audio for slow-mo — sounds garbled
+        drop_audio = True
 
     vf_arg = ['-vf', ','.join(vf_filters)] if vf_filters else []
-    af_arg = ['-af', ','.join(af_filters)] if af_filters else []
+
+    # -t is output duration: at 0.25x speed, output needs to be duration/speed
+    # to show the full segment content
+    output_duration = duration / speed if speed != 1.0 else duration
+
+    audio_args = ['-an'] if drop_audio else [
+        '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
+    ]
 
     cmd = [
         'ffmpeg', '-y',
         '-ss', str(start),
         '-i', video_path,
-        '-t', str(duration),
+        '-t', str(output_duration),
         *vf_arg,
-        *af_arg,
         '-r', str(fps),
         '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-        '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
+        *audio_args,
         '-movflags', '+faststart',
         output_path
     ]
@@ -433,7 +431,7 @@ def extract_segment(video_path, start, duration, output_path, fps=60, speed=1.0)
     return result.returncode == 0
 
 
-def create_title_card(text, width, height, duration_secs, output_path, fps=60):
+def create_title_card(text, width, height, duration_secs, output_path, fps=60, no_audio=False):
     """Create a title card video clip with text on black background."""
     # Create title image with PIL
     img = Image.new('RGB', (width, height), (0, 0, 0))
@@ -476,19 +474,32 @@ def create_title_card(text, width, height, duration_secs, output_path, fps=60):
     img_path = output_path.replace('.mp4', '.png')
     img.save(img_path)
 
-    # Generate video from image with silent audio
-    cmd = [
-        'ffmpeg', '-y',
-        '-loop', '1', '-framerate', str(fps), '-i', img_path,
-        '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
-        '-t', str(duration_secs),
-        '-r', str(fps),
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
-        '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
-        '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart',
-        output_path
-    ]
+    # Generate video from image
+    if no_audio:
+        cmd = [
+            'ffmpeg', '-y',
+            '-loop', '1', '-framerate', str(fps), '-i', img_path,
+            '-t', str(duration_secs),
+            '-r', str(fps),
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+            '-an',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            output_path
+        ]
+    else:
+        cmd = [
+            'ffmpeg', '-y',
+            '-loop', '1', '-framerate', str(fps), '-i', img_path,
+            '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo',
+            '-t', str(duration_secs),
+            '-r', str(fps),
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+            '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            output_path
+        ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     os.remove(img_path)
     return result.returncode == 0
@@ -593,7 +604,8 @@ def export_highlights_grouped(video_path, det_data, output_path,
             # Title card
             title_path = os.path.join(tmpdir, f"title_{shot_type}.mp4")
             title_text = f"{title}  ({count})"
-            if create_title_card(title_text, width, height, 2.0, title_path, fps=fps):
+            if create_title_card(title_text, width, height, 2.0, title_path, fps=fps,
+                                no_audio=(speed != 1.0)):
                 all_paths.append(title_path)
 
             # Compute segments for this group
