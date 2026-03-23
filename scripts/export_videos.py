@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Export tennis analysis videos in 3 formats:
+"""Export tennis analysis videos in 4 formats:
 1. Full video with shot timeline bar at the bottom
 2. Highlights in chronological order
 3. Highlights grouped by shot type with title cards
+4. Rally mode — full points kept, dead time between points removed
 
 Usage:
     python scripts/export_videos.py preprocessed/IMG_6878.mp4
-    python scripts/export_videos.py preprocessed/IMG_6878.mp4 --before 2 --after 2
+    python scripts/export_videos.py preprocessed/IMG_6878.mp4 --types rally
+    python scripts/export_videos.py preprocessed/IMG_6878.mp4 --types rally --slow-motion --upload
 """
 
 import json
@@ -391,6 +393,47 @@ def compute_segments(detections, duration, before=2.0, after=2.0, min_gap=0.5):
     return merged
 
 
+def compute_rally_segments(detections, duration, point_gap=8.0, before=3.5, after=4.5):
+    """Group shots into rally points by gap threshold, removing dead time between points.
+
+    Shots within `point_gap` seconds of each other belong to the same point.
+    Each point gets `before` seconds of lead-in and `after` seconds of trail.
+    """
+    if not detections:
+        return []
+
+    sorted_dets = sorted(detections, key=lambda d: d['timestamp'])
+
+    # Split into points by gap threshold
+    points = []
+    current_point = [sorted_dets[0]]
+
+    for det in sorted_dets[1:]:
+        gap = det['timestamp'] - current_point[-1]['timestamp']
+        if gap > point_gap:
+            points.append(current_point)
+            current_point = [det]
+        else:
+            current_point.append(det)
+    points.append(current_point)
+
+    # Build segments with padding
+    segments = []
+    for i, point_shots in enumerate(points):
+        first_ts = point_shots[0]['timestamp']
+        last_ts = point_shots[-1]['timestamp']
+        start = max(0, first_ts - before)
+        end = min(duration, last_ts + after)
+        segments.append({
+            'start': start,
+            'end': end,
+            'shots': point_shots,
+            'point_num': i + 1,
+        })
+
+    return segments
+
+
 def extract_segment(video_path, start, duration, output_path, fps=60, speed=1.0):
     """Extract a video segment with re-encoding for precise cuts.
 
@@ -636,6 +679,60 @@ def export_highlights_grouped(video_path, det_data, output_path,
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def export_rally_points(video_path, det_data, output_path,
+                         width, height, duration, fps=60,
+                         point_gap=8.0, before=3.5, after=4.5, speed=1.0):
+    """Export video with dead time between points removed, keeping full rally points."""
+    label = " (slow motion)" if speed < 1.0 else ""
+    print(f"\nExporting rally points{label}...")
+
+    detections = [d for d in det_data['detections']
+                  if d.get('shot_type', 'unknown_shot') not in EXCLUDED_FROM_HIGHLIGHTS]
+    segments = compute_rally_segments(detections, duration, point_gap, before, after)
+
+    total_kept = sum(s['end'] - s['start'] for s in segments)
+    dead_removed = duration - total_kept
+    print(f"  {len(detections)} shots → {len(segments)} points "
+          f"(gap threshold: {point_gap}s)")
+    print(f"  Keeping {total_kept:.0f}s, removing {dead_removed:.0f}s dead time "
+          f"({dead_removed/duration*100:.0f}%)")
+
+    tmpdir = tempfile.mkdtemp(prefix='tennis_rally_')
+    segment_paths = []
+
+    try:
+        for i, seg in enumerate(segments):
+            seg_path = os.path.join(tmpdir, f"pt_{i:03d}.mp4")
+            seg_dur = seg['end'] - seg['start']
+            shot_types = {}
+            for s in seg['shots']:
+                st = SHOT_LABELS.get(s.get('shot_type', 'unknown_shot'), '?')
+                shot_types[st] = shot_types.get(st, 0) + 1
+            breakdown = ' '.join(f"{v}{k}" for k, v in shot_types.items())
+            print(f"  Point {seg['point_num']}: {seg['start']:.1f}s-{seg['end']:.1f}s "
+                  f"({seg_dur:.1f}s, {len(seg['shots'])} shots: {breakdown})")
+
+            if not extract_segment(video_path, seg['start'], seg_dur, seg_path, fps=fps,
+                                   speed=speed):
+                print(f"    [ERROR] Failed to extract point {seg['point_num']}")
+                continue
+            segment_paths.append(seg_path)
+
+        if not segment_paths:
+            print("  [ERROR] No segments extracted")
+            return
+
+        print(f"  Concatenating {len(segment_paths)} points...")
+        if concat_videos(segment_paths, output_path):
+            size_mb = os.path.getsize(output_path) / (1024 * 1024)
+            print(f"  Saved: {output_path} ({size_mb:.0f}MB)")
+        else:
+            print("  [ERROR] Concat failed")
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def upload_to_r2(local_path, remote_key):
     """Upload a file to Cloudflare R2 storage."""
     from dotenv import load_dotenv
@@ -663,8 +760,14 @@ def main():
     parser.add_argument('--after', type=float, default=2.0,
                         help='Seconds after each shot for highlights (default: 2.0)')
     parser.add_argument('--types', nargs='+', default=['all'],
-                        choices=['all', 'timeline', 'highlights', 'grouped'],
+                        choices=['all', 'timeline', 'highlights', 'grouped', 'rally'],
                         help='Which export types to generate')
+    parser.add_argument('--point-gap', type=float, default=8.0,
+                        help='Max inter-shot gap within a point for rally mode (default: 8.0)')
+    parser.add_argument('--rally-before', type=float, default=3.5,
+                        help='Seconds before first shot in a point (default: 3.5)')
+    parser.add_argument('--rally-after', type=float, default=4.5,
+                        help='Seconds after last shot in a point (default: 4.5)')
     parser.add_argument('--speed', type=float, default=1.0,
                         help='Playback speed (0.25 = 4x slow motion, default: 1.0)')
     parser.add_argument('--slow-motion', action='store_true',
@@ -701,7 +804,7 @@ def main():
 
         export_types = args.types
         if 'all' in export_types:
-            export_types = ['timeline', 'highlights', 'grouped']
+            export_types = ['timeline', 'highlights', 'grouped', 'rally']
 
         # Determine speed variants to generate
         speeds = []
@@ -738,6 +841,18 @@ def main():
                     video_path, det_data, out,
                     width, height, duration, fps=fps,
                     before=args.before, after=args.after, speed=speed
+                )
+                if os.path.exists(out):
+                    exported_files.append(out)
+
+            if 'rally' in export_types:
+                out = f"{export_dir}/{video_name}_rally{suffix}.mp4"
+                export_rally_points(
+                    video_path, det_data, out,
+                    width, height, duration, fps=fps,
+                    point_gap=args.point_gap,
+                    before=args.rally_before, after=args.rally_after,
+                    speed=speed
                 )
                 if os.path.exists(out):
                     exported_files.append(out)
