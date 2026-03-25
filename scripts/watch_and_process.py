@@ -228,6 +228,64 @@ def process_video(stem, raw_path):
     return True
 
 
+def update_r2_index():
+    """Regenerate the browsable index.html on R2."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
+        import importlib, config.settings
+        importlib.reload(config.settings)
+        from storage.r2_client import R2Client
+        import tempfile
+
+        c = R2Client()
+        keys = c.list(prefix='highlights/', max_keys=1000)
+
+        videos = {}
+        for k in keys:
+            if k.endswith('index.html'):
+                continue
+            parts = k.split('/')
+            if len(parts) == 3:
+                videos.setdefault(parts[1], []).append(parts[2])
+
+        rows = ''
+        for vid in sorted(videos.keys(), reverse=True):
+            links = []
+            for f in sorted(videos[vid]):
+                label = f.replace(vid + '_', '').replace('.mp4', '')
+                url = f'https://media.playfullife.com/highlights/{vid}/{f}'
+                links.append(f'<a href="{url}">{label}</a>')
+            rows += f'<tr><td><strong>{vid}</strong></td><td>{" &middot; ".join(links)}</td></tr>\n'
+
+        html = f'''<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tennis Highlights</title>
+<style>
+  body {{ font-family: -apple-system, system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #111; color: #eee; }}
+  h1 {{ color: #FF8C00; }}
+  table {{ width: 100%; border-collapse: collapse; }}
+  td {{ padding: 10px 8px; border-bottom: 1px solid #333; }}
+  a {{ color: #5dade2; text-decoration: none; margin: 0 2px; }}
+  a:hover {{ text-decoration: underline; }}
+</style>
+</head><body>
+<h1>Tennis Highlights</h1>
+<table>{rows}</table>
+</body></html>
+'''
+        tmp = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w')
+        tmp.write(html)
+        tmp.close()
+        c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
+        os.unlink(tmp.name)
+        log("  Updated R2 index.html")
+    except Exception as e:
+        log(f"  Warning: failed to update R2 index: {e}")
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Watch for new 240fps videos and process them")
@@ -291,6 +349,7 @@ def main():
         success = process_video(stem, raw_path)
         if success:
             log(f"  COMPLETE: {stem}")
+            update_r2_index()
         else:
             log(f"  FAILED: {stem} (partial output may exist)")
 
