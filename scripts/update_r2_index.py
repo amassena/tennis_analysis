@@ -110,6 +110,111 @@ def format_date_time(created_str):
         return created_str[:10], ''
 
 
+UPLOAD_SECTION = '''
+<div class="upload-section">
+  <button class="upload-toggle" onclick="this.nextElementSibling.classList.toggle('open')">Upload Video</button>
+  <div class="upload-panel">
+    <input type="file" id="videoFile" accept=".mov,.mp4">
+    <input type="password" id="uploadPwd" placeholder="Password">
+    <button id="uploadBtn" onclick="startUpload()">Upload</button>
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
+      <span id="progressText"></span>
+    </div>
+    <div id="uploadStatus"></div>
+  </div>
+</div>
+<script>
+const CHUNK_SIZE = 10 * 1024 * 1024;
+
+async function startUpload() {
+  const file = document.getElementById('videoFile').files[0];
+  const password = document.getElementById('uploadPwd').value;
+  if (!file || !password) { alert('Select a file and enter password'); return; }
+
+  const btn = document.getElementById('uploadBtn');
+  const prog = document.getElementById('progressContainer');
+  const bar = document.getElementById('progressBar');
+  const txt = document.getElementById('progressText');
+  const st = document.getElementById('uploadStatus');
+
+  btn.disabled = true;
+  prog.style.display = 'block';
+  bar.style.width = '0%';
+  bar.style.background = '#FF8C00';
+  st.textContent = 'Initializing...';
+
+  try {
+    const initRes = await fetch('/api/upload/init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password, filename: file.name }),
+    });
+    if (!initRes.ok) { const e = await initRes.json(); throw new Error(e.error); }
+    const { id } = await initRes.json();
+
+    st.textContent = 'Uploading...';
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const parts = [];
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+
+      const r = await fetch('/api/upload/' + id + '/' + (i + 1), { method: 'PUT', body: chunk });
+      if (!r.ok) throw new Error('Chunk ' + (i + 1) + ' failed');
+      parts.push(await r.json());
+
+      const pct = Math.round((end / file.size) * 100);
+      bar.style.width = pct + '%';
+      txt.textContent = pct + '% (' + (end / 1048576).toFixed(0) + ' / ' + (file.size / 1048576).toFixed(0) + ' MB)';
+    }
+
+    st.textContent = 'Finalizing...';
+    const cr = await fetch('/api/upload/' + id + '/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parts }),
+    });
+    if (!cr.ok) throw new Error('Finalize failed');
+
+    bar.style.width = '100%';
+    bar.style.background = '#27AE60';
+    st.innerHTML = 'Upload complete! Processing will begin shortly.<br><small>Video will appear on this page when ready.</small>';
+    pollStatus(id);
+  } catch (err) {
+    st.textContent = 'Error: ' + err.message;
+    bar.style.background = '#E74C3C';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function pollStatus(id) {
+  const st = document.getElementById('uploadStatus');
+  const iv = setInterval(async () => {
+    try {
+      const r = await fetch('/api/status/' + id);
+      const d = await r.json();
+      if (d.status === 'not_found') {
+        st.innerHTML = 'Video processed! <a href="javascript:location.reload()">Refresh page</a>';
+        clearInterval(iv);
+      } else if (d.status === 'failed') {
+        st.textContent = 'Processing failed.';
+        clearInterval(iv);
+      } else if (d.status === 'pending') {
+        st.textContent = 'Queued for processing...';
+      } else if (d.status === 'processing') {
+        st.textContent = 'Processing video...';
+      }
+    } catch {}
+  }, 30000);
+}
+</script>
+'''
+
+
 def build_index_html(videos_meta):
     """Build the HTML index page."""
     sorted_vids = sorted(videos_meta.keys(),
@@ -214,6 +319,34 @@ def build_index_html(videos_meta):
     opacity: 0.9; transition: opacity 0.15s;
   }}
   .links a:hover {{ opacity: 1; }}
+  .upload-section {{ max-width: 900px; margin: 0 auto 24px; text-align: center; }}
+  .upload-toggle {{
+    padding: 10px 24px; background: #FF8C00; color: #fff; border: none;
+    border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer;
+  }}
+  .upload-panel {{
+    max-height: 0; overflow: hidden; transition: max-height 0.3s, padding 0.3s;
+    text-align: left; margin-top: 12px; background: #1a1a1a; border-radius: 12px;
+  }}
+  .upload-panel.open {{ max-height: 500px; padding: 20px; border: 1px solid #2a2a2a; }}
+  .upload-panel input[type="file"], .upload-panel input[type="password"] {{
+    display: block; width: 100%; margin-bottom: 10px; padding: 10px;
+    background: #222; border: 1px solid #333; border-radius: 6px; color: #eee; font-size: 0.95em;
+  }}
+  .upload-panel button {{
+    padding: 8px 20px; background: #FF8C00; color: #fff; border: none;
+    border-radius: 6px; font-weight: 600; cursor: pointer;
+  }}
+  .progress-container {{
+    display: none; margin-top: 12px; background: #222; border-radius: 6px;
+    overflow: hidden; position: relative; height: 24px;
+  }}
+  .progress-bar {{ height: 100%; background: #FF8C00; width: 0; transition: width 0.3s; }}
+  #progressText {{
+    position: absolute; top: 3px; left: 0; right: 0; text-align: center;
+    font-size: 0.8em; color: #fff;
+  }}
+  #uploadStatus {{ margin-top: 10px; font-size: 0.9em; color: #bbb; }}
   @media (max-width: 600px) {{
     .card {{ flex-direction: column; }}
     .thumb {{ width: 100%; }}
@@ -223,6 +356,7 @@ def build_index_html(videos_meta):
 </style>
 </head><body>
 <h1>Tennis Highlights</h1>
+{UPLOAD_SECTION}
 <div class="grid">{cards}
 </div>
 </body></html>

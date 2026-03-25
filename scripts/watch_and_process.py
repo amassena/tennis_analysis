@@ -238,6 +238,81 @@ def update_r2_index():
         log(f"  Warning: failed to update R2 index: {e}")
 
 
+def poll_r2_uploads():
+    """Check R2 uploads/ prefix for videos uploaded via the web form."""
+    import tempfile
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
+    import importlib, config.settings
+    importlib.reload(config.settings)
+    from storage.r2_client import R2Client
+
+    client = R2Client()
+    keys = client.list(prefix='uploads/', max_keys=100)
+
+    meta_keys = [k for k in keys if k.endswith('.json')]
+    if not meta_keys:
+        return []
+
+    processed = []
+    for meta_key in meta_keys:
+        tmp_meta = None
+        try:
+            # Download and parse metadata
+            tmp_meta = tempfile.NamedTemporaryFile(suffix='.json', delete=False).name
+            client.download(meta_key, tmp_meta)
+            with open(tmp_meta) as f:
+                meta = json.load(f)
+
+            if meta.get('status') != 'pending':
+                continue
+
+            upload_id = meta['id']
+            filename = meta['filename']
+            stem = os.path.splitext(filename)[0]
+            video_key = meta.get('key', f'uploads/{upload_id}.mov')
+
+            log(f"Found uploaded video: {filename} (id={upload_id})")
+
+            # Download video to raw/
+            raw_path = os.path.join(RAW_DIR, filename)
+            log(f"  Downloading from R2...")
+            client.download(video_key, raw_path)
+
+            # Update metadata to processing
+            meta['status'] = 'processing'
+            with open(tmp_meta, 'w') as f:
+                json.dump(meta, f)
+            client.upload(tmp_meta, meta_key, content_type='application/json')
+
+            fps = verify_fps(raw_path)
+            log(f"  Downloaded: {fps:.0f}fps, {os.path.getsize(raw_path)/(1024*1024):.0f} MB")
+
+            # Run full pipeline
+            success = process_video(stem, raw_path)
+
+            if success:
+                log(f"  COMPLETE: {stem}")
+                client.delete(video_key)
+                client.delete(meta_key)
+                update_r2_index()
+                processed.append(stem)
+            else:
+                log(f"  FAILED: {stem}")
+                meta['status'] = 'failed'
+                with open(tmp_meta, 'w') as f:
+                    json.dump(meta, f)
+                client.upload(tmp_meta, meta_key, content_type='application/json')
+
+        except Exception as e:
+            log(f"  Error processing upload {meta_key}: {e}")
+        finally:
+            if tmp_meta and os.path.exists(tmp_meta):
+                os.unlink(tmp_meta)
+
+    return processed
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Watch for new 240fps videos and process them")
@@ -250,6 +325,17 @@ def main():
     os.makedirs(POSES_DIR, exist_ok=True)
     os.makedirs(os.path.join(PROJECT_ROOT, "detections"), exist_ok=True)
     os.makedirs(os.path.join(PROJECT_ROOT, "exports"), exist_ok=True)
+
+    # Poll R2 uploads first (user-initiated, higher priority)
+    log("Checking R2 for uploaded videos...")
+    try:
+        r2_processed = poll_r2_uploads()
+        if r2_processed:
+            log(f"Processed {len(r2_processed)} R2 upload(s): {', '.join(r2_processed)}")
+        else:
+            log("No pending R2 uploads.")
+    except Exception as e:
+        log(f"R2 poll error (continuing to Photos scan): {e}")
 
     state = load_state()
     already = set(state["processed"])

@@ -1,0 +1,14 @@
+name = "tennis-media"
+main = "upload-worker.js"
+compatibility_date = "2026-03-25"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "tennis-videos"
+
+[vars]
+MAX_SIZE_GB = "5"
+
+[[routes]]
+pattern = "media.playfullife.com/api/*"
+zone_name = "playfullife.com"
