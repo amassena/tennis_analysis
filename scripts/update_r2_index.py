@@ -116,14 +116,18 @@ UPLOAD_SECTION = '''
   <div class="upload-panel">
     <div class="mode-tabs">
       <button class="mode-tab active" onclick="setMode('file',this)">File Upload</button>
-      <button class="mode-tab" onclick="setMode('link',this)">iCloud Link</button>
+      <button class="mode-tab" onclick="setMode('link',this)">iCloud Drive</button>
     </div>
     <div id="fileMode">
       <input type="file" id="videoFile" accept=".mov,.mp4">
     </div>
     <div id="linkMode" style="display:none">
-      <input type="text" id="icloudUrl" placeholder="Paste iCloud share link...">
-      <div class="link-hint">In Photos: Share &gt; Copy iCloud Link</div>
+      <div class="link-hint" style="padding:12px 0">
+        On iPhone: open video in Photos &gt; Share &gt; Save to Files &gt;<br>
+        iCloud Drive &gt; <b>Tennis Highlights</b> folder.<br><br>
+        Video will sync automatically and get processed.
+        No upload needed!
+      </div>
     </div>
     <input type="password" id="uploadPwd" placeholder="Password">
     <button id="uploadBtn" onclick="startUpload()">Upload</button>
@@ -181,27 +185,7 @@ async function startUpload() {
   bar.style.width = '0%';
   bar.style.background = '#FF8C00';
 
-  if (uploadMode === 'link') {
-    const url = document.getElementById('icloudUrl').value.trim();
-    if (!url) { alert('Paste an iCloud link'); btn.disabled = false; return; }
-    st.textContent = 'Submitting link...';
-    try {
-      const r = await fetch('/api/upload/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, url }),
-      });
-      if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
-      const { id } = await r.json();
-      st.innerHTML = 'Link submitted! Processing will begin shortly.<br><small>Video will appear on this page when ready.</small>';
-      pollStatus(id);
-    } catch (err) {
-      st.textContent = 'Error: ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
-    return;
-  }
+  if (uploadMode === 'link') { return; }
 
   const file = document.getElementById('videoFile').files[0];
   if (!file) { alert('Select a file'); btn.disabled = false; return; }

@@ -238,76 +238,59 @@ def update_r2_index():
         log(f"  Warning: failed to update R2 index: {e}")
 
 
-def download_icloud_share(share_url, dest_path):
-    """Download a video from an iCloud share link."""
-    import re
-    import requests
+ICLOUD_DRIVE_UPLOAD_DIR = os.path.expanduser(
+    "~/Library/Mobile Documents/com~apple~CloudDocs/Tennis Highlights"
+)
 
-    # Extract token from URL (e.g. https://share.icloud.com/photos/XXXXX)
-    match = re.search(r'(?:photos|iclouddrive)/(.+?)(?:\?|#|$)', share_url)
-    if not match:
-        raise ValueError(f"Cannot parse iCloud share URL: {share_url}")
-    token = match.group(1).strip('/')
 
-    # Resolve partition server by following redirect
-    log(f"  Resolving iCloud share link...")
-    r = requests.head(share_url, allow_redirects=True, timeout=15)
-    host_match = re.search(r'(p\d+-sharedstreams\.icloud\.com)', r.url)
-    host = host_match.group(1) if host_match else 'p63-sharedstreams.icloud.com'
-    base = f"https://{host}/{token}"
+def poll_icloud_drive():
+    """Check iCloud Drive 'Tennis Highlights' folder for new videos."""
+    if not os.path.isdir(ICLOUD_DRIVE_UPLOAD_DIR):
+        return []
 
-    # Get stream metadata
-    r = requests.post(f"{base}/sharedstreams/webstream",
-                      json={"streamCtag": None}, timeout=15)
-    r.raise_for_status()
-    stream = r.json()
+    processed = []
+    for fname in os.listdir(ICLOUD_DRIVE_UPLOAD_DIR):
+        lower = fname.lower()
+        if not (lower.endswith('.mov') or lower.endswith('.mp4')):
+            continue
 
-    photos = stream.get("photos", [])
-    if not photos:
-        raise Exception("No media found in share link")
+        src = os.path.join(ICLOUD_DRIVE_UPLOAD_DIR, fname)
 
-    # Collect all asset GUIDs
-    guids = [p["photoGuid"] for p in photos]
+        # Skip iCloud placeholder files (not yet downloaded)
+        if fname.startswith('.') or not os.path.isfile(src):
+            continue
+        # Check file isn't still being synced (size stable for 5s)
+        size1 = os.path.getsize(src)
+        if size1 == 0:
+            continue
+        time.sleep(5)
+        size2 = os.path.getsize(src)
+        if size1 != size2:
+            log(f"  {fname} still syncing ({size2/(1024*1024):.0f} MB), skipping for now")
+            continue
 
-    # Get download URLs
-    r = requests.post(f"{base}/sharedstreams/webasseturls",
-                      json={"photoGuids": guids}, timeout=15)
-    r.raise_for_status()
-    items = r.json().get("items", {})
+        stem = os.path.splitext(fname)[0]
+        raw_path = os.path.join(RAW_DIR, fname)
 
-    if not items:
-        raise Exception("No download URLs returned from iCloud")
+        log(f"Found video in iCloud Drive: {fname} ({size2/(1024*1024):.0f} MB)")
 
-    # Pick the largest file (the original video)
-    best_url = None
-    best_size = 0
-    for checksum, info in items.items():
-        size = int(info.get("fileSize", 0))
-        if size > best_size:
-            best_size = size
-            loc = info.get("url_location", "")
-            path = info.get("url_path", "")
-            if loc and path:
-                best_url = f"https://{loc}{path}"
-                best_size = size
+        # Move to raw/
+        import shutil
+        shutil.move(src, raw_path)
+        log(f"  Moved to {raw_path}")
 
-    if not best_url:
-        raise Exception("Could not resolve download URL from iCloud")
+        fps = verify_fps(raw_path)
+        log(f"  {fps:.0f}fps, {os.path.getsize(raw_path)/(1024*1024):.0f} MB")
 
-    log(f"  Downloading {best_size/(1024*1024):.0f} MB from iCloud...")
-    with requests.get(best_url, stream=True, timeout=30) as r:
-        r.raise_for_status()
-        total = int(r.headers.get('content-length', 0)) or best_size
-        downloaded = 0
-        with open(dest_path, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                f.write(chunk)
-                downloaded += len(chunk)
-                if total:
-                    pct = downloaded / total * 100
-                    print(f"\r  Downloading: {downloaded/(1024*1024):.0f}/{total/(1024*1024):.0f} MB ({pct:.0f}%)", end="", flush=True)
-    print()
-    return dest_path
+        success = process_video(stem, raw_path)
+        if success:
+            log(f"  COMPLETE: {stem}")
+            update_r2_index()
+            processed.append(stem)
+        else:
+            log(f"  FAILED: {stem}")
+
+    return processed
 
 
 def poll_r2_uploads():
@@ -348,23 +331,24 @@ def poll_r2_uploads():
             client.upload(tmp_meta, meta_key, content_type='application/json')
 
             if meta.get('type') == 'icloud_link':
-                # iCloud link — download directly from iCloud
-                icloud_url = meta['url']
-                log(f"Found iCloud link upload (id={upload_id})")
-                # Use a temp filename until we know the real one
-                raw_path = os.path.join(RAW_DIR, f"icloud_{upload_id}.mov")
-                download_icloud_share(icloud_url, raw_path)
-                stem = f"icloud_{upload_id}"
-                video_key = None  # No R2 video file to clean up
-            else:
-                # Direct file upload — download from R2
-                filename = meta['filename']
-                stem = os.path.splitext(filename)[0]
-                video_key = meta.get('key', f'uploads/{upload_id}.mov')
-                log(f"Found uploaded video: {filename} (id={upload_id})")
-                raw_path = os.path.join(RAW_DIR, filename)
-                log(f"  Downloading from R2...")
-                client.download(video_key, raw_path)
+                # iCloud share links require auth — tell user to use iCloud Drive
+                log(f"  iCloud link (id={upload_id}) — cannot download programmatically.")
+                log(f"  Save the video to iCloud Drive > Tennis Highlights folder instead.")
+                meta['status'] = 'failed'
+                meta['error'] = 'iCloud links require auth. Use iCloud Drive folder instead.'
+                with open(tmp_meta, 'w') as f:
+                    json.dump(meta, f)
+                client.upload(tmp_meta, meta_key, content_type='application/json')
+                continue
+
+            # Direct file upload — download from R2
+            filename = meta['filename']
+            stem = os.path.splitext(filename)[0]
+            video_key = meta.get('key', f'uploads/{upload_id}.mov')
+            log(f"Found uploaded video: {filename} (id={upload_id})")
+            raw_path = os.path.join(RAW_DIR, filename)
+            log(f"  Downloading from R2...")
+            client.download(video_key, raw_path)
 
             fps = verify_fps(raw_path)
             log(f"  Downloaded: {fps:.0f}fps, {os.path.getsize(raw_path)/(1024*1024):.0f} MB")
@@ -374,8 +358,7 @@ def poll_r2_uploads():
 
             if success:
                 log(f"  COMPLETE: {stem}")
-                if video_key:
-                    client.delete(video_key)
+                client.delete(video_key)
                 client.delete(meta_key)
                 update_r2_index()
                 processed.append(stem)
@@ -408,7 +391,18 @@ def main():
     os.makedirs(os.path.join(PROJECT_ROOT, "detections"), exist_ok=True)
     os.makedirs(os.path.join(PROJECT_ROOT, "exports"), exist_ok=True)
 
-    # Poll R2 uploads first (user-initiated, higher priority)
+    # Check iCloud Drive folder first (simplest upload path from iPhone)
+    log("Checking iCloud Drive folder...")
+    try:
+        drive_processed = poll_icloud_drive()
+        if drive_processed:
+            log(f"Processed {len(drive_processed)} iCloud Drive video(s): {', '.join(drive_processed)}")
+        else:
+            log("No videos in iCloud Drive folder.")
+    except Exception as e:
+        log(f"iCloud Drive poll error: {e}")
+
+    # Poll R2 uploads (web form uploads)
     log("Checking R2 for uploaded videos...")
     try:
         r2_processed = poll_r2_uploads()
