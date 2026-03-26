@@ -137,6 +137,14 @@ UPLOAD_SECTION = '''
 <script>
 const CHUNK_SIZE = 5 * 1024 * 1024;
 let uploadMode = 'file';
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
 
 function setMode(mode, el) {
   uploadMode = mode;
@@ -200,6 +208,7 @@ async function startUpload() {
 
   prog.style.display = 'block';
   st.textContent = 'Initializing...';
+  await acquireWakeLock();
 
   try {
     const initRes = await fetch('/api/upload/init', {
@@ -244,6 +253,7 @@ async function startUpload() {
     bar.style.background = '#E74C3C';
   } finally {
     btn.disabled = false;
+    releaseWakeLock();
   }
 }
 
