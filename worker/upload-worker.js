@@ -9,6 +9,7 @@
  *   POST /api/upload/init       — validate password, start multipart upload
  *   PUT  /api/upload/:id/:part  — upload a chunk
  *   POST /api/upload/:id/complete — finalize upload
+ *   POST /api/upload/link       — submit iCloud share link (no file upload)
  *   GET  /api/status/:id        — check processing status
  */
 
@@ -37,6 +38,11 @@ export default {
       const partMatch = path.match(/^\/api\/upload\/([^/]+)\/(\d+)$/);
       if (partMatch && request.method === 'PUT') {
         return await handlePart(request, env, cors, partMatch[1], parseInt(partMatch[2]));
+      }
+
+      // POST /api/upload/link
+      if (path === '/api/upload/link' && request.method === 'POST') {
+        return await handleLink(request, env, cors);
       }
 
       // POST /api/upload/:id/complete
@@ -138,6 +144,33 @@ async function handleComplete(request, env, cors, id) {
   meta.completed_at = new Date().toISOString();
   delete meta.uploadId;
   await env.BUCKET.put(`uploads/${id}.json`, JSON.stringify(meta), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return jsonResponse({ id, status: 'pending' }, 200, cors);
+}
+
+async function handleLink(request, env, cors) {
+  const body = await request.json();
+  const { password, url } = body;
+
+  if (!password || password !== env.UPLOAD_PASSWORD) {
+    return jsonResponse({ error: 'Invalid password' }, 403, cors);
+  }
+
+  if (!url || !url.includes('icloud.com/')) {
+    return jsonResponse({ error: 'Valid iCloud share link required' }, 400, cors);
+  }
+
+  const id = generateId();
+  const metadata = {
+    id,
+    type: 'icloud_link',
+    url,
+    uploaded_at: new Date().toISOString(),
+    status: 'pending',
+  };
+  await env.BUCKET.put(`uploads/${id}.json`, JSON.stringify(metadata), {
     httpMetadata: { contentType: 'application/json' },
   });
 

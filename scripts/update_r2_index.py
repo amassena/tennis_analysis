@@ -114,7 +114,17 @@ UPLOAD_SECTION = '''
 <div class="upload-section">
   <button class="upload-toggle" onclick="this.nextElementSibling.classList.toggle('open')">Upload Video</button>
   <div class="upload-panel">
-    <input type="file" id="videoFile" accept=".mov,.mp4">
+    <div class="mode-tabs">
+      <button class="mode-tab active" onclick="setMode('file',this)">File Upload</button>
+      <button class="mode-tab" onclick="setMode('link',this)">iCloud Link</button>
+    </div>
+    <div id="fileMode">
+      <input type="file" id="videoFile" accept=".mov,.mp4">
+    </div>
+    <div id="linkMode" style="display:none">
+      <input type="text" id="icloudUrl" placeholder="Paste iCloud share link...">
+      <div class="link-hint">In Photos: Share &gt; Copy iCloud Link</div>
+    </div>
     <input type="password" id="uploadPwd" placeholder="Password">
     <button id="uploadBtn" onclick="startUpload()">Upload</button>
     <div class="progress-container" id="progressContainer">
@@ -125,12 +135,33 @@ UPLOAD_SECTION = '''
   </div>
 </div>
 <script>
-const CHUNK_SIZE = 10 * 1024 * 1024;
+const CHUNK_SIZE = 5 * 1024 * 1024;
+let uploadMode = 'file';
+
+function setMode(mode, el) {
+  uploadMode = mode;
+  document.getElementById('fileMode').style.display = mode === 'file' ? '' : 'none';
+  document.getElementById('linkMode').style.display = mode === 'link' ? '' : 'none';
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function uploadChunk(url, chunk, retries) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const r = await fetch(url, { method: 'PUT', body: chunk });
+      if (r.ok) return await r.json();
+      if (attempt === retries) throw new Error('HTTP ' + r.status);
+    } catch (err) {
+      if (attempt === retries) throw err;
+      await new Promise(ok => setTimeout(ok, 2000 * (attempt + 1)));
+    }
+  }
+}
 
 async function startUpload() {
-  const file = document.getElementById('videoFile').files[0];
   const password = document.getElementById('uploadPwd').value;
-  if (!file || !password) { alert('Select a file and enter password'); return; }
+  if (!password) { alert('Enter password'); return; }
 
   const btn = document.getElementById('uploadBtn');
   const prog = document.getElementById('progressContainer');
@@ -139,9 +170,35 @@ async function startUpload() {
   const st = document.getElementById('uploadStatus');
 
   btn.disabled = true;
-  prog.style.display = 'block';
   bar.style.width = '0%';
   bar.style.background = '#FF8C00';
+
+  if (uploadMode === 'link') {
+    const url = document.getElementById('icloudUrl').value.trim();
+    if (!url) { alert('Paste an iCloud link'); btn.disabled = false; return; }
+    st.textContent = 'Submitting link...';
+    try {
+      const r = await fetch('/api/upload/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, url }),
+      });
+      if (!r.ok) { const e = await r.json(); throw new Error(e.error); }
+      const { id } = await r.json();
+      st.innerHTML = 'Link submitted! Processing will begin shortly.<br><small>Video will appear on this page when ready.</small>';
+      pollStatus(id);
+    } catch (err) {
+      st.textContent = 'Error: ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  const file = document.getElementById('videoFile').files[0];
+  if (!file) { alert('Select a file'); btn.disabled = false; return; }
+
+  prog.style.display = 'block';
   st.textContent = 'Initializing...';
 
   try {
@@ -162,9 +219,8 @@ async function startUpload() {
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = file.slice(start, end);
 
-      const r = await fetch('/api/upload/' + id + '/' + (i + 1), { method: 'PUT', body: chunk });
-      if (!r.ok) throw new Error('Chunk ' + (i + 1) + ' failed');
-      parts.push(await r.json());
+      const partData = await uploadChunk('/api/upload/' + id + '/' + (i + 1), chunk, 3);
+      parts.push(partData);
 
       const pct = Math.round((end / file.size) * 100);
       bar.style.width = pct + '%';
@@ -347,6 +403,19 @@ def build_index_html(videos_meta):
     font-size: 0.8em; color: #fff;
   }}
   #uploadStatus {{ margin-top: 10px; font-size: 0.9em; color: #bbb; }}
+  .mode-tabs {{ display: flex; gap: 0; margin-bottom: 12px; }}
+  .mode-tab {{
+    flex: 1; padding: 8px; background: #222; border: 1px solid #333; color: #888;
+    cursor: pointer; font-size: 0.9em; font-weight: 600;
+  }}
+  .mode-tab:first-child {{ border-radius: 6px 0 0 6px; }}
+  .mode-tab:last-child {{ border-radius: 0 6px 6px 0; }}
+  .mode-tab.active {{ background: #FF8C00; color: #fff; border-color: #FF8C00; }}
+  .upload-panel input[type="text"] {{
+    display: block; width: 100%; margin-bottom: 6px; padding: 10px;
+    background: #222; border: 1px solid #333; border-radius: 6px; color: #eee; font-size: 0.95em;
+  }}
+  .link-hint {{ font-size: 0.8em; color: #666; margin-bottom: 10px; }}
   @media (max-width: 600px) {{
     .card {{ flex-direction: column; }}
     .thumb {{ width: 100%; }}

@@ -238,6 +238,78 @@ def update_r2_index():
         log(f"  Warning: failed to update R2 index: {e}")
 
 
+def download_icloud_share(share_url, dest_path):
+    """Download a video from an iCloud share link."""
+    import re
+    import requests
+
+    # Extract token from URL (e.g. https://share.icloud.com/photos/XXXXX)
+    match = re.search(r'(?:photos|iclouddrive)/(.+?)(?:\?|#|$)', share_url)
+    if not match:
+        raise ValueError(f"Cannot parse iCloud share URL: {share_url}")
+    token = match.group(1).strip('/')
+
+    # Resolve partition server by following redirect
+    log(f"  Resolving iCloud share link...")
+    r = requests.head(share_url, allow_redirects=True, timeout=15)
+    host_match = re.search(r'(p\d+-sharedstreams\.icloud\.com)', r.url)
+    host = host_match.group(1) if host_match else 'p63-sharedstreams.icloud.com'
+    base = f"https://{host}/{token}"
+
+    # Get stream metadata
+    r = requests.post(f"{base}/sharedstreams/webstream",
+                      json={"streamCtag": None}, timeout=15)
+    r.raise_for_status()
+    stream = r.json()
+
+    photos = stream.get("photos", [])
+    if not photos:
+        raise Exception("No media found in share link")
+
+    # Collect all asset GUIDs
+    guids = [p["photoGuid"] for p in photos]
+
+    # Get download URLs
+    r = requests.post(f"{base}/sharedstreams/webasseturls",
+                      json={"photoGuids": guids}, timeout=15)
+    r.raise_for_status()
+    items = r.json().get("items", {})
+
+    if not items:
+        raise Exception("No download URLs returned from iCloud")
+
+    # Pick the largest file (the original video)
+    best_url = None
+    best_size = 0
+    for checksum, info in items.items():
+        size = int(info.get("fileSize", 0))
+        if size > best_size:
+            best_size = size
+            loc = info.get("url_location", "")
+            path = info.get("url_path", "")
+            if loc and path:
+                best_url = f"https://{loc}{path}"
+                best_size = size
+
+    if not best_url:
+        raise Exception("Could not resolve download URL from iCloud")
+
+    log(f"  Downloading {best_size/(1024*1024):.0f} MB from iCloud...")
+    with requests.get(best_url, stream=True, timeout=30) as r:
+        r.raise_for_status()
+        total = int(r.headers.get('content-length', 0)) or best_size
+        downloaded = 0
+        with open(dest_path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    pct = downloaded / total * 100
+                    print(f"\r  Downloading: {downloaded/(1024*1024):.0f}/{total/(1024*1024):.0f} MB ({pct:.0f}%)", end="", flush=True)
+    print()
+    return dest_path
+
+
 def poll_r2_uploads():
     """Check R2 uploads/ prefix for videos uploaded via the web form."""
     import tempfile
@@ -268,22 +340,31 @@ def poll_r2_uploads():
                 continue
 
             upload_id = meta['id']
-            filename = meta['filename']
-            stem = os.path.splitext(filename)[0]
-            video_key = meta.get('key', f'uploads/{upload_id}.mov')
-
-            log(f"Found uploaded video: {filename} (id={upload_id})")
-
-            # Download video to raw/
-            raw_path = os.path.join(RAW_DIR, filename)
-            log(f"  Downloading from R2...")
-            client.download(video_key, raw_path)
 
             # Update metadata to processing
             meta['status'] = 'processing'
             with open(tmp_meta, 'w') as f:
                 json.dump(meta, f)
             client.upload(tmp_meta, meta_key, content_type='application/json')
+
+            if meta.get('type') == 'icloud_link':
+                # iCloud link — download directly from iCloud
+                icloud_url = meta['url']
+                log(f"Found iCloud link upload (id={upload_id})")
+                # Use a temp filename until we know the real one
+                raw_path = os.path.join(RAW_DIR, f"icloud_{upload_id}.mov")
+                download_icloud_share(icloud_url, raw_path)
+                stem = f"icloud_{upload_id}"
+                video_key = None  # No R2 video file to clean up
+            else:
+                # Direct file upload — download from R2
+                filename = meta['filename']
+                stem = os.path.splitext(filename)[0]
+                video_key = meta.get('key', f'uploads/{upload_id}.mov')
+                log(f"Found uploaded video: {filename} (id={upload_id})")
+                raw_path = os.path.join(RAW_DIR, filename)
+                log(f"  Downloading from R2...")
+                client.download(video_key, raw_path)
 
             fps = verify_fps(raw_path)
             log(f"  Downloaded: {fps:.0f}fps, {os.path.getsize(raw_path)/(1024*1024):.0f} MB")
@@ -293,7 +374,8 @@ def poll_r2_uploads():
 
             if success:
                 log(f"  COMPLETE: {stem}")
-                client.delete(video_key)
+                if video_key:
+                    client.delete(video_key)
                 client.delete(meta_key)
                 update_r2_index()
                 processed.append(stem)
