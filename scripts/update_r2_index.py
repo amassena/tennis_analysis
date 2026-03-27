@@ -310,17 +310,22 @@ def build_index_html(videos_meta):
             label, color = label_map.get(key, (key, '#5DADE2'))
             links.append(f'<a href="{url}" style="background:{color}">{label}</a>')
 
-        time_html = f'<span class="time">{time_str}</span>' if time_str else ''
+        # Build readable title from date
+        if time_str:
+            title = f'{date_str} — {time_str}'
+        elif date_str and date_str != '?':
+            title = date_str
+        else:
+            title = vid
         bd_html = f'<div class="breakdown">{bd_str}</div>' if bd_str else ''
 
         cards += f'''
     <div class="card">
       <div class="thumb">{thumb_html}</div>
       <div class="info">
-        <div class="title">{vid}</div>
+        <div class="title">{title}</div>
         <div class="meta">
-          <span class="date">{date_str}</span>
-          {time_html}
+          <span class="vid-id">{vid}</span>
           <span class="dur">{dur_str}</span>
           <span class="shots">{shots} shots</span>
         </div>
@@ -357,8 +362,7 @@ def build_index_html(videos_meta):
   .title {{ font-size: 1.15em; font-weight: 700; color: #fff; }}
   .meta {{ display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85em; color: #999; }}
   .meta span {{ display: inline-flex; align-items: center; gap: 4px; }}
-  .date::before {{ content: "\\1F4C5 "; }}
-  .time::before {{ content: "\\1F552 "; }}
+  .vid-id {{ font-family: monospace; font-size: 0.85em; color: #666; }}
   .dur::before {{ content: "\\23F1 "; }}
   .shots::before {{ content: "\\1F3BE "; }}
   .breakdown {{ font-size: 0.85em; color: #bbb; }}
