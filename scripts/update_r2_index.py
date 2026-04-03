@@ -279,6 +279,7 @@ def build_index_html(videos_meta):
         'highlights': ('Highlights', '#2ECC71'),
         'highlights_slowmo': ('Highlights Slow-Mo', '#8E44AD'),
         'grouped_slowmo': ('Grouped Slow-Mo', '#3498DB'),
+        'comparisons': ('Pro Compare', '#E74C3C'),
     }
 
     cards = ''

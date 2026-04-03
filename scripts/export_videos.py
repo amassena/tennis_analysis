@@ -760,7 +760,7 @@ def main():
     parser.add_argument('--after', type=float, default=2.0,
                         help='Seconds after each shot for highlights (default: 2.0)')
     parser.add_argument('--types', nargs='+', default=['all'],
-                        choices=['all', 'timeline', 'highlights', 'grouped', 'rally'],
+                        choices=['all', 'timeline', 'highlights', 'grouped', 'rally', 'comparison'],
                         help='Which export types to generate')
     parser.add_argument('--point-gap', type=float, default=8.0,
                         help='Max inter-shot gap within a point for rally mode (default: 8.0)')
@@ -805,6 +805,7 @@ def main():
         export_types = args.types
         if 'all' in export_types:
             export_types = ['timeline', 'highlights', 'grouped', 'rally']
+            # 'comparison' excluded from 'all' — must be requested explicitly
 
         # Determine speed variants to generate
         speeds = []
@@ -856,6 +857,17 @@ def main():
                 )
                 if os.path.exists(out):
                     exported_files.append(out)
+
+        # Pro comparison (if requested)
+        if 'comparison' in export_types:
+            try:
+                from scripts.pro_comparison import generate_comparisons
+                comparison_files = generate_comparisons(
+                    video_path, output_dir=export_dir, upload=False
+                )
+                exported_files.extend(comparison_files)
+            except Exception as e:
+                print(f"  [WARN] Comparison generation failed: {e}")
 
         # Upload to R2 if requested
         if args.upload and exported_files:

@@ -31,7 +31,9 @@ WORKER_ID = os.environ.get("WORKER_ID", socket.gethostname())
 PROJECT_ROOT = Path(__file__).parent.parent
 RAW_DIR = PROJECT_ROOT / "raw"
 PREPROCESSED_DIR = PROJECT_ROOT / "preprocessed"
-POSES_DIR = PROJECT_ROOT / "poses"
+POSES_DIR = PROJECT_ROOT / "poses_full_videos"
+DETECTIONS_DIR = PROJECT_ROOT / "detections"
+EXPORTS_DIR = PROJECT_ROOT / "exports"
 CLIPS_DIR = PROJECT_ROOT / "clips"
 HIGHLIGHTS_DIR = PROJECT_ROOT / "highlights"
 THUMBS_DIR = PROJECT_ROOT / "thumbs"
@@ -394,18 +396,19 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None) -> Path:
             raise RuntimeError(f"Pose extraction failed: {result.stderr}")
     stage("poses", 100, "Pose extraction complete")
 
-    # Step 5: Detect shots
-    log("Step 5: Detecting shots")
-    stage("detection", 0, "Running shot detection model")
-    shots_file = PROJECT_ROOT / f"shots_detected_{video_name}.json"
+    # Step 5: Detect shots (sequence CNN)
+    log("Step 5: Detecting shots (sequence CNN)")
+    stage("detection", 0, "Running sequence CNN detection")
+    DETECTIONS_DIR.mkdir(parents=True, exist_ok=True)
+    det_file = DETECTIONS_DIR / f"{video_name}_fused_detections.json"
 
-    if not shots_file.exists():
+    if not det_file.exists():
         result = subprocess.run(
             [
                 python,
-                str(PROJECT_ROOT / "scripts" / "detect_shots.py"),
-                str(poses_file),
-                "-o", str(shots_file),
+                str(PROJECT_ROOT / "scripts" / "detect_shots_sequence.py"),
+                str(preprocessed),
+                "--threshold", "0.90",
             ],
             cwd=PROJECT_ROOT,
             capture_output=True,
@@ -415,43 +418,57 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None) -> Path:
             raise RuntimeError(f"Shot detection failed: {result.stderr}")
     stage("detection", 100, "Shot detection complete")
 
-    # Step 6: Extract clips and compile highlights
-    log("Step 6: Extracting clips and highlights")
-    stage("clips", 0, "Extracting clips")
-
-    # Check if highlights already exist
-    highlight_pattern = f"{video_name}*highlights*.mp4"
-    existing_highlights = list(HIGHLIGHTS_DIR.glob(highlight_pattern))
-
-    if existing_highlights:
-        log(f"Highlights already exist: {existing_highlights[0].name}")
-        stage("clips", 100, "Using existing highlights")
-        return existing_highlights[0]
+    # Step 6: Export videos and upload to R2
+    log("Step 6: Exporting videos to R2")
+    stage("clips", 0, "Exporting video formats + uploading to R2")
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     result = subprocess.run(
         [
             python,
-            str(PROJECT_ROOT / "scripts" / "extract_clips.py"),
-            "-i", str(shots_file),
-            "-v", str(preprocessed),
-            "--highlights",
-            "--group-by-type",
+            str(PROJECT_ROOT / "scripts" / "export_videos.py"),
+            str(preprocessed),
+            "--types", "timeline", "rally", "grouped",
+            "--slow-motion",
+            "--upload",
         ],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Clip extraction failed: {result.stderr}")
-    stage("clips", 100, "Clip extraction complete")
+        log(f"Export output: {result.stdout[-500:]}", "WARN")
+        log(f"Export stderr: {result.stderr[-500:]}", "WARN")
+        # Don't fail entirely — partial exports are still useful
+    else:
+        log("Export and R2 upload complete")
+    stage("clips", 100, "Export complete")
 
-    # Find the highlight file
-    highlights = list(HIGHLIGHTS_DIR.glob(highlight_pattern))
+    # Step 7: Update R2 gallery index
+    log("Step 7: Updating gallery index")
+    stage("uploading", 0, "Updating gallery index")
+    result = subprocess.run(
+        [python, str(PROJECT_ROOT / "scripts" / "update_r2_index.py")],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        log(f"Index update failed: {result.stderr[-300:]}", "WARN")
+    else:
+        log("Gallery index updated")
+    stage("uploading", 100, "Gallery index updated")
 
-    if not highlights:
-        raise RuntimeError(f"No highlight file found matching {highlight_pattern}")
-
-    return highlights[0]
+    # Return best export file for YouTube upload (prefer grouped)
+    export_dir = EXPORTS_DIR / video_name
+    for candidate in [
+        export_dir / f"{video_name}_grouped.mp4",
+        export_dir / f"{video_name}_highlights.mp4",
+        export_dir / f"{video_name}_rally.mp4",
+    ]:
+        if candidate.exists():
+            return candidate
+    return preprocessed
 
 
 def upload_to_youtube(video_path: Path, title: str = None, dry_run: bool = False) -> str:
@@ -497,6 +514,47 @@ def upload_to_youtube(video_path: Path, title: str = None, dry_run: bool = False
     raise RuntimeError("Could not find YouTube URL in output")
 
 
+def _get_detection_stats(video_name: str) -> dict:
+    """Read detection JSON and return stats for email notification."""
+    det_file = DETECTIONS_DIR / f"{video_name}_fused_detections.json"
+    if not det_file.exists():
+        return {"total_clips": 0, "shot_counts": {}, "duration_seconds": 0}
+
+    with open(det_file) as f:
+        data = json.load(f)
+
+    detections = data.get("detections", [])
+    shot_counts = {}
+    for d in detections:
+        st = d.get("shot_type", "unknown")
+        shot_counts[st] = shot_counts.get(st, 0) + 1
+
+    return {
+        "total_clips": len(detections),
+        "shot_counts": shot_counts,
+        "duration_seconds": data.get("duration", 0),
+    }
+
+
+def _send_notification(func_name: str, *args, **kwargs):
+    """Import and call an email_notify function. Fails silently."""
+    try:
+        # Lazy import to avoid hard dependency
+        if str(PROJECT_ROOT) not in sys.path:
+            sys.path.insert(0, str(PROJECT_ROOT))
+        mod_path = PROJECT_ROOT / "scripts" / "email_notify.py"
+        if not mod_path.exists():
+            return
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("email_notify", str(mod_path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        fn = getattr(mod, func_name)
+        fn(*args, **kwargs)
+    except Exception as e:
+        log(f"Notification ({func_name}) failed: {e}", "WARN")
+
+
 def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = False) -> str:
     """Process a single job. Returns YouTube URL or highlight path on success.
 
@@ -508,8 +566,12 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
     video_id = job["video_id"]
     filename = job["filename"]
     icloud_asset_id = job["icloud_asset_id"]
+    video_name = Path(filename).stem
 
     log(f"Processing job {video_id}: {filename}")
+
+    # Notify processing started
+    _send_notification("sms_processing_started", video_name, WORKER_ID)
 
     # Update status to processing
     api_request("POST", f"/jobs/{video_id}/processing?worker_id={WORKER_ID}")
@@ -566,6 +628,7 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
             job = claim_job()
 
             if job:
+                video_name = Path(job.get("filename", "")).stem
                 try:
                     highlights_url = process_job(job, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
                     api_request(
@@ -573,12 +636,24 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
                         f"/jobs/{job['video_id']}/complete?worker_id={WORKER_ID}",
                         {"success": True, "highlights_url": highlights_url},
                     )
+                    # Notify upload complete
+                    r2_url = f"https://media.playfullife.com/highlights/{video_name}/"
+                    stats = _get_detection_stats(video_name)
+                    _send_notification(
+                        "notify_upload_complete",
+                        video_name, r2_url, stats, "auto", "chronological",
+                    )
                 except Exception as e:
                     log(f"Job failed: {e}", "ERROR")
                     api_request(
                         "POST",
                         f"/jobs/{job['video_id']}/complete?worker_id={WORKER_ID}",
                         {"success": False, "error_message": str(e)},
+                    )
+                    # Notify failure
+                    _send_notification(
+                        "notify_processing_failed",
+                        video_name, WORKER_ID, str(e),
                     )
             else:
                 log("No pending jobs", "DEBUG")

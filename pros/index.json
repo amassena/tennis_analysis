@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "description": "Pro clip library for side-by-side comparison. Each clip is a 3-5s window around contact point.",
+  "clip_spec": {
+    "format": "mp4",
+    "target_fps": 60,
+    "duration_range": "3-5 seconds",
+    "contact_frame": "Frame index of racket-ball contact"
+  },
+  "players": {
+    "federer": {
+      "name": "Roger Federer",
+      "clips": []
+    },
+    "djokovic": {
+      "name": "Novak Djokovic",
+      "clips": []
+    },
+    "nadal": {
+      "name": "Rafael Nadal",
+      "clips": []
+    }
+  }
+}
