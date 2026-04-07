@@ -26,6 +26,8 @@ from pathlib import Path
 COORDINATOR_URL = os.environ.get("COORDINATOR_URL", "http://localhost:8080")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "60"))  # seconds
 WORKER_ID = os.environ.get("WORKER_ID", socket.gethostname())
+WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://media.playfullife.com")
+UPLOAD_PASSWORD = os.environ.get("UPLOAD_PASSWORD", "")
 
 # Project paths (auto-detect)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -56,6 +58,49 @@ def report_stage(video_id: str, stage: str, progress: float = None, message: str
         api_request("POST", f"/jobs/{video_id}/stage?worker_id={WORKER_ID}", data)
     except Exception as e:
         log(f"Failed to report stage: {e}", "WARN")
+
+
+def report_queue_status(upload_id: str, status: str = None, stage: str = None,
+                        progress: int = None, error: str = None, video_url: str = None):
+    """Report processing status to the website queue (/api/status/:id/update).
+
+    Args:
+        upload_id: The upload ID from the website (e.g. 'mnnlku4e_0za6yz')
+        status: Overall status: pending, processing, complete, failed
+        stage: Current stage: downloading, preprocessing, extracting_poses,
+               detecting_shots, exporting, uploading_results
+        progress: Percentage 0-100
+        error: Error message (for failed status)
+        video_url: Link to finished video (for complete status)
+    """
+    if not upload_id or not UPLOAD_PASSWORD:
+        return
+
+    data = {"password": UPLOAD_PASSWORD}
+    if status:
+        data["status"] = status
+    if stage:
+        data["stage"] = stage
+    if progress is not None:
+        data["progress"] = progress
+    if error:
+        data["error"] = error
+    if video_url:
+        data["video_url"] = video_url
+
+    try:
+        body = json.dumps(data).encode()
+        url = f"{WEBSITE_URL}/api/status/{upload_id}/update"
+        req = urllib.request.Request(
+            url, data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+        log(f"Queue status: {stage or status} {progress or ''}%")
+    except Exception as e:
+        log(f"Queue status update failed: {e}", "WARN")
 
 
 def api_request(method: str, endpoint: str, data: dict = None) -> dict:
@@ -199,17 +244,35 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     if api.requires_2fa:
         raise RuntimeError("iCloud requires 2FA - authenticate manually first")
 
-    # Find the asset by searching all photos
+    # Find the asset — try smart albums first (much faster), then full scan
     log(f"Looking for asset {icloud_asset_id}")
     photo = None
 
-    # Search through all photos (more reliable than album iteration)
-    log("Searching all photos...")
-    for p in api.photos.all:
-        if p.id == icloud_asset_id:
-            photo = p
-            log(f"Found: {p.filename}")
-            break
+    # Try Slo-mo smart album first (most pipeline videos are slo-mo)
+    for album_name in ["Slo-mo", "Videos", "Recents"]:
+        try:
+            album = api.photos.albums.get(album_name)
+            if not album:
+                continue
+            log(f"Searching '{album_name}' album...")
+            for p in album:
+                if p.id == icloud_asset_id:
+                    photo = p
+                    log(f"Found in '{album_name}': {p.filename}")
+                    break
+            if photo:
+                break
+        except Exception as e:
+            log(f"Error searching '{album_name}': {e}")
+
+    # Fallback: full library scan
+    if not photo:
+        log("Searching all photos (this may take a while)...")
+        for p in api.photos.all:
+            if p.id == icloud_asset_id:
+                photo = p
+                log(f"Found: {p.filename}")
+                break
 
     if not photo:
         raise RuntimeError(f"Asset {icloud_asset_id} not found in iCloud")
@@ -341,14 +404,35 @@ def run_pipeline(video_path: Path) -> Path:
     return run_pipeline_with_stages(video_path, None)
 
 
-def run_pipeline_with_stages(video_path: Path, video_id: str = None) -> Path:
-    """Run the full processing pipeline on a video with stage reporting."""
+def run_pipeline_with_stages(video_path: Path, video_id: str = None,
+                             upload_id: str = None) -> Path:
+    """Run the full processing pipeline on a video with stage reporting.
+
+    Args:
+        video_path: Path to raw video file
+        video_id: Coordinator job ID (for Hetzner coordinator)
+        upload_id: Website upload ID (for gallery queue status)
+    """
     video_name = video_path.stem
     python = sys.executable
 
     def stage(name: str, progress: float = 0, msg: str = None):
         if video_id:
             report_stage(video_id, name, progress, msg)
+        if upload_id:
+            # Map internal stage names to website queue stages
+            queue_stage_map = {
+                "preprocessing": "preprocessing",
+                "thumbnail": "preprocessing",
+                "prescan": "preprocessing",
+                "poses": "extracting_poses",
+                "detection": "detecting_shots",
+                "clips": "exporting",
+                "uploading": "uploading_results",
+            }
+            queue_stage = queue_stage_map.get(name, name)
+            report_queue_status(upload_id, status="processing",
+                                stage=queue_stage, progress=int(progress))
 
     # Step 1: Preprocess (VFR -> CFR)
     log("Step 1: Preprocessing video")
@@ -357,7 +441,7 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None) -> Path:
 
     if not preprocessed.exists():
         result = subprocess.run(
-            [python, str(PROJECT_ROOT / "preprocess_nvenc.py"), video_path.name],
+            [python, str(PROJECT_ROOT / "scripts" / "preprocess_nvenc.py"), video_path.name],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
@@ -555,13 +639,15 @@ def _send_notification(func_name: str, *args, **kwargs):
         log(f"Notification ({func_name}) failed: {e}", "WARN")
 
 
-def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = False) -> str:
+def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = False,
+                upload_id: str = None) -> str:
     """Process a single job. Returns YouTube URL or highlight path on success.
 
     Args:
         job: Job dict with video_id, filename, icloud_asset_id
         skip_youtube: If True, skip YouTube upload entirely
         youtube_dry_run: If True, simulate YouTube upload without actually uploading
+        upload_id: Website upload ID for queue status reporting
     """
     video_id = job["video_id"]
     filename = job["filename"]
@@ -570,8 +656,11 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
 
     log(f"Processing job {video_id}: {filename}")
 
-    # Notify processing started
-    _send_notification("sms_processing_started", video_name, WORKER_ID)
+    # Report to website queue if applicable
+    if upload_id:
+        report_queue_status(upload_id, status="processing", stage="downloading", progress=0)
+
+    # Notifications disabled for intermediate steps — only notify on completion
 
     # Update status to processing
     api_request("POST", f"/jobs/{video_id}/processing?worker_id={WORKER_ID}")
@@ -580,9 +669,11 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
     report_stage(video_id, "downloading", 0, f"Downloading {filename}")
     video_path = download_from_icloud(icloud_asset_id, filename)
     report_stage(video_id, "downloading", 100, "Download complete")
+    if upload_id:
+        report_queue_status(upload_id, stage="downloading", progress=100)
 
     # Run pipeline
-    highlight_path = run_pipeline_with_stages(video_path, video_id)
+    highlight_path = run_pipeline_with_stages(video_path, video_id, upload_id=upload_id)
 
     # Upload to YouTube
     if skip_youtube:
@@ -629,20 +720,40 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
 
             if job:
                 video_name = Path(job.get("filename", "")).stem
+                # Check if this job has a linked website upload ID
+                job_upload_id = job.get("upload_id")
                 try:
-                    highlights_url = process_job(job, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
+                    highlights_url = process_job(
+                        job, skip_youtube=skip_youtube,
+                        youtube_dry_run=youtube_dry_run,
+                        upload_id=job_upload_id,
+                    )
                     api_request(
                         "POST",
                         f"/jobs/{job['video_id']}/complete?worker_id={WORKER_ID}",
                         {"success": True, "highlights_url": highlights_url},
                     )
-                    # Notify upload complete
-                    r2_url = f"https://media.playfullife.com/highlights/{video_name}/"
+                    # Notify upload complete with direct video links
+                    gallery_url = f"{WEBSITE_URL}/"
+                    base_url = f"{WEBSITE_URL}/{video_name}"
+                    video_links = {
+                        "Timeline": f"{base_url}/{video_name}_timeline.mp4",
+                        "Rally": f"{base_url}/{video_name}_rally.mp4",
+                        "Rally (Slow-Mo)": f"{base_url}/{video_name}_rally_slowmo.mp4",
+                        "Grouped": f"{base_url}/{video_name}_grouped.mp4",
+                        "Grouped (Slow-Mo)": f"{base_url}/{video_name}_grouped_slowmo.mp4",
+                    }
                     stats = _get_detection_stats(video_name)
                     _send_notification(
                         "notify_upload_complete",
-                        video_name, r2_url, stats, "auto", "chronological",
+                        video_name, video_links, stats,
                     )
+                    # Mark website queue as complete
+                    if job_upload_id:
+                        report_queue_status(
+                            job_upload_id, status="complete", stage="complete",
+                            progress=100, video_url=gallery_url,
+                        )
                 except Exception as e:
                     log(f"Job failed: {e}", "ERROR")
                     api_request(
@@ -655,6 +766,12 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
                         "notify_processing_failed",
                         video_name, WORKER_ID, str(e),
                     )
+                    # Mark website queue as failed
+                    if job_upload_id:
+                        report_queue_status(
+                            job_upload_id, status="failed",
+                            error=str(e)[:200],
+                        )
             else:
                 log("No pending jobs", "DEBUG")
 
@@ -667,49 +784,109 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
         time.sleep(POLL_INTERVAL)
 
 
+def process_local_video(video_path: str, upload_id: str = None):
+    """Process a local video file through the full pipeline.
+
+    This is for processing videos that were uploaded via the website
+    or added manually, without needing the coordinator.
+
+    Args:
+        video_path: Path to the video file (raw or preprocessed)
+        upload_id: Website upload ID for queue status updates
+    """
+    path = Path(video_path)
+    if not path.exists():
+        log(f"Video not found: {path}", "ERROR")
+        return
+
+    video_name = path.stem
+    log(f"Processing local video: {video_name}")
+
+    if upload_id:
+        report_queue_status(upload_id, status="processing", stage="preprocessing", progress=0)
+
+    try:
+        highlight_path = run_pipeline_with_stages(path, upload_id=upload_id)
+
+        # Send email notification
+        gallery_url = f"{WEBSITE_URL}/"
+        base_url = f"{WEBSITE_URL}/{video_name}"
+        video_links = {
+            "Timeline": f"{base_url}/{video_name}_timeline.mp4",
+            "Rally": f"{base_url}/{video_name}_rally.mp4",
+            "Rally (Slow-Mo)": f"{base_url}/{video_name}_rally_slowmo.mp4",
+            "By Shot Type": f"{base_url}/{video_name}_grouped.mp4",
+            "By Shot Type (Slow-Mo)": f"{base_url}/{video_name}_grouped_slowmo.mp4",
+        }
+        stats = _get_detection_stats(video_name)
+        _send_notification("notify_upload_complete", video_name, video_links, stats)
+
+        if upload_id:
+            report_queue_status(
+                upload_id, status="complete", stage="complete",
+                progress=100, video_url=gallery_url,
+            )
+
+        log(f"Done: {highlight_path}")
+    except Exception as e:
+        log(f"Processing failed: {e}", "ERROR")
+        _send_notification("notify_processing_failed", video_name, WORKER_ID, str(e))
+        if upload_id:
+            report_queue_status(upload_id, status="failed", error=str(e)[:200])
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description="GPU Worker for tennis pipeline")
-    parser.add_argument(
-        "--coordinator",
-        default=None,
-        help="Coordinator API URL",
-    )
-    parser.add_argument(
-        "--worker-id",
-        default=None,
-        help="Worker identifier (default: hostname)",
-    )
-    parser.add_argument(
-        "--poll-interval",
-        type=int,
-        default=None,
-        help="Seconds between polls",
-    )
-    parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Process one job and exit",
-    )
-    parser.add_argument(
-        "--skip-youtube",
-        action="store_true",
-        help="Skip YouTube upload entirely (just generate highlights)",
-    )
-    parser.add_argument(
-        "--youtube-dry-run",
-        action="store_true",
-        help="Simulate YouTube upload without actually uploading (for testing)",
-    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    # 'run' subcommand — process a local video
+    run_parser = subparsers.add_parser("run", help="Process a local video file")
+    run_parser.add_argument("video", help="Path to video file")
+    run_parser.add_argument("--upload-id", help="Website upload ID for queue status")
+
+    # 'poll' subcommand (default) — coordinator polling loop
+    poll_parser = subparsers.add_parser("poll", help="Poll coordinator for jobs")
+    poll_parser.add_argument("--coordinator", default=None, help="Coordinator API URL")
+    poll_parser.add_argument("--worker-id", default=None, help="Worker identifier")
+    poll_parser.add_argument("--poll-interval", type=int, default=None)
+    poll_parser.add_argument("--once", action="store_true", help="Process one job and exit")
+    poll_parser.add_argument("--skip-youtube", action="store_true")
+    poll_parser.add_argument("--youtube-dry-run", action="store_true")
+
+    # Legacy: no subcommand = poll mode (backward compat)
+    parser.add_argument("--coordinator", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--worker-id", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--poll-interval", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--skip-youtube", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--youtube-dry-run", action="store_true", help=argparse.SUPPRESS)
+
     args = parser.parse_args()
 
-    coordinator_url = args.coordinator or COORDINATOR_URL
-    worker_id = args.worker_id or WORKER_ID
-    poll_interval = args.poll_interval or POLL_INTERVAL
-    skip_youtube = args.skip_youtube
-    youtube_dry_run = args.youtube_dry_run
+    if args.command == "run":
+        # Load password from .env if not in environment
+        global UPLOAD_PASSWORD
+        if not UPLOAD_PASSWORD:
+            env_path = PROJECT_ROOT / ".env"
+            if env_path.exists():
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("UPLOAD_PASSWORD="):
+                            UPLOAD_PASSWORD = line.split("=", 1)[1].strip().strip('"')
+        process_local_video(args.video, upload_id=args.upload_id)
+    else:
+        # Poll mode (default)
+        coordinator_url = args.coordinator or COORDINATOR_URL
+        worker_id = args.worker_id or WORKER_ID
+        poll_interval = args.poll_interval or POLL_INTERVAL
+        skip_youtube = args.skip_youtube
+        youtube_dry_run = args.youtube_dry_run
 
-    worker_loop(coordinator_url, worker_id, poll_interval,
-                once=args.once, skip_youtube=skip_youtube, youtube_dry_run=youtube_dry_run)
+        worker_loop(coordinator_url, worker_id, poll_interval,
+                    once=args.once, skip_youtube=skip_youtube,
+                    youtube_dry_run=youtube_dry_run)
 
 
 if __name__ == "__main__":

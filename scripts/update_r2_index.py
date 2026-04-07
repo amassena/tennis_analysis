@@ -26,6 +26,18 @@ def generate_thumbnail(vid):
 
     if os.path.exists(thumb):
         return True
+
+    # Try downloading from R2 if not local (worker may have uploaded it)
+    r2_url = f'https://media.playfullife.com/thumbs/{vid}.jpg'
+    try:
+        import urllib.request
+        urllib.request.urlretrieve(r2_url, thumb)
+        if os.path.exists(thumb) and os.path.getsize(thumb) > 100:
+            return True
+        os.remove(thumb)
+    except Exception:
+        pass
+
     if not os.path.exists(pp):
         return False
 
@@ -62,6 +74,9 @@ def get_video_metadata(vid):
                 st = det.get('shot_type', 'unknown')
                 types[st] = types.get(st, 0) + 1
             info['breakdown'] = types
+            # Check for embedded creation date in detection JSON
+            if d.get('created'):
+                info['created'] = d['created']
             break
 
     # Creation date from raw MOV
@@ -109,6 +124,233 @@ def format_date_time(created_str):
     except Exception:
         return created_str[:10], ''
 
+
+PLAYER_SECTION = '''
+<style>
+  #playerOverlay {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.92); align-items: center; justify-content: center;
+  }
+  .player-wrap {
+    width: 95vw; max-width: 1200px; display: flex; flex-direction: column;
+  }
+  .player-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 4px; color: #ccc; font-size: 0.95em;
+  }
+  .player-head button {
+    background: none; border: none; color: #999; font-size: 1.8em;
+    cursor: pointer; padding: 0 8px; line-height: 1;
+  }
+  .player-head button:hover { color: #fff; }
+  #vid {
+    width: 100%; max-height: 75vh; background: #000; border-radius: 8px;
+  }
+  .player-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 0;
+    align-items: center;
+  }
+  .player-bar button {
+    padding: 6px 14px; background: #333; color: #ddd; border: none;
+    border-radius: 6px; font-size: 0.85em; cursor: pointer;
+  }
+  .player-bar button:hover { background: #444; }
+  .player-bar button.active { background: #FF8C00; color: #fff; }
+  .speed-group, .frame-group { display: flex; gap: 4px; }
+  .share-btn { margin-left: auto !important; background: #2a7 !important; }
+  .share-btn:hover { background: #3b8 !important; }
+  .time-display { color: #999; font-size: 0.85em; font-family: monospace; min-width: 60px; }
+  @media (max-width: 600px) {
+    .player-bar { justify-content: center; }
+    .share-btn { margin-left: 0 !important; width: 100%; }
+  }
+</style>
+<div id="playerOverlay" onclick="if(event.target===this)closePlayer()">
+  <div class="player-wrap">
+    <div class="player-head">
+      <span id="playerTitle"></span>
+      <button onclick="closePlayer()">&times;</button>
+    </div>
+    <video id="vid" controls playsinline></video>
+    <div class="player-bar">
+      <div class="speed-group">
+        <button onclick="setSpeed(0.25,this)">0.25x</button>
+        <button onclick="setSpeed(0.5,this)">0.5x</button>
+        <button onclick="setSpeed(1,this)" class="active">1x</button>
+        <button onclick="setSpeed(2,this)">2x</button>
+      </div>
+      <div class="frame-group">
+        <button onclick="stepFrame(-1)">&larr;</button>
+        <button onclick="stepFrame(1)">&rarr;</button>
+      </div>
+      <span class="time-display" id="timeDisplay">0:00.0</span>
+      <button onclick="copyTimeLink()" class="share-btn" id="shareBtn">Copy link at current time</button>
+    </div>
+  </div>
+</div>
+<script>
+var vid = document.getElementById('vid');
+var overlay = document.getElementById('playerOverlay');
+var pendingTime = null;
+
+function fmtTime(s) {
+  var m = Math.floor(s / 60);
+  var sec = s - m * 60;
+  return m + ':' + (sec < 10 ? '0' : '') + sec.toFixed(1);
+}
+
+vid.addEventListener('timeupdate', function() {
+  document.getElementById('timeDisplay').textContent = fmtTime(vid.currentTime);
+});
+
+function openPlayer(url, title) {
+  vid.src = url;
+  document.getElementById('playerTitle').textContent = title;
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  if (pendingTime !== null) {
+    vid.addEventListener('loadedmetadata', function() {
+      vid.currentTime = pendingTime; pendingTime = null;
+    }, { once: true });
+  }
+  vid.play().catch(function(){});
+  var vKey = url.replace('https://media.playfullife.com/', '');
+  history.replaceState(null, '', '?v=' + encodeURIComponent(vKey));
+}
+
+function closePlayer() {
+  vid.pause();
+  vid.removeAttribute('src');
+  vid.load();
+  overlay.style.display = 'none';
+  document.body.style.overflow = '';
+  history.replaceState(null, '', location.pathname);
+}
+
+function setSpeed(s, btn) {
+  vid.playbackRate = s;
+  document.querySelectorAll('.speed-group button').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  if (btn) btn.classList.add('active');
+}
+
+function stepFrame(dir) {
+  vid.pause();
+  vid.currentTime = Math.max(0, vid.currentTime + dir / 60);
+}
+
+function copyTimeLink() {
+  var vKey = vid.src.replace('https://media.playfullife.com/highlights/', '');
+  var t = Math.round(vid.currentTime * 10) / 10;
+  var link = location.origin + location.pathname + '?v=' + encodeURIComponent(vKey) + (t > 0 ? '&t=' + t : '');
+  navigator.clipboard.writeText(link).then(function() {
+    var btn = document.getElementById('shareBtn');
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy link at current time'; }, 2000);
+  });
+}
+
+(function() {
+  var params = new URLSearchParams(location.search);
+  var v = params.get('v');
+  if (v) {
+    var t = parseFloat(params.get('t'));
+    if (t > 0) pendingTime = t;
+    var url = 'https://media.playfullife.com/' + v;
+    var name = v.split('/').pop().replace('.mp4', '').replace(/_/g, ' ');
+    openPlayer(url, name);
+  }
+})();
+
+document.addEventListener('keydown', function(e) {
+  if (overlay.style.display !== 'flex') return;
+  if (e.key === 'Escape') closePlayer();
+  if (e.key === 'ArrowLeft') { e.preventDefault(); vid.currentTime = Math.max(0, vid.currentTime - 5); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); vid.currentTime += 5; }
+  if (e.key === ' ') { e.preventDefault(); vid.paused ? vid.play() : vid.pause(); }
+});
+</script>
+'''
+
+QUEUE_SECTION = '''
+<div id="queueSection" class="queue-section" style="display:none">
+  <h2 class="queue-title">Processing Queue</h2>
+  <div id="queueItems"></div>
+</div>
+<script>
+(function() {
+  const stageLabels = {
+    'uploading': 'Uploading...',
+    'pending': 'Queued',
+    'downloading': 'Downloading',
+    'preprocessing': 'Preprocessing',
+    'extracting_poses': 'Extracting Poses',
+    'detecting_shots': 'Detecting Shots',
+    'exporting': 'Exporting Videos',
+    'uploading_results': 'Uploading to Gallery',
+    'processing': 'Processing',
+    'complete': 'Complete',
+    'failed': 'Failed',
+  };
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    var d = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (d < 60) return 'just now';
+    if (d < 3600) return Math.floor(d/60) + 'm ago';
+    if (d < 86400) return Math.floor(d/3600) + 'h ago';
+    return Math.floor(d/86400) + 'd ago';
+  }
+
+  function renderQueue(items) {
+    var sec = document.getElementById('queueSection');
+    var container = document.getElementById('queueItems');
+    // Filter to only active items (not complete or old)
+    var active = items.filter(function(i) {
+      return i.status !== 'complete' || (i.video_url && Date.now() - new Date(i.updated_at).getTime() < 86400000);
+    });
+    if (active.length === 0) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    container.innerHTML = active.map(function(item) {
+      var name = item.filename || 'Unknown';
+      if (name.length > 40) name = name.substring(0, 37) + '...';
+      var statusClass = 'status-' + (item.status || 'pending');
+      var label = stageLabels[item.stage || item.status] || item.status;
+      var pct = item.progress ? ' (' + item.progress + '%)' : '';
+      var time = timeAgo(item.updated_at);
+      var bar = '';
+      if (item.progress && item.status !== 'complete' && item.status !== 'failed') {
+        bar = '<div class="q-progress"><div class="q-bar" style="width:' + item.progress + '%"></div></div>';
+      }
+      var link = '';
+      if (item.status === 'complete' && item.video_url) {
+        link = ' <a href="' + item.video_url + '" class="q-link">View</a>';
+      }
+      var err = '';
+      if (item.status === 'failed' && item.error) {
+        err = '<div class="q-error">' + item.error + '</div>';
+      }
+      return '<div class="q-item ' + statusClass + '">' +
+        '<div class="q-name">' + name + '</div>' +
+        '<div class="q-status"><span class="q-dot"></span>' + label + pct + link + '</div>' +
+        bar + err +
+        '<div class="q-time">' + time + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function loadQueue() {
+    fetch('/api/queue').then(function(r) { return r.json(); }).then(function(d) {
+      if (d.queue) renderQueue(d.queue);
+    }).catch(function(){});
+  }
+
+  loadQueue();
+  setInterval(loadQueue, 30000);
+})();
+</script>
+'''
 
 UPLOAD_SECTION = '''
 <div class="upload-section">
@@ -275,12 +517,20 @@ def build_index_html(videos_meta):
         'timeline': ('Timeline', '#FF8C00'),
         'rally': ('Rally', '#27AE60'),
         'rally_slowmo': ('Rally Slow-Mo', '#9B59B6'),
-        'grouped': ('By Type', '#5DADE2'),
+        'grouped': ('By Shot Type', '#5DADE2'),
+        'grouped_slowmo': ('By Shot Type Slow-Mo', '#3498DB'),
         'highlights': ('Highlights', '#2ECC71'),
         'highlights_slowmo': ('Highlights Slow-Mo', '#8E44AD'),
-        'grouped_slowmo': ('Grouped Slow-Mo', '#3498DB'),
         'comparisons': ('Pro Compare', '#E74C3C'),
     }
+
+    # Display order for video links
+    link_order = [
+        'timeline', 'rally', 'rally_slowmo',
+        'grouped', 'grouped_slowmo',
+        'highlights', 'highlights_slowmo',
+        'comparisons',
+    ]
 
     cards = ''
     for vid in sorted_vids:
@@ -299,17 +549,30 @@ def build_index_html(videos_meta):
         bd_str = ', '.join(bd_parts) if bd_parts else ''
 
         if m.get('has_thumb'):
-            thumb_url = f'https://media.playfullife.com/highlights/thumbs/{vid}.jpg'
+            thumb_url = f'https://media.playfullife.com/thumbs/{vid}.jpg'
             thumb_html = f'<img src="{thumb_url}" alt="{vid}" loading="lazy">'
         else:
             thumb_html = f'<div class="no-thumb">{vid}</div>'
 
         links = []
-        for f in m.get('files', []):
-            url = f'https://media.playfullife.com/highlights/{vid}/{f}'
+        files = m.get('files', [])
+        file_keys = {}
+        for f in files:
             key = f.replace(vid + '_', '').replace('.mp4', '')
+            file_keys[key] = f
+        for key in link_order:
+            if key not in file_keys:
+                continue
+            f = file_keys[key]
+            url = f'https://media.playfullife.com/{vid}/{f}'
             label, color = label_map.get(key, (key, '#5DADE2'))
-            links.append(f'<a href="{url}" style="background:{color}">{label}</a>')
+            links.append(f'<a href="{url}" data-title="{label} — {vid}" onclick="openPlayer(this.href,this.dataset.title);return false" style="background:{color}">{label}</a>')
+        # Any files not in the predefined order
+        for key, f in file_keys.items():
+            if key not in link_order:
+                url = f'https://media.playfullife.com/{vid}/{f}'
+                label, color = label_map.get(key, (key, '#5DADE2'))
+                links.append(f'<a href="{url}" data-title="{label} — {vid}" onclick="openPlayer(this.href,this.dataset.title);return false" style="background:{color}">{label}</a>')
 
         # Build readable title from date
         if time_str:
@@ -415,6 +678,36 @@ def build_index_html(videos_meta):
     background: #222; border: 1px solid #333; border-radius: 6px; color: #eee; font-size: 0.95em;
   }}
   .link-hint {{ font-size: 0.8em; color: #666; margin-bottom: 10px; }}
+  .queue-section {{ max-width: 900px; margin: 0 auto 24px; }}
+  .queue-title {{ color: #FF8C00; font-size: 1.1em; margin-bottom: 12px; }}
+  .q-item {{
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    background: #1a1a1a; border-radius: 8px; margin-bottom: 8px;
+    border: 1px solid #2a2a2a; flex-wrap: wrap;
+  }}
+  .q-name {{ font-weight: 600; color: #ddd; flex: 1; min-width: 120px; }}
+  .q-status {{ font-size: 0.85em; color: #aaa; display: flex; align-items: center; gap: 6px; }}
+  .q-dot {{
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }}
+  .status-pending .q-dot {{ background: #F1C40F; }}
+  .status-processing .q-dot, .status-downloading .q-dot,
+  .status-preprocessing .q-dot, .status-extracting_poses .q-dot,
+  .status-detecting_shots .q-dot, .status-exporting .q-dot,
+  .status-uploading_results .q-dot {{ background: #3498DB; animation: pulse 1.5s infinite; }}
+  .status-complete .q-dot {{ background: #27AE60; }}
+  .status-failed .q-dot {{ background: #E74C3C; }}
+  .status-uploading .q-dot {{ background: #FF8C00; animation: pulse 1.5s infinite; }}
+  @keyframes pulse {{ 0%,100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
+  .q-progress {{
+    width: 100%; height: 4px; background: #333; border-radius: 2px; margin-top: 4px;
+    flex-basis: 100%;
+  }}
+  .q-bar {{ height: 100%; background: #3498DB; border-radius: 2px; transition: width 0.5s; }}
+  .q-time {{ font-size: 0.75em; color: #666; }}
+  .q-link {{ color: #FF8C00; text-decoration: none; font-weight: 600; }}
+  .q-link:hover {{ text-decoration: underline; }}
+  .q-error {{ color: #E74C3C; font-size: 0.8em; flex-basis: 100%; }}
   @media (max-width: 600px) {{
     .card {{ flex-direction: column; }}
     .thumb {{ width: 100%; }}
@@ -425,8 +718,10 @@ def build_index_html(videos_meta):
 </head><body>
 <h1>Tennis Highlights</h1>
 {UPLOAD_SECTION}
+{QUEUE_SECTION}
 <div class="grid">{cards}
 </div>
+{PLAYER_SECTION}
 </body></html>
 '''
 
@@ -468,9 +763,10 @@ def update_index():
     tmp.write(html)
     tmp.close()
     c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
+    c.upload(tmp.name, 'highlights/', content_type='text/html')
     os.unlink(tmp.name)
     print(f'Updated index: {len(all_meta)} videos')
-    print('https://media.playfullife.com/highlights/index.html')
+    print('https://media.playfullife.com/')
 
 
 if __name__ == '__main__':

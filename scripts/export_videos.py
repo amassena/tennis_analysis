@@ -548,19 +548,31 @@ def create_title_card(text, width, height, duration_secs, output_path, fps=60, n
     return result.returncode == 0
 
 
-def concat_videos(segment_paths, output_path):
-    """Concatenate video segments using ffmpeg concat demuxer."""
+def concat_videos(segment_paths, output_path, reencode=False):
+    """Concatenate video segments using ffmpeg concat demuxer.
+
+    reencode: If True, re-encode output to fix audio drift from mixed sources
+              (e.g., title cards with synthetic audio + real video segments).
+    """
     # Write concat file
     concat_path = output_path.replace('.mp4', '_concat.txt')
     with open(concat_path, 'w') as f:
         for path in segment_paths:
             f.write(f"file '{os.path.abspath(path)}'\n")
 
+    if reencode:
+        codec_args = [
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '22',
+            '-c:a', 'aac', '-b:a', '128k', '-ar', '48000', '-ac', '2',
+        ]
+    else:
+        codec_args = ['-c', 'copy']
+
     cmd = [
         'ffmpeg', '-y',
         '-f', 'concat', '-safe', '0',
         '-i', concat_path,
-        '-c', 'copy',
+        *codec_args,
         '-movflags', '+faststart',
         output_path
     ]
@@ -580,7 +592,7 @@ def export_highlights_chronological(video_path, det_data, output_path,
                   if d.get('shot_type', 'unknown_shot') not in EXCLUDED_FROM_HIGHLIGHTS]
     segments = compute_segments(detections, duration, before, after)
 
-    print(f"  {len(detections)} shots → {len(segments)} segments (merged overlaps)")
+    print(f"  {len(detections)} shots -> {len(segments)} segments (merged overlaps)")
 
     tmpdir = tempfile.mkdtemp(prefix='tennis_export_')
     segment_paths = []
@@ -669,7 +681,8 @@ def export_highlights_grouped(video_path, det_data, output_path,
             return
 
         print(f"  Concatenating {len(all_paths)} clips...")
-        if concat_videos(all_paths, output_path):
+        # Re-encode to fix audio drift from title cards with synthetic audio
+        if concat_videos(all_paths, output_path, reencode=True):
             size_mb = os.path.getsize(output_path) / (1024 * 1024)
             print(f"  Saved: {output_path} ({size_mb:.0f}MB)")
         else:
@@ -692,7 +705,7 @@ def export_rally_points(video_path, det_data, output_path,
 
     total_kept = sum(s['end'] - s['start'] for s in segments)
     dead_removed = duration - total_kept
-    print(f"  {len(detections)} shots → {len(segments)} points "
+    print(f"  {len(detections)} shots -> {len(segments)} points "
           f"(gap threshold: {point_gap}s)")
     print(f"  Keeping {total_kept:.0f}s, removing {dead_removed:.0f}s dead time "
           f"({dead_removed/duration*100:.0f}%)")

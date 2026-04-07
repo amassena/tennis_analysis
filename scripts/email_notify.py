@@ -129,9 +129,8 @@ def sms_processing_started(video_name: str, host: str):
 
 def sms_upload_complete(video_name: str, highlights_url: str):
     """Send SMS when upload completes."""
-    # Shorten for SMS
     short_name = video_name.replace("IMG_", "").replace(".mov", "").replace(".MOV", "")
-    msg = f"Tennis uploaded: {short_name}\n{highlights_url}"
+    msg = f"Tennis ready: {short_name} - {highlights_url}"
     return send_sms(msg)
 
 
@@ -217,12 +216,11 @@ View Angle: {view_angle}
 Clip Ordering: {ordering}
 
 Pipeline stages:
-1. Preprocess (VFR → 60fps CFR)
+1. Preprocess (VFR -> 60fps CFR)
 2. Extract poses (MediaPipe)
-3. Detect shots (GRU model)
-4. Extract clips
-5. Compile highlights
-6. Upload to YouTube
+3. Detect shots (CNN model)
+4. Export highlight videos
+5. Upload to Playful Life
 
 You'll receive another email when processing completes.
 """
@@ -230,7 +228,7 @@ You'll receive another email when processing completes.
     html_body = f"""
 <html>
 <body style="font-family: Arial, sans-serif; max-width: 600px;">
-<h2 style="color: #2e7d32;">🎾 Tennis Video Processing Started</h2>
+<h2 style="color: #2e7d32;">Tennis Video Processing Started</h2>
 
 <table style="border-collapse: collapse; width: 100%;">
 <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Video</strong></td>
@@ -239,23 +237,9 @@ You'll receive another email when processing completes.
     <td style="padding: 8px; border-bottom: 1px solid #ddd;">{timestamp}</td></tr>
 <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Machine</strong></td>
     <td style="padding: 8px; border-bottom: 1px solid #ddd;">{host}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>View Angle</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{view_angle}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Clip Ordering</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{ordering}</td></tr>
 </table>
 
-<h3 style="color: #666;">Pipeline Stages:</h3>
-<ol>
-<li>Preprocess (VFR → 60fps CFR)</li>
-<li>Extract poses (MediaPipe)</li>
-<li>Detect shots (GRU model)</li>
-<li>Extract clips</li>
-<li>Compile highlights</li>
-<li>Upload to YouTube</li>
-</ol>
-
-<p style="color: #888;">You'll receive another email when processing completes.</p>
+<p style="color: #888; margin-top: 16px;">You'll receive another email when processing completes.</p>
 </body>
 </html>
 """
@@ -265,20 +249,16 @@ You'll receive another email when processing completes.
     return send_email(subject, body, html_body)
 
 
-def notify_upload_complete(video_name: str, highlights_url: str, stats: dict,
-                           view_angle: str, ordering: str):
-    """Send email when video is uploaded to YouTube.
+def notify_upload_complete(video_name: str, video_links: dict, stats: dict):
+    """Send email when video highlights are uploaded.
 
     Args:
         video_name: Name of the video file
-        highlights_url: YouTube URL of uploaded video
+        video_links: Dict of {label: url} for each video type
         stats: Dict with shot counts, duration, etc.
-        view_angle: Camera view angle used
-        ordering: Clip ordering used
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # Build stats summary
     shot_counts = stats.get("shot_counts", {})
     total_clips = stats.get("total_clips", sum(shot_counts.values()))
     duration = stats.get("duration_seconds", 0)
@@ -286,74 +266,53 @@ def notify_upload_complete(video_name: str, highlights_url: str, stats: dict,
 
     shots_summary = ", ".join(f"{k}: {v}" for k, v in shot_counts.items()) or "N/A"
 
-    # Format video title for YouTube
-    view_label = {
-        "back-court": "Back View",
-        "left-side": "Left Side",
-        "right-side": "Right Side",
-        "front": "Front View",
-        "overhead": "Overhead"
-    }.get(view_angle, view_angle)
+    subject = f"Tennis: {video_name} ready ({total_clips} shots)"
 
-    order_label = "Grouped by Shot" if ordering == "by_shot_type" else "Chronological"
+    # Plain text body
+    links_text = "\n".join(f"  {label}: {url}" for label, url in video_links.items())
+    body = f"""{video_name} - {total_clips} shots ({shots_summary})
+Duration: {duration_str}
 
-    subject = f"✅ Uploaded: {video_name} ({view_label}, {order_label})"
-
-    body = f"""Tennis Highlights Uploaded to YouTube
-
-Video: {video_name}
-YouTube: {highlights_url}
-Time: {timestamp}
-
-Details:
-- View Angle: {view_label}
-- Ordering: {order_label}
-- Total Clips: {total_clips}
-- Shots: {shots_summary}
-- Duration: {duration_str}
-
-Watch now: {highlights_url}
+{links_text}
 """
+
+    # HTML body with styled link buttons
+    colors = {
+        "Timeline": "#FF8C00",
+        "Rally": "#9b59b6",
+        "Rally (Slow-Mo)": "#8e44ad",
+        "Grouped": "#27ae60",
+        "Grouped (Slow-Mo)": "#219a52",
+    }
+
+    link_buttons = ""
+    for label, url in video_links.items():
+        color = colors.get(label, "#555")
+        link_buttons += (
+            f'<a href="{url}" style="background: {color}; color: white; padding: 10px 20px; '
+            f'text-decoration: none; border-radius: 8px; display: inline-block; '
+            f'font-weight: 600; margin: 4px 4px 4px 0; font-size: 14px;">{label}</a>\n'
+        )
 
     html_body = f"""
 <html>
-<body style="font-family: Arial, sans-serif; max-width: 600px;">
-<h2 style="color: #2e7d32;">✅ Tennis Highlights Uploaded!</h2>
+<body style="font-family: -apple-system, system-ui, sans-serif; max-width: 600px; background: #f5f5f5; padding: 20px;">
+<div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+<h2 style="color: #333; margin-top: 0;">{video_name}</h2>
+<p style="color: #666; margin: 4px 0;">{total_clips} shots &mdash; {shots_summary}</p>
+<p style="color: #999; margin: 4px 0; font-size: 13px;">Duration: {duration_str}</p>
 
-<p style="font-size: 18px;">
-<a href="{highlights_url}" style="color: #1976d2; text-decoration: none;">
-▶️ Watch on YouTube
-</a>
-</p>
-
-<table style="border-collapse: collapse; width: 100%;">
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Video</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{video_name}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>View Angle</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{view_label}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Ordering</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{order_label}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Total Clips</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{total_clips}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Shots</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{shots_summary}</td></tr>
-<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Duration</strong></td>
-    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{duration_str}</td></tr>
-</table>
-
-<p style="margin-top: 20px;">
-<a href="{highlights_url}" style="background: #c62828; color: white; padding: 12px 24px;
-   text-decoration: none; border-radius: 4px; display: inline-block;">
-Watch on YouTube
-</a>
-</p>
-
+<div style="margin-top: 20px;">
+{link_buttons}
+</div>
+</div>
 </body>
 </html>
 """
 
-    # Send both email and SMS
-    sms_upload_complete(video_name, highlights_url)
+    # SMS with just the gallery link
+    gallery_url = "https://media.playfullife.com/"
+    sms_upload_complete(video_name, gallery_url)
     return send_email(subject, body, html_body)
 
 

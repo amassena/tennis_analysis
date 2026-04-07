@@ -9,6 +9,16 @@ bucket_name = "tennis-videos"
 [vars]
 MAX_SIZE_GB = "5"
 
+# Serve all routes on media subdomain (assets + API)
 [[routes]]
-pattern = "media.playfullife.com/api/*"
+pattern = "media.playfullife.com/*"
+zone_name = "playfullife.com"
+
+# Redirect bare domain to media subdomain
+[[routes]]
+pattern = "playfullife.com/*"
+zone_name = "playfullife.com"
+
+[[routes]]
+pattern = "www.playfullife.com/*"
 zone_name = "playfullife.com"

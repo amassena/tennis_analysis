@@ -71,34 +71,42 @@ def load_detections(video_name):
     return None
 
 
-def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None):
+def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None,
+                   used_files=None):
     """Find the best matching pro clip for a given shot type.
 
+    Rotates through available clips to avoid repeating the same one.
     Returns (player_name, clip_info) or (None, None) if no match.
     """
     candidates = []
     players = library.get("players", {})
+    if used_files is None:
+        used_files = set()
 
     for player_id, player_data in players.items():
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
             if clip.get("type") == shot_type:
-                score = 1.0
+                score = 0.0
+                # Strong preference for matching angle
+                if preferred_angle and clip.get("angle") == preferred_angle:
+                    score += 3.0
+                # Preference for preferred player
                 if preferred_player and player_id == preferred_player:
                     score += 2.0
-                if preferred_angle and clip.get("angle") == preferred_angle:
-                    score += 1.0
-                candidates.append((score, name, player_id, clip))
+                # Avoid clips already used
+                clip_key = f"{player_id}/{clip['file']}"
+                if clip_key in used_files:
+                    score -= 5.0
+                candidates.append((score, name, player_id, clip, clip_key))
 
     if not candidates:
-        return None, None
+        return None, None, None
 
-    # Sort by score descending, pick randomly among top candidates
+    # Sort by score descending, pick the best
     candidates.sort(key=lambda x: -x[0])
-    top_score = candidates[0][0]
-    top_candidates = [c for c in candidates if c[0] == top_score]
-    chosen = random.choice(top_candidates)
-    return chosen[1], chosen[3]  # (player_name, clip_info)
+    chosen = candidates[0]
+    return chosen[1], chosen[3], chosen[4]  # (player_name, clip_info, clip_key)
 
 
 def get_pro_clip_path(player_name, clip_info, library):
@@ -135,9 +143,15 @@ def get_pro_clip_path(player_name, clip_info, library):
 
 
 def extract_user_clip(video_path, timestamp, output_path, speed=SLOWMO_SPEED):
-    """Extract a clip from the user's video centered on the contact point."""
+    """Extract a clip from the user's video centered on the contact point.
+
+    The contact point (timestamp) is placed at exactly CLIP_BEFORE seconds
+    into the output (before slow-mo), so both clips align at contact.
+    """
     start = max(0, timestamp - CLIP_BEFORE)
-    duration = CLIP_BEFORE + CLIP_AFTER
+    # Adjust if we hit the start of the video
+    actual_before = timestamp - start
+    duration = actual_before + CLIP_AFTER
 
     # Scale to half-width, pad to exact dimensions, apply slow-mo
     vf = (
@@ -167,28 +181,34 @@ def extract_user_clip(video_path, timestamp, output_path, speed=SLOWMO_SPEED):
 def extract_pro_clip(clip_path, clip_info, output_path, target_duration):
     """Extract and normalize a pro clip, aligned at contact frame.
 
-    The pro clip is padded/trimmed to match target_duration, with contact
-    frame aligned to CLIP_BEFORE / SLOWMO_SPEED into the output.
+    The contact frame is placed at exactly CLIP_BEFORE/SLOWMO_SPEED seconds
+    into the output, matching the user clip's contact point position.
     """
     contact_frame = clip_info.get("contact_frame", 0)
     clip_fps = clip_info.get("fps", 60)
     contact_time = contact_frame / clip_fps
 
-    # Start so that contact aligns with CLIP_BEFORE/speed point in output
+    # Position contact at CLIP_BEFORE into the source window
     start = max(0, contact_time - CLIP_BEFORE)
 
-    # Read the entire clip, scale, pad, and slow down
+    # The source duration needed (before slow-mo)
+    source_duration = CLIP_BEFORE + CLIP_AFTER
+
+    # Scale, pad, slow down
     vf = (
         f"setpts=PTS/{SLOWMO_SPEED:.4f},"
         f"scale={HALF_WIDTH}:-1,"
         f"pad={HALF_WIDTH}:{HALF_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black"
     )
 
+    # Output duration matches source_duration / speed
+    output_duration = source_duration / SLOWMO_SPEED
+
     cmd = [
         "ffmpeg", "-y",
         "-ss", str(start),
         "-i", str(clip_path),
-        "-t", str(target_duration),
+        "-t", str(output_duration),
         "-vf", vf,
         "-r", str(OUTPUT_FPS),
         "-c:v", "libx264", "-preset", "fast", "-crf", "22",
@@ -303,6 +323,28 @@ def hstack_with_labels(left_path, right_path, output_path,
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def detect_camera_angle(det_data):
+    """Detect the user's camera angle from the detection metadata.
+
+    Returns 'behind' for back_court/front angles, 'side' for side angles.
+    Defaults to 'behind' since most user videos are filmed from behind.
+    """
+    camera_angle = det_data.get("camera_angle", "")
+    if not camera_angle:
+        camera_angle = det_data.get("metadata", {}).get("camera_angle", "")
+
+    if not camera_angle:
+        return "behind"  # default — most user videos are from behind
+
+    if "back" in camera_angle.lower():
+        return "behind"
+    elif "side" in camera_angle.lower():
+        return "side"
+    elif "front" in camera_angle.lower():
+        return "behind"  # front-facing = filmed from behind player
+    return "behind"
+
+
 def generate_comparisons(video_path, output_dir=None, player=None,
                           shot_type_filter=None, max_clips=None, upload=False):
     """Generate comparison clips for all eligible shots in a video.
@@ -329,7 +371,7 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     # Load pro library
     library = load_pro_library()
     if not library.get("players"):
-        print("[ERROR] Pro clip library is empty — add clips to pros/index.json")
+        print("[ERROR] Pro clip library is empty -- add clips to pros/index.json")
         return []
 
     # Set up output
@@ -337,6 +379,9 @@ def generate_comparisons(video_path, output_dir=None, player=None,
         output_dir = EXPORTS_DIR / video_name
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Detect camera angle for pro clip matching
+    user_angle = detect_camera_angle(det_data)
 
     detections = det_data.get("detections", [])
     eligible = [
@@ -352,43 +397,46 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     print(f"Pro Comparison: {video_name}")
     print(f"  {len(eligible)} eligible shots (of {len(detections)} total)")
     print(f"  Pro library: {len(library.get('players', {}))} players")
+    if user_angle:
+        print(f"  Camera angle: {user_angle} (preferring matching pro clips)")
 
     generated = []
     tmpdir = tempfile.mkdtemp(prefix="tennis_procomp_")
 
     try:
-        # Track which pro clips we've used to add variety
-        used_clips = {}  # shot_type -> set of clip files used
+        used_files = set()  # Track used pro clips to rotate through them
 
         for i, det in enumerate(eligible):
             shot_type = det["shot_type"]
             timestamp = det["timestamp"]
             idx = i + 1
 
-            # Find matching pro clip (avoiding repeats when possible)
-            pro_name, pro_clip = match_pro_clip(shot_type, library, player)
+            # Find matching pro clip (rotates through available clips)
+            pro_name, pro_clip, clip_key = match_pro_clip(
+                shot_type, library, player, user_angle, used_files)
             if not pro_clip:
-                print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s — no pro clip available")
+                print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s -- no pro clip available")
                 continue
+
+            used_files.add(clip_key)
 
             # Get local path to pro clip
             clip_path = get_pro_clip_path(pro_name, pro_clip, library)
             if not clip_path:
-                print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s — pro clip file not found")
+                print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s -- pro clip file not found")
                 continue
 
-            print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s vs {pro_name}")
+            pro_angle = pro_clip.get("angle", "?")
+            print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s vs {pro_name} ({pro_angle})")
 
-            # Extract user clip
+            # Extract user clip centered on contact
             user_clip = os.path.join(tmpdir, f"user_{i:03d}.mp4")
             if not extract_user_clip(video_path, timestamp, user_clip):
                 print(f"    [ERROR] Failed to extract user clip")
                 continue
 
-            # Get user clip duration for alignment
+            # Extract pro clip aligned at contact frame
             target_duration = (CLIP_BEFORE + CLIP_AFTER) / SLOWMO_SPEED
-
-            # Extract pro clip
             pro_clip_out = os.path.join(tmpdir, f"pro_{i:03d}.mp4")
             if not extract_pro_clip(clip_path, pro_clip, pro_clip_out, target_duration):
                 print(f"    [ERROR] Failed to extract pro clip")
