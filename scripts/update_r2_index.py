@@ -461,6 +461,8 @@ document.addEventListener('keydown', function(e) {{
   }}
 }})();
 
+function toggleCard(el) {{ el.classList.toggle('expanded'); }}
+
 // ── Rendering ──
 var currentFilter = 'all';
 var searchQuery = '';
@@ -578,7 +580,7 @@ function renderGallery() {{
           +'style="background:'+lk.color+'">'+lk.label+'</a>';
       }});
 
-      html += '<div class="card" onclick="this.classList.toggle(\'expanded\')">';
+      html += '<div class="card" onclick="toggleCard(this)">';
       html += thumbHtml;
       html += '<div class="card-body">';
       html += '<div class="card-time">'+(time||v.id)+'</div>';
