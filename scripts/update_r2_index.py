@@ -243,8 +243,14 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .session{{margin-bottom:28px}}
 .session-header{{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;padding-bottom:6px;
   border-bottom:1px solid #1a1a1a}}
+.session-header{{cursor:pointer;transition:opacity .15s}}
+.session-header:hover{{opacity:.85}}
+.session-header:hover .share-icon{{opacity:1}}
 .session-date{{font-size:1.1em;font-weight:700;color:#fff}}
 .session-stats{{font-size:0.8em;color:#666}}
+.share-icon{{font-size:0.8em;opacity:0.3;transition:opacity .15s;margin-left:auto}}
+.session.highlighted{{animation:highlightFade 2s ease-out}}
+@keyframes highlightFade{{0%{{background:rgba(255,140,0,.15)}}100%{{background:transparent}}}}
 
 /* ── Card Grid ── */
 .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}}
@@ -466,6 +472,14 @@ document.addEventListener('keydown', function(e) {{
 
 function toggleCard(el) {{ el.classList.toggle('expanded'); }}
 
+function shareSession(dk) {{
+  var link = location.origin + location.pathname + '#' + dk;
+  navigator.clipboard.writeText(link).then(function() {{
+    var icon = document.getElementById('share-'+dk);
+    if(icon) {{ icon.textContent = 'Copied!'; setTimeout(function(){{ icon.innerHTML = '&#128279;'; }}, 2000); }}
+  }});
+}}
+
 // ── Rendering ──
 var currentFilter = 'all';
 var searchQuery = '';
@@ -551,10 +565,11 @@ function renderGallery() {{
     var sessionShots = 0;
     vids.forEach(function(v){{ sessionShots += v.shots||0; }});
 
-    html += '<div class="session">';
-    html += '<div class="session-header">';
+    html += '<div class="session" id="session-'+dk+'">';
+    html += '<div class="session-header" onclick="shareSession('+JSON.stringify(dk)+')" title="Click to copy link">';
     html += '<span class="session-date">'+formatSessionDate(dk)+'</span>';
     html += '<span class="session-stats">'+vids.length+' video'+(vids.length>1?'s':'')+' / '+sessionShots+' shots</span>';
+    html += '<span class="share-icon" id="share-'+dk+'">&#128279;</span>';
     html += '</div>';
     html += '<div class="grid">';
 
@@ -718,6 +733,19 @@ async function startUpload() {{
 
 // ── Init ──
 renderGallery();
+
+// Deep link to session via hash (e.g. #2026-04-02)
+(function() {{
+  var hash = location.hash.replace('#','');
+  if(!hash) return;
+  var el = document.getElementById('session-'+hash);
+  if(el) {{
+    setTimeout(function() {{
+      el.scrollIntoView({{behavior:'smooth', block:'start'}});
+      el.classList.add('highlighted');
+    }}, 100);
+  }}
+}})();
 </script>
 </body></html>'''
 
