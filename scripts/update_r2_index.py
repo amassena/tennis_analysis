@@ -754,6 +754,30 @@ def update_index():
     tmp = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w')
     tmp.write(html)
     tmp.close()
+
+    # Validate JS syntax before uploading (catches f-string escaping bugs)
+    try:
+        import re as _re
+        scripts = _re.findall(r'<script>(.*?)</script>', html, _re.DOTALL)
+        if scripts:
+            js_tmp = tempfile.NamedTemporaryFile(suffix='.js', delete=False, mode='w')
+            js_tmp.write('(function(){\n')
+            for s in scripts:
+                js_tmp.write(s + '\n')
+            js_tmp.write('});\n')
+            js_tmp.close()
+            r = subprocess.run(['node', '--check', js_tmp.name],
+                             capture_output=True, text=True, timeout=5)
+            os.unlink(js_tmp.name)
+            if r.returncode != 0:
+                print(f'ERROR: JS syntax error in generated HTML — aborting upload')
+                print(r.stderr.strip()[:200])
+                os.unlink(tmp.name)
+                return
+            print('JS syntax check: OK')
+    except FileNotFoundError:
+        pass  # node not installed, skip check
+
     c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
     c.upload(tmp.name, 'highlights/', content_type='text/html')
     os.unlink(tmp.name)

@@ -221,7 +221,7 @@ def check_pending_jobs():
 
 
 def check_r2_gallery():
-    """Check R2 gallery status."""
+    """Check R2 gallery status — HTML loads, JS is valid, videos render."""
     header("R2 Gallery")
     try:
         import urllib.request
@@ -229,12 +229,62 @@ def check_r2_gallery():
                                      headers={"User-Agent": "tennis-healthcheck/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-            # Count video cards in HTML
-            import re
-            cards = len(re.findall(r'class="card"', body))
-            ok(f"Gallery responding — {cards} videos listed")
     except Exception as e:
         fail(f"Gallery not responding: {e}")
+        return
+
+    # Check video data is embedded
+    import re
+    vid_match = re.search(r'var VIDEOS = (\[.*?\]);', body, re.DOTALL)
+    if not vid_match:
+        fail("No VIDEOS data found in HTML")
+        return
+
+    try:
+        video_data = json.loads(vid_match.group(1))
+        video_count = len(video_data)
+        if video_count == 0:
+            fail("VIDEOS array is empty")
+        else:
+            ok(f"Gallery has {video_count} videos in data")
+    except json.JSONDecodeError as e:
+        fail(f"VIDEOS JSON is invalid: {e}")
+        return
+
+    # Check thumbnails — all videos should have has_thumb=True
+    missing_thumbs = [v['id'] for v in video_data if not v.get('has_thumb')]
+    if missing_thumbs:
+        warn(f"Missing thumbnails: {', '.join(missing_thumbs)}")
+    else:
+        ok("All videos have thumbnails")
+
+    # Check JS syntax by running through node (if available)
+    try:
+        scripts = re.findall(r'<script>(.*?)</script>', body, re.DOTALL)
+        if scripts:
+            # Write to temp file and check with node
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+                # Wrap in function to avoid DOM errors but catch syntax
+                f.write('(function(){\n')
+                for s in scripts:
+                    f.write(s)
+                    f.write('\n')
+                f.write('});\n')  # Don't execute, just parse
+                tmp_path = f.name
+            result = subprocess.run(
+                ['node', '--check', tmp_path],
+                capture_output=True, text=True, timeout=5
+            )
+            os.unlink(tmp_path)
+            if result.returncode == 0:
+                ok("JavaScript syntax valid")
+            else:
+                fail(f"JavaScript syntax error: {result.stderr.strip()[:100]}")
+    except FileNotFoundError:
+        pass  # node not available, skip
+    except Exception as e:
+        warn(f"JS check skipped: {e}")
 
 
 def test_icloud_auth():
