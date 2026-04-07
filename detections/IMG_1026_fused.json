@@ -29,7 +29,7 @@
   },
   "detections": [
     {
-      "timestamp": 19.95,
+      "timestamp": 24.464,
       "frame": 1197,
       "shot_type": "forehand",
       "confidence": 0.924,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "timestamp": 22.65,
+      "timestamp": 27.775,
       "frame": 1359,
       "shot_type": "forehand",
       "confidence": 0.959,
@@ -59,7 +59,7 @@
       }
     },
     {
-      "timestamp": 25.65,
+      "timestamp": 31.453,
       "frame": 1539,
       "shot_type": "forehand",
       "confidence": 0.965,
@@ -74,7 +74,7 @@
       }
     },
     {
-      "timestamp": 28.05,
+      "timestamp": 34.396,
       "frame": 1683,
       "shot_type": "forehand",
       "confidence": 0.966,
@@ -89,7 +89,7 @@
       }
     },
     {
-      "timestamp": 30.75,
+      "timestamp": 37.707,
       "frame": 1845,
       "shot_type": "forehand",
       "confidence": 0.956,
@@ -104,7 +104,7 @@
       }
     },
     {
-      "timestamp": 33.65,
+      "timestamp": 41.263,
       "frame": 2019,
       "shot_type": "forehand",
       "confidence": 0.965,
@@ -119,7 +119,7 @@
       }
     },
     {
-      "timestamp": 36.65,
+      "timestamp": 44.942,
       "frame": 2199,
       "shot_type": "forehand",
       "confidence": 0.97,
@@ -134,7 +134,7 @@
       }
     },
     {
-      "timestamp": 39.35,
+      "timestamp": 48.253,
       "frame": 2361,
       "shot_type": "forehand",
       "confidence": 0.967,
@@ -149,7 +149,7 @@
       }
     },
     {
-      "timestamp": 42.55,
+      "timestamp": 52.177,
       "frame": 2553,
       "shot_type": "forehand",
       "confidence": 0.975,
@@ -164,7 +164,7 @@
       }
     },
     {
-      "timestamp": 45.05,
+      "timestamp": 55.243,
       "frame": 2703,
       "shot_type": "forehand",
       "confidence": 0.982,
@@ -179,7 +179,7 @@
       }
     },
     {
-      "timestamp": 47.65,
+      "timestamp": 58.431,
       "frame": 2859,
       "shot_type": "forehand",
       "confidence": 0.958,
@@ -194,7 +194,7 @@
       }
     },
     {
-      "timestamp": 52.95,
+      "timestamp": 64.93,
       "frame": 3177,
       "shot_type": "forehand",
       "confidence": 0.973,
@@ -209,7 +209,7 @@
       }
     },
     {
-      "timestamp": 55.75,
+      "timestamp": 68.363,
       "frame": 3345,
       "shot_type": "forehand",
       "confidence": 0.98,
@@ -224,7 +224,7 @@
       }
     },
     {
-      "timestamp": 58.35,
+      "timestamp": 71.552,
       "frame": 3501,
       "shot_type": "forehand",
       "confidence": 0.959,
@@ -239,7 +239,7 @@
       }
     },
     {
-      "timestamp": 61.15,
+      "timestamp": 74.985,
       "frame": 3669,
       "shot_type": "forehand",
       "confidence": 0.977,
@@ -254,7 +254,7 @@
       }
     },
     {
-      "timestamp": 64.25,
+      "timestamp": 78.787,
       "frame": 3855,
       "shot_type": "backhand",
       "confidence": 0.969,
@@ -269,7 +269,7 @@
       }
     },
     {
-      "timestamp": 66.55,
+      "timestamp": 81.607,
       "frame": 3993,
       "shot_type": "backhand",
       "confidence": 0.984,
@@ -284,7 +284,7 @@
       }
     },
     {
-      "timestamp": 69.35,
+      "timestamp": 85.04,
       "frame": 4161,
       "shot_type": "backhand",
       "confidence": 0.966,
@@ -299,7 +299,7 @@
       }
     },
     {
-      "timestamp": 72.35,
+      "timestamp": 88.719,
       "frame": 4341,
       "shot_type": "forehand",
       "confidence": 0.981,
@@ -314,7 +314,7 @@
       }
     },
     {
-      "timestamp": 74.85,
+      "timestamp": 91.785,
       "frame": 4491,
       "shot_type": "forehand",
       "confidence": 0.979,
@@ -329,7 +329,7 @@
       }
     },
     {
-      "timestamp": 77.55,
+      "timestamp": 95.096,
       "frame": 4653,
       "shot_type": "forehand",
       "confidence": 0.983,
@@ -344,7 +344,7 @@
       }
     },
     {
-      "timestamp": 83.45,
+      "timestamp": 102.331,
       "frame": 5007,
       "shot_type": "forehand",
       "confidence": 0.968,
@@ -359,7 +359,7 @@
       }
     },
     {
-      "timestamp": 85.85,
+      "timestamp": 105.274,
       "frame": 5151,
       "shot_type": "forehand",
       "confidence": 0.981,
@@ -374,7 +374,7 @@
       }
     },
     {
-      "timestamp": 88.35,
+      "timestamp": 108.339,
       "frame": 5301,
       "shot_type": "forehand",
       "confidence": 0.986,
@@ -389,7 +389,7 @@
       }
     },
     {
-      "timestamp": 90.95,
+      "timestamp": 111.527,
       "frame": 5457,
       "shot_type": "backhand",
       "confidence": 0.965,
@@ -404,7 +404,7 @@
       }
     },
     {
-      "timestamp": 93.75,
+      "timestamp": 114.961,
       "frame": 5625,
       "shot_type": "backhand",
       "confidence": 0.978,
@@ -419,7 +419,7 @@
       }
     },
     {
-      "timestamp": 96.35,
+      "timestamp": 118.149,
       "frame": 5781,
       "shot_type": "forehand",
       "confidence": 0.98,

@@ -348,6 +348,46 @@ def generate_thumbnail(video_path: Path, output_path: Path = None) -> Path:
     return output_path
 
 
+def _get_icloud_created(video_name: str) -> str:
+    """Query iCloud for a video's creation date. Returns ISO timestamp or empty string."""
+    try:
+        from pyicloud import PyiCloudService
+        env_path = PROJECT_ROOT / ".env"
+        env_vars = {}
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    env_vars[key.strip()] = value.strip().strip('"').strip("'")
+        apple_id = env_vars.get("ICLOUD_USER") or env_vars.get("ICLOUD_USERNAME")
+        password = env_vars.get("ICLOUD_PASS") or env_vars.get("ICLOUD_PASSWORD")
+        if not apple_id or not password:
+            return ""
+        cookie_dir = PROJECT_ROOT / "config" / "icloud_session"
+        cookie_dir.mkdir(parents=True, exist_ok=True)
+        api = PyiCloudService(apple_id, password, cookie_directory=str(cookie_dir))
+        if api.requires_2fa:
+            return ""
+        target = f"{video_name}.MOV"
+        for album_name in ["Slo-mo", "Videos"]:
+            try:
+                album = api.photos.albums.get(album_name)
+                if not album:
+                    continue
+                for asset in album:
+                    if asset.filename and asset.filename.upper() == target.upper():
+                        dt = asset.created
+                        if dt:
+                            log(f"iCloud creation date for {video_name}: {dt}")
+                            return dt.isoformat()
+            except Exception:
+                continue
+    except Exception as e:
+        log(f"iCloud date lookup failed for {video_name}: {e}", "WARN")
+    return ""
+
+
 def _get_r2_client():
     """Get boto3 R2 client and bucket name. Returns (client, bucket) or (None, None)."""
     try:
@@ -522,7 +562,7 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
             import json as _json
             with open(det_path) as _f:
                 det_data = _json.load(_f)
-            # Extract creation date from raw video
+            # Extract creation date — try raw video first, then iCloud
             created = ""
             raw_path = RAW_DIR / f"{video_name}.MOV"
             if not raw_path.exists():
@@ -536,6 +576,9 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
                     created = tags.get("com.apple.quicktime.creationdate", tags.get("creation_time", ""))
                 except Exception:
                     pass
+            # Fallback: query iCloud for the asset creation date
+            if not created:
+                created = _get_icloud_created(video_name)
             meta = {
                 "duration": det_data.get("duration", 0),
                 "shots": len(det_data.get("detections", [])),
