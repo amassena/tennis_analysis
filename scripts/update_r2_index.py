@@ -735,20 +735,19 @@ function renderGallery() {{
     vids.forEach(function(v){{ sessionShots += v.shots||0; }});
 
     var dkTags = sessionTags[dk] || [];
-    var tagsHtml = '<span class="session-tags" id="tags-'+dk+'" onclick="event.stopPropagation()">';
+    var tagsHtml = '<span class="session-tags" id="tags-'+dk+'">';
     dkTags.forEach(function(name) {{
-      tagsHtml += '<span class="tag">'+name+' <span class="rm" onclick="removeTag('+JSON.stringify(dk)+','+JSON.stringify(name)+')">&times;</span></span>';
+      tagsHtml += '<span class="tag">'+name+' <span class="rm" data-action="rmtag" data-dk="'+dk+'" data-name="'+name+'">&times;</span></span>';
     }});
-    // Workaround: JSON.stringify produces double-quoted strings which are safe inside onclick single-quote attrs
-    tagsHtml += '<span class="add-tag" onclick="addTagToSession('+JSON.stringify(dk)+')">+ person</span>';
+    tagsHtml += '<span class="add-tag" data-action="addtag" data-dk="'+dk+'">+ person</span>';
     tagsHtml += '</span>';
 
     html += '<div class="session" id="session-'+dk+'">';
-    html += '<div class="session-header" onclick="shareSession('+JSON.stringify(dk)+')" title="Click date to copy link">';
-    html += '<span class="session-date">'+formatSessionDate(dk)+'</span>';
+    html += '<div class="session-header" data-dk="'+dk+'">';
+    html += '<span class="session-date" data-action="share" data-dk="'+dk+'">'+formatSessionDate(dk)+'</span>';
     html += '<span class="session-stats">'+vids.length+' video'+(vids.length>1?'s':'')+' / '+sessionShots+' shots</span>';
     html += tagsHtml;
-    html += '<span class="share-icon" id="share-'+dk+'">&#128279;</span>';
+    html += '<span class="share-icon" id="share-'+dk+'" data-action="share" data-dk="'+dk+'">&#128279;</span>';
     html += '</div>';
     html += '<div class="grid">';
 
@@ -955,6 +954,18 @@ async function startUpload() {{
     st.textContent = 'Error: '+err.message; bar.style.background='#E74C3C';
   }} finally {{ btn.disabled = false; }}
 }}
+
+// ── Event delegation for content area ──
+document.getElementById('content').addEventListener('click', function(e) {{
+  var el = e.target.closest('[data-action]');
+  if(!el) return;
+  var action = el.dataset.action;
+  var dk = el.dataset.dk;
+  e.stopPropagation();
+  if(action === 'addtag') addTagToSession(dk);
+  else if(action === 'rmtag') removeTag(dk, el.dataset.name);
+  else if(action === 'share') shareSession(dk);
+}});
 
 // ── Init ──
 renderGallery();
