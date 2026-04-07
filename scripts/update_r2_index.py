@@ -232,7 +232,8 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .stat-badge{{font-size:0.8em;color:#666;white-space:nowrap}}
 
 /* ── Filters ── */
-.filters{{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap}}
+.filters{{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}}
+.filter-sep{{width:1px;height:20px;background:#333;margin:0 4px;flex-shrink:0}}
 .chip{{padding:5px 14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;
   color:#999;font-size:0.8em;cursor:pointer;transition:all .15s;white-space:nowrap}}
 .chip:hover{{border-color:#555;color:#ddd}}
@@ -358,13 +359,7 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 </div>
 
 <!-- Filters -->
-<div class="filters" id="filters">
-  <span class="chip active" data-filter="all">All</span>
-  <span class="chip" data-filter="serve">Serves</span>
-  <span class="chip" data-filter="forehand">Forehands</span>
-  <span class="chip" data-filter="backhand">Backhands</span>
-  <span class="chip" data-filter="recent">This Week</span>
-</div>
+<div class="filters" id="filters"></div>
 
 <!-- Processing Banner (populated by JS) -->
 <div class="proc-banner" id="procBanner" style="display:none"></div>
@@ -535,11 +530,15 @@ function fmtDur(s) {{
 
 function matchesFilter(v) {{
   if(currentFilter==='all') return true;
-  if(currentFilter==='recent') {{
-    var d = parseDate(v.created);
-    return d && (Date.now()-d.getTime()) < 7*86400000;
+  // Shot type filter
+  if(['serve','forehand','backhand'].indexOf(currentFilter) >= 0) {{
+    return (v.breakdown[currentFilter]||0) > 0;
   }}
-  return (v.breakdown[currentFilter]||0) > 0;
+  // Month filter (format: "2026-04")
+  if(currentFilter.match(/^\d{{4}}-\d{{2}}$/)) {{
+    return (v.created||'').substring(0,7) === currentFilter;
+  }}
+  return true;
 }}
 
 function matchesSearch(v) {{
@@ -634,6 +633,34 @@ function renderGallery() {{
 }}
 
 // ── Filters ──
+function buildFilters() {{
+  var months = {{}};
+  var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  VIDEOS.forEach(function(v) {{
+    if(v.created) {{
+      var ym = v.created.substring(0,7);
+      if(!months[ym]) {{
+        var parts = ym.split('-');
+        months[ym] = monthNames[parseInt(parts[1])-1]+' '+parts[0];
+      }}
+    }}
+  }});
+  var sortedMonths = Object.keys(months).sort().reverse();
+
+  var html = '<span class="chip active" data-filter="all">All</span>';
+  html += '<span class="chip" data-filter="serve">Serves</span>';
+  html += '<span class="chip" data-filter="forehand">Forehands</span>';
+  html += '<span class="chip" data-filter="backhand">Backhands</span>';
+  if(sortedMonths.length > 1) {{
+    html += '<span class="filter-sep"></span>';
+    sortedMonths.forEach(function(ym) {{
+      html += '<span class="chip" data-filter="'+ym+'">'+months[ym]+'</span>';
+    }});
+  }}
+  document.getElementById('filters').innerHTML = html;
+}}
+buildFilters();
+
 document.getElementById('filters').addEventListener('click', function(e) {{
   var chip = e.target.closest('.chip');
   if(!chip) return;
