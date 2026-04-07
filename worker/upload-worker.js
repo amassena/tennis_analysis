@@ -209,6 +209,14 @@ async function handleApi(request, env, path) {
       return await handleQueue(env, cors);
     }
 
+    if (path === '/api/tags' && request.method === 'GET') {
+      return await handleGetTags(env, cors);
+    }
+
+    if (path === '/api/tags' && request.method === 'POST') {
+      return await handleSetTags(request, env, cors);
+    }
+
     return jsonResponse({ error: 'Not found' }, 404, cors);
   } catch (err) {
     return jsonResponse({ error: err.message }, 500, cors);
@@ -400,6 +408,53 @@ async function handleQueue(env, cors) {
   items.sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
 
   return jsonResponse({ queue: items }, 200, cors);
+}
+
+// ---------------------------------------------------------------------------
+// Tags — per-session people tagging stored in highlights/tags.json
+// ---------------------------------------------------------------------------
+
+async function handleGetTags(env, cors) {
+  try {
+    const obj = await env.BUCKET.get('highlights/tags.json');
+    if (obj) {
+      return jsonResponse(await obj.json(), 200, cors);
+    }
+  } catch {}
+  return jsonResponse({}, 200, cors);
+}
+
+async function handleSetTags(request, env, cors) {
+  const body = await request.json();
+  const { password, date, tags } = body;
+
+  if (!password || password !== env.UPLOAD_PASSWORD) {
+    return jsonResponse({ error: 'Invalid password' }, 403, cors);
+  }
+
+  if (!date || !Array.isArray(tags)) {
+    return jsonResponse({ error: 'date and tags[] required' }, 400, cors);
+  }
+
+  // Read existing
+  let allTags = {};
+  try {
+    const obj = await env.BUCKET.get('highlights/tags.json');
+    if (obj) allTags = await obj.json();
+  } catch {}
+
+  // Update
+  if (tags.length === 0) {
+    delete allTags[date];
+  } else {
+    allTags[date] = tags;
+  }
+
+  await env.BUCKET.put('highlights/tags.json', JSON.stringify(allTags), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return jsonResponse({ ok: true, tags: allTags }, 200, cors);
 }
 
 // ---------------------------------------------------------------------------

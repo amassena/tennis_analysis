@@ -274,7 +274,21 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .session-header:hover .share-icon{{opacity:1}}
 .session-date{{font-size:1.1em;font-weight:700;color:#fff}}
 .session-stats{{font-size:0.8em;color:#666}}
-.share-icon{{font-size:0.8em;opacity:0.3;transition:opacity .15s;margin-left:auto}}
+.share-icon{{font-size:0.8em;opacity:0.3;transition:opacity .15s}}
+.session-tags{{display:flex;gap:4px;align-items:center;margin-left:auto}}
+.tag{{padding:2px 8px;background:#2a2a2a;border-radius:12px;font-size:.72em;color:#ccc;
+  display:inline-flex;align-items:center;gap:4px}}
+.tag .rm{{cursor:pointer;opacity:.5;font-size:1.1em}}.tag .rm:hover{{opacity:1}}
+.add-tag{{padding:2px 8px;background:transparent;border:1px dashed #333;border-radius:12px;
+  font-size:.72em;color:#555;cursor:pointer;transition:all .15s}}
+.add-tag:hover{{border-color:#FF8C00;color:#FF8C00}}
+.tag-input{{width:100px;padding:2px 8px;background:#1a1a1a;border:1px solid #FF8C00;
+  border-radius:12px;font-size:.72em;color:#eee;outline:none}}
+.tag-suggest{{position:absolute;top:100%;left:0;background:#1a1a1a;border:1px solid #333;
+  border-radius:8px;z-index:10;min-width:120px;max-height:150px;overflow-y:auto;display:none}}
+.tag-suggest.show{{display:block}}
+.tag-suggest div{{padding:6px 10px;font-size:.8em;color:#ccc;cursor:pointer}}
+.tag-suggest div:hover{{background:#222;color:#fff}}
 .session.highlighted{{animation:highlightFade 2s ease-out}}
 @keyframes highlightFade{{0%{{background:rgba(255,140,0,.15)}}100%{{background:transparent}}}}
 
@@ -511,6 +525,82 @@ function shareSession(dk) {{
   }});
 }}
 
+// ── Tags ──
+var sessionTags = {{}};
+function loadTags() {{
+  fetch('/api/tags').then(function(r){{return r.json()}}).then(function(d) {{
+    sessionTags = d || {{}};
+    buildFilters();
+    renderGallery();
+  }}).catch(function(){{}});
+}}
+
+function saveTags(dateKey, tags) {{
+  var pwd = localStorage.getItem('upload_pwd');
+  if(!pwd) {{ pwd = prompt('Password:'); if(!pwd) return; localStorage.setItem('upload_pwd', pwd); }}
+  sessionTags[dateKey] = tags;
+  fetch('/api/tags', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    body:JSON.stringify({{password:pwd, date:dateKey, tags:tags}})
+  }}).then(function(r){{return r.json()}}).then(function(d){{
+    if(d.error) {{ localStorage.removeItem('upload_pwd'); alert(d.error); return; }}
+    if(d.tags) sessionTags = d.tags;
+    buildFilters();
+    renderGallery();
+  }}).catch(function(){{}});
+}}
+
+function allPeople() {{
+  var s = {{}};
+  Object.values(sessionTags).forEach(function(arr){{
+    arr.forEach(function(n){{ s[n] = true; }});
+  }});
+  return Object.keys(s).sort();
+}}
+
+function addTagToSession(dateKey) {{
+  var el = document.getElementById('taginput-'+dateKey);
+  if(el) return; // already open
+  var container = document.getElementById('tags-'+dateKey);
+  var wrap = document.createElement('span');
+  wrap.style.position = 'relative';
+  wrap.innerHTML = '<input class="tag-input" id="taginput-'+dateKey+'" placeholder="Name...">'
+    + '<div class="tag-suggest" id="tagsuggest-'+dateKey+'"></div>';
+  container.insertBefore(wrap, container.querySelector('.add-tag'));
+  var inp = wrap.querySelector('input');
+  var suggest = wrap.querySelector('.tag-suggest');
+  inp.focus();
+  inp.addEventListener('input', function() {{
+    var q = inp.value.toLowerCase();
+    var people = allPeople().filter(function(p){{ return p.toLowerCase().indexOf(q)>=0 && (sessionTags[dateKey]||[]).indexOf(p)<0; }});
+    if(q.length>0 && people.length>0) {{
+      suggest.innerHTML = people.map(function(p){{ return '<div data-name="'+p+'">'+p+'</div>'; }}).join('');
+      suggest.classList.add('show');
+    }} else {{ suggest.classList.remove('show'); }}
+  }});
+  suggest.addEventListener('click', function(e) {{
+    var name = e.target.dataset.name;
+    if(name) commitTag(dateKey, name, wrap);
+  }});
+  inp.addEventListener('keydown', function(e) {{
+    if(e.key==='Enter' && inp.value.trim()) {{ commitTag(dateKey, inp.value.trim(), wrap); }}
+    if(e.key==='Escape') {{ wrap.remove(); }}
+  }});
+  inp.addEventListener('blur', function() {{ setTimeout(function(){{ wrap.remove(); }}, 200); }});
+}}
+
+function commitTag(dateKey, name, wrap) {{
+  var tags = (sessionTags[dateKey]||[]).slice();
+  if(tags.indexOf(name)<0) tags.push(name);
+  wrap.remove();
+  saveTags(dateKey, tags);
+}}
+
+function removeTag(dateKey, name) {{
+  var tags = (sessionTags[dateKey]||[]).filter(function(n){{ return n!==name; }});
+  saveTags(dateKey, tags);
+}}
+
 // ── Rendering ──
 var currentFilter = 'all';
 var currentSort = 'recorded-desc';
@@ -586,6 +676,12 @@ function matchesFilter(v) {{
   if(currentFilter.match(/^\d{{4}}-\d{{2}}$/)) {{
     return (v.created||'').substring(0,7) === currentFilter;
   }}
+  // People filter (format: "person:Name")
+  if(currentFilter.indexOf('person:') === 0) {{
+    var name = currentFilter.substring(7);
+    var tags = sessionTags[dateKey(v.created)] || [];
+    return tags.indexOf(name) >= 0;
+  }}
   return true;
 }}
 
@@ -596,6 +692,9 @@ function matchesSearch(v) {{
   if((v.created||'').toLowerCase().includes(q)) return true;
   var dk = formatSessionDate(dateKey(v.created)).toLowerCase();
   if(dk.includes(q)) return true;
+  // Search by tagged people
+  var tags = sessionTags[dateKey(v.created)] || [];
+  for(var i=0; i<tags.length; i++) {{ if(tags[i].toLowerCase().includes(q)) return true; }}
   return false;
 }}
 
@@ -635,10 +734,20 @@ function renderGallery() {{
     var sessionShots = 0;
     vids.forEach(function(v){{ sessionShots += v.shots||0; }});
 
+    var dkTags = sessionTags[dk] || [];
+    var tagsHtml = '<span class="session-tags" id="tags-'+dk+'" onclick="event.stopPropagation()">';
+    dkTags.forEach(function(name) {{
+      tagsHtml += '<span class="tag">'+name+' <span class="rm" onclick="removeTag('+JSON.stringify(dk)+','+JSON.stringify(name)+')">&times;</span></span>';
+    }});
+    // Workaround: JSON.stringify produces double-quoted strings which are safe inside onclick single-quote attrs
+    tagsHtml += '<span class="add-tag" onclick="addTagToSession('+JSON.stringify(dk)+')">+ person</span>';
+    tagsHtml += '</span>';
+
     html += '<div class="session" id="session-'+dk+'">';
-    html += '<div class="session-header" onclick="shareSession('+JSON.stringify(dk)+')" title="Click to copy link">';
+    html += '<div class="session-header" onclick="shareSession('+JSON.stringify(dk)+')" title="Click date to copy link">';
     html += '<span class="session-date">'+formatSessionDate(dk)+'</span>';
     html += '<span class="session-stats">'+vids.length+' video'+(vids.length>1?'s':'')+' / '+sessionShots+' shots</span>';
+    html += tagsHtml;
     html += '<span class="share-icon" id="share-'+dk+'">&#128279;</span>';
     html += '</div>';
     html += '<div class="grid">';
@@ -716,7 +825,21 @@ function buildFilters() {{
       html += '<span class="chip" data-filter="'+ym+'">'+months[ym]+'</span>';
     }});
   }}
+  var people = allPeople();
+  if(people.length > 0) {{
+    html += '<span class="filter-sep"></span>';
+    html += '<span class="filter-label">People</span>';
+    people.forEach(function(name) {{
+      html += '<span class="chip" data-filter="person:'+name+'">'+name+'</span>';
+    }});
+  }}
   document.getElementById('filters').innerHTML = html;
+  // Re-mark active chip if filter is still set
+  if(currentFilter !== 'all') {{
+    var active = document.querySelector('.chip[data-filter="'+currentFilter+'"]');
+    if(active) active.classList.add('active');
+    else {{ var all = document.querySelector('.chip[data-filter="all"]'); if(all) all.classList.add('active'); currentFilter='all'; }}
+  }}
 }}
 buildFilters();
 
@@ -835,6 +958,7 @@ async function startUpload() {{
 
 // ── Init ──
 renderGallery();
+loadTags();
 
 // Deep link to session via hash (e.g. #2026-04-02)
 (function() {{
