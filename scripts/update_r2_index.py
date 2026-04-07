@@ -251,9 +251,12 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card{{background:#141414;border-radius:10px;border:1px solid #222;overflow:hidden;
   cursor:pointer;transition:border-color .2s,transform .15s}}
 .card:hover{{border-color:#FF8C00;transform:translateY(-2px)}}
+.card-thumb-wrap{{position:relative}}
 .card-thumb{{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#1a1a1a}}
 .card-thumb-placeholder{{width:100%;aspect-ratio:16/9;background:#1a1a1a;display:flex;
   align-items:center;justify-content:center;color:#444;font-size:0.85em}}
+.card-id{{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.7);color:#aaa;
+  font-size:.65em;padding:2px 6px;border-radius:4px;font-family:monospace}}
 .card-body{{padding:10px 12px}}
 .card-time{{font-size:0.95em;font-weight:600;color:#eee}}
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
@@ -565,12 +568,13 @@ function renderGallery() {{
         if(bd[st]) bdParts.push(bd[st]+' '+abbrev[st]);
       }});
 
-      var thumbHtml;
+      var thumbInner;
       if(v.has_thumb) {{
-        thumbHtml = '<img class="card-thumb" src="https://media.playfullife.com/thumbs/'+v.id+'.jpg" alt="'+v.id+'" loading="lazy">';
+        thumbInner = '<img class="card-thumb" src="https://media.playfullife.com/thumbs/'+v.id+'.jpg" alt="'+v.id+'" loading="lazy">';
       }} else {{
-        thumbHtml = '<div class="card-thumb-placeholder">'+v.id+'</div>';
+        thumbInner = '<div class="card-thumb-placeholder">'+v.id+'</div>';
       }}
+      var thumbHtml = '<div class="card-thumb-wrap">'+thumbInner+'<span class="card-id">'+v.id+'</span></div>';
 
       var linksHtml = '';
       v.links.forEach(function(lk) {{
