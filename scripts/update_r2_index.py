@@ -233,7 +233,17 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 
 /* ── Filters ── */
 .filters{{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}}
-.filter-sep{{width:1px;height:20px;background:#333;margin:0 4px;flex-shrink:0}}
+.filter-sep{{width:1px;height:20px;background:#333;margin:0 6px;flex-shrink:0}}
+.filter-label{{font-size:.7em;color:#555;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}}
+.active-filter{{display:none;align-items:center;gap:6px;margin-left:auto;padding:4px 10px 4px 12px;
+  background:#FF8C00;border-radius:20px;font-size:.78em;color:#fff;font-weight:600}}
+.active-filter.show{{display:flex}}
+.active-filter .clear{{background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;
+  font-size:1.1em;line-height:1;padding:0 0 0 4px}}
+.active-filter .clear:hover{{color:#fff}}
+.sort-select{{margin-left:auto;padding:5px 10px;background:#1a1a1a;border:1px solid #2a2a2a;
+  border-radius:8px;color:#999;font-size:.78em;cursor:pointer;outline:none}}
+.sort-select:focus{{border-color:#FF8C00}}
 .chip{{padding:5px 14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:20px;
   color:#999;font-size:0.8em;cursor:pointer;transition:all .15s;white-space:nowrap}}
 .chip:hover{{border-color:#555;color:#ddd}}
@@ -360,6 +370,17 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 
 <!-- Filters -->
 <div class="filters" id="filters"></div>
+<div class="filters" style="padding-top:0">
+  <div class="active-filter" id="activeFilter"><span id="activeFilterText"></span><button class="clear" onclick="clearFilter()">&times;</button></div>
+  <select class="sort-select" id="sortSelect" onchange="changeSort(this.value)">
+    <option value="recorded-desc">Date Recorded (newest)</option>
+    <option value="recorded-asc">Date Recorded (oldest)</option>
+    <option value="shots-desc">Most Shots</option>
+    <option value="shots-asc">Fewest Shots</option>
+    <option value="duration-desc">Longest</option>
+    <option value="duration-asc">Shortest</option>
+  </select>
+</div>
 
 <!-- Processing Banner (populated by JS) -->
 <div class="proc-banner" id="procBanner" style="display:none"></div>
@@ -492,7 +513,34 @@ function shareSession(dk) {{
 
 // ── Rendering ──
 var currentFilter = 'all';
+var currentSort = 'recorded-desc';
 var searchQuery = '';
+
+function clearFilter() {{
+  currentFilter = 'all';
+  document.querySelectorAll('.chip').forEach(function(c){{c.classList.remove('active')}});
+  var allChip = document.querySelector('.chip[data-filter="all"]');
+  if(allChip) allChip.classList.add('active');
+  updateActiveFilter();
+  renderGallery();
+}}
+
+function changeSort(val) {{
+  currentSort = val;
+  renderGallery();
+}}
+
+function updateActiveFilter() {{
+  var el = document.getElementById('activeFilter');
+  var txt = document.getElementById('activeFilterText');
+  if(currentFilter === 'all') {{
+    el.classList.remove('show');
+  }} else {{
+    el.classList.add('show');
+    var label = document.querySelector('.chip[data-filter="'+currentFilter+'"]');
+    txt.textContent = label ? label.textContent : currentFilter;
+  }}
+}}
 
 function parseDate(s) {{
   if(!s) return null;
@@ -553,7 +601,15 @@ function matchesSearch(v) {{
 
 function renderGallery() {{
   var filtered = VIDEOS.filter(function(v) {{ return matchesFilter(v) && matchesSearch(v); }});
-  filtered.sort(function(a,b) {{ return (b.created||'').localeCompare(a.created||''); }});
+  var sortFns = {{
+    'recorded-desc': function(a,b){{ return (b.created||'').localeCompare(a.created||''); }},
+    'recorded-asc': function(a,b){{ return (a.created||'').localeCompare(b.created||''); }},
+    'shots-desc': function(a,b){{ return (b.shots||0)-(a.shots||0); }},
+    'shots-asc': function(a,b){{ return (a.shots||0)-(b.shots||0); }},
+    'duration-desc': function(a,b){{ return (b.duration||0)-(a.duration||0); }},
+    'duration-asc': function(a,b){{ return (a.duration||0)-(b.duration||0); }},
+  }};
+  filtered.sort(sortFns[currentSort] || sortFns['recorded-desc']);
 
   // Group by date
   var sessions = {{}};
@@ -648,11 +704,14 @@ function buildFilters() {{
   var sortedMonths = Object.keys(months).sort().reverse();
 
   var html = '<span class="chip active" data-filter="all">All</span>';
+  html += '<span class="filter-sep"></span>';
+  html += '<span class="filter-label">Type</span>';
   html += '<span class="chip" data-filter="serve">Serves</span>';
   html += '<span class="chip" data-filter="forehand">Forehands</span>';
   html += '<span class="chip" data-filter="backhand">Backhands</span>';
-  if(sortedMonths.length > 1) {{
+  if(sortedMonths.length > 0) {{
     html += '<span class="filter-sep"></span>';
+    html += '<span class="filter-label">Month</span>';
     sortedMonths.forEach(function(ym) {{
       html += '<span class="chip" data-filter="'+ym+'">'+months[ym]+'</span>';
     }});
@@ -667,6 +726,7 @@ document.getElementById('filters').addEventListener('click', function(e) {{
   currentFilter = chip.dataset.filter;
   document.querySelectorAll('.chip').forEach(function(c){{c.classList.remove('active')}});
   chip.classList.add('active');
+  updateActiveFilter();
   renderGallery();
 }});
 
