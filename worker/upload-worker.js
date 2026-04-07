@@ -98,12 +98,14 @@ async function handleAsset(request, env, path) {
   headers.set('accept-ranges', 'bytes');
   headers.set('access-control-allow-origin', '*');
 
-  // Cache: videos 24h, html 5min, other 1h
-  const ct = headers.get('content-type') || '';
+  // Cache: videos 24h, html always revalidate, images 1h
+  const ct = (headers.get('content-type') || '').toLowerCase();
+  const isHtml = ct.includes('html') || key.endsWith('.html') || key === 'highlights/';
   if (ct.startsWith('video/')) {
     headers.set('cache-control', 'public, max-age=86400');
-  } else if (ct.includes('html')) {
-    headers.set('cache-control', 'public, max-age=300');
+  } else if (isHtml) {
+    headers.set('cache-control', 'no-store, no-cache, must-revalidate, max-age=0');
+    headers.set('cdn-cache-control', 'no-store');
   } else {
     headers.set('cache-control', 'public, max-age=3600');
   }
@@ -126,6 +128,12 @@ async function handleAsset(request, env, path) {
 
   // Full response → 200
   headers.set('content-length', String(obj.size));
+  // Ensure cache-control is set (explicitly set after all other header manipulation)
+  if (isHtml) {
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
+  }
   return new Response(obj.body, { status: 200, headers });
 }
 

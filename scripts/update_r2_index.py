@@ -68,11 +68,11 @@ def upload_thumbnail(client, vid):
         client.upload(thumb, f'highlights/thumbs/{vid}.jpg', content_type='image/jpeg')
 
 
-def get_video_metadata(vid):
-    """Gather metadata for a video from detection JSON and raw MOV."""
+def get_video_metadata(vid, r2_client=None):
+    """Gather metadata for a video from detection JSON, R2 meta.json, or raw MOV."""
     info = {}
 
-    # Detection JSON
+    # 1. Local detection JSON
     for det_name in [f'{vid}_fused.json', f'{vid}_fused_detections.json']:
         det_path = os.path.join(PROJECT_ROOT, 'detections', det_name)
         if os.path.exists(det_path):
@@ -86,27 +86,42 @@ def get_video_metadata(vid):
                 st = det.get('shot_type', 'unknown')
                 types[st] = types.get(st, 0) + 1
             info['breakdown'] = types
-            # Check for embedded creation date in detection JSON
             if d.get('created'):
                 info['created'] = d['created']
             break
 
-    # Creation date from raw MOV
-    raw_path = os.path.join(PROJECT_ROOT, 'raw', f'{vid}.MOV')
-    if os.path.exists(raw_path):
+    # 2. R2 meta.json (uploaded by GPU worker — has metadata even when local files missing)
+    if not info.get('shots') and r2_client:
+        meta_key = f'highlights/{vid}/meta.json'
         try:
-            r = subprocess.run(
-                ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', raw_path],
-                capture_output=True, text=True, timeout=10
-            )
-            tags = json.loads(r.stdout).get('format', {}).get('tags', {})
-            cd = tags.get('com.apple.quicktime.creationdate', tags.get('creation_time', ''))
-            if cd:
-                info['created'] = cd
+            obj = r2_client.client.get_object(
+                Bucket=r2_client.bucket_name, Key=meta_key)
+            meta = json.loads(obj['Body'].read())
+            info['duration'] = meta.get('duration', 0)
+            info['shots'] = meta.get('shots', 0)
+            info['breakdown'] = meta.get('breakdown', {})
+            if meta.get('created'):
+                info['created'] = meta['created']
         except Exception:
             pass
 
-    # Fallback: preprocessed file mod time
+    # 3. Creation date from raw MOV
+    if 'created' not in info:
+        raw_path = os.path.join(PROJECT_ROOT, 'raw', f'{vid}.MOV')
+        if os.path.exists(raw_path):
+            try:
+                r = subprocess.run(
+                    ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_format', raw_path],
+                    capture_output=True, text=True, timeout=10
+                )
+                tags = json.loads(r.stdout).get('format', {}).get('tags', {})
+                cd = tags.get('com.apple.quicktime.creationdate', tags.get('creation_time', ''))
+                if cd:
+                    info['created'] = cd
+            except Exception:
+                pass
+
+    # 4. Fallback: preprocessed file mod time
     if 'created' not in info:
         pp = os.path.join(PROJECT_ROOT, 'preprocessed', f'{vid}.mp4')
         if os.path.exists(pp):
@@ -773,7 +788,7 @@ def update_index():
     # Gather metadata + ensure thumbnails
     all_meta = {}
     for vid in videos:
-        meta = get_video_metadata(vid)
+        meta = get_video_metadata(vid, r2_client=c)
         meta['files'] = sorted(videos[vid])
         has_thumb = generate_thumbnail(vid)
         if has_thumb:

@@ -348,20 +348,18 @@ def generate_thumbnail(video_path: Path, output_path: Path = None) -> Path:
     return output_path
 
 
-def upload_thumbnail_to_r2(thumb_path: Path, video_name: str) -> bool:
-    """Upload thumbnail to R2 storage."""
+def _get_r2_client():
+    """Get boto3 R2 client and bucket name. Returns (client, bucket) or (None, None)."""
     try:
         import boto3
         from botocore.config import Config
     except ImportError:
-        log("boto3 not installed, skipping R2 upload", "WARN")
-        return False
+        log("boto3 not installed", "WARN")
+        return None, None
 
-    # Load R2 credentials from .env
     env_path = PROJECT_ROOT / ".env"
     if not env_path.exists():
-        log("No .env file for R2 credentials", "WARN")
-        return False
+        return None, None
 
     env_vars = {}
     with open(env_path) as f:
@@ -377,26 +375,39 @@ def upload_thumbnail_to_r2(thumb_path: Path, video_name: str) -> bool:
     bucket = env_vars.get("R2_BUCKET", "tennis-videos")
 
     if not all([account_id, access_key, secret_key]):
-        log("R2 credentials not configured in .env", "WARN")
+        return None, None
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+        region_name="us-east-1",
+    )
+    return client, bucket
+
+
+def _upload_file_to_r2(local_path: str, r2_key: str, content_type: str = "application/octet-stream") -> bool:
+    """Upload a file to R2. Returns True on success."""
+    client, bucket = _get_r2_client()
+    if not client:
         return False
-
     try:
-        client = boto3.client(
-            "s3",
-            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-            region_name="us-east-1",
-        )
-
-        key = f"thumbs/{video_name}.jpg"
-        client.upload_file(str(thumb_path), bucket, key, ExtraArgs={"ContentType": "image/jpeg"})
-        log(f"Uploaded thumbnail to R2: {key}")
+        client.upload_file(str(local_path), bucket, r2_key, ExtraArgs={"ContentType": content_type})
         return True
     except Exception as e:
-        log(f"R2 upload failed: {e}", "WARN")
+        log(f"R2 upload failed ({r2_key}): {e}", "WARN")
         return False
+
+
+def upload_thumbnail_to_r2(thumb_path: Path, video_name: str) -> bool:
+    """Upload thumbnail to R2 storage."""
+    key = f"thumbs/{video_name}.jpg"
+    if _upload_file_to_r2(str(thumb_path), key, "image/jpeg"):
+        log(f"Uploaded thumbnail to R2: {key}")
+        return True
+    return False
 
 
 def run_pipeline(video_path: Path) -> Path:
@@ -501,6 +512,51 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
         if result.returncode != 0:
             raise RuntimeError(f"Shot detection failed: {result.stderr}")
     stage("detection", 100, "Shot detection complete")
+
+    # Step 5b: Upload video metadata to R2 (so gallery index works from any machine)
+    try:
+        det_path = DETECTIONS_DIR / f"{video_name}_fused_detections.json"
+        if not det_path.exists():
+            det_path = DETECTIONS_DIR / f"{video_name}_fused.json"
+        if det_path.exists():
+            import json as _json
+            with open(det_path) as _f:
+                det_data = _json.load(_f)
+            # Extract creation date from raw video
+            created = ""
+            raw_path = RAW_DIR / f"{video_name}.MOV"
+            if not raw_path.exists():
+                raw_path = RAW_DIR / f"{video_name}.mov"
+            if raw_path.exists():
+                try:
+                    r = subprocess.run(
+                        ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(raw_path)],
+                        capture_output=True, text=True, timeout=10)
+                    tags = _json.loads(r.stdout).get("format", {}).get("tags", {})
+                    created = tags.get("com.apple.quicktime.creationdate", tags.get("creation_time", ""))
+                except Exception:
+                    pass
+            meta = {
+                "duration": det_data.get("duration", 0),
+                "shots": len(det_data.get("detections", [])),
+                "breakdown": {},
+                "created": created or det_data.get("created", ""),
+            }
+            for d in det_data.get("detections", []):
+                st = d.get("shot_type", "unknown")
+                meta["breakdown"][st] = meta["breakdown"].get(st, 0) + 1
+            meta_json = _json.dumps(meta).encode()
+            # Upload to R2
+            from pathlib import Path as _P
+            import tempfile as _tf
+            with _tf.NamedTemporaryFile(suffix=".json", delete=False, mode="wb") as mf:
+                mf.write(meta_json)
+                meta_tmp = mf.name
+            _upload_file_to_r2(meta_tmp, f"highlights/{video_name}/meta.json", "application/json")
+            os.unlink(meta_tmp)
+            log(f"Uploaded metadata to R2: highlights/{video_name}/meta.json")
+    except Exception as e:
+        log(f"Metadata upload failed (non-fatal): {e}", "WARN")
 
     # Step 6: Export videos and upload to R2
     log("Step 6: Exporting videos to R2")
