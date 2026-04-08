@@ -17,17 +17,18 @@
  *   POST /api/status/:id/update    → update processing status (auth)
  *   GET  /api/queue                → list all uploads and their status
  *
- *   playfullife.com/*              → redirect to media.playfullife.com
+ *   playfullife.com/*              → redirect to tennis.playfullife.com
+ *   media.playfullife.com/*        → redirect to tennis.playfullife.com
  */
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Redirect bare domain to media subdomain
-    if (url.hostname === 'playfullife.com' || url.hostname === 'www.playfullife.com') {
+    // Redirect bare domain and legacy media subdomain to tennis subdomain
+    if (url.hostname === 'playfullife.com' || url.hostname === 'www.playfullife.com' || url.hostname === 'media.playfullife.com') {
       return Response.redirect(
-        `https://media.playfullife.com${url.pathname}${url.search}`,
+        `https://tennis.playfullife.com${url.pathname}${url.search}`,
         301
       );
     }

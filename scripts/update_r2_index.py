@@ -30,8 +30,8 @@ def generate_thumbnail(vid):
     # index uploads to highlights/thumbs/)
     import urllib.request
     for r2_url in [
-        f'https://media.playfullife.com/thumbs/{vid}.jpg',
-        f'https://media.playfullife.com/highlights/thumbs/{vid}.jpg',
+        f'https://tennis.playfullife.com/thumbs/{vid}.jpg',
+        f'https://tennis.playfullife.com/highlights/thumbs/{vid}.jpg',
     ]:
         try:
             req = urllib.request.Request(r2_url, headers={'User-Agent': 'tennis-index/1.0'})
@@ -436,8 +436,10 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
         <button onclick="setSpeed(2,this)">2x</button>
       </div>
       <div class="frame-group">
-        <button onclick="stepFrame(-1)">&larr;</button>
-        <button onclick="stepFrame(1)">&rarr;</button>
+        <button onclick="stepFrame(-5)" title="-5s">&laquo;</button>
+        <button onclick="stepFrame(-1)" title="-1 frame">&larr;</button>
+        <button onclick="stepFrame(1)" title="+1 frame">&rarr;</button>
+        <button onclick="stepFrame(5)" title="+5s">&raquo;</button>
       </div>
       <span class="time-display" id="timeDisplay">0:00.0</span>
       <button onclick="copyTimeLink()" class="share-btn" id="shareBtn">Copy link at time</button>
@@ -473,7 +475,7 @@ function openPlayer(url, title) {{
     }}, {{once:true}});
   }}
   vid.play().catch(function(){{}});
-  history.replaceState(null,'','?v='+encodeURIComponent(url.replace('https://media.playfullife.com/','')));
+  history.replaceState(null,'','?v='+encodeURIComponent(url.replace('https://tennis.playfullife.com/','')));
 }}
 
 function closePlayer() {{
@@ -487,10 +489,14 @@ function setSpeed(s,btn) {{
   document.querySelectorAll('.speed-group button').forEach(function(b){{b.classList.remove('active')}});
   if(btn)btn.classList.add('active');
 }}
-function stepFrame(dir) {{ vid.pause(); vid.currentTime = Math.max(0, vid.currentTime + dir/60); }}
+function stepFrame(dir) {{
+  vid.pause();
+  if(Math.abs(dir) >= 2) {{ vid.currentTime = Math.max(0, vid.currentTime + dir); }}
+  else {{ vid.currentTime = Math.max(0, vid.currentTime + dir/60); }}
+}}
 
 function copyTimeLink() {{
-  var vKey = vid.src.replace('https://media.playfullife.com/','');
+  var vKey = vid.src.replace('https://tennis.playfullife.com/','');
   var t = Math.round(vid.currentTime*10)/10;
   var link = location.origin+location.pathname+'?v='+encodeURIComponent(vKey)+(t>0?'&t='+t:'');
   navigator.clipboard.writeText(link).then(function(){{
@@ -511,7 +517,7 @@ document.addEventListener('keydown', function(e) {{
 (function(){{
   var p=new URLSearchParams(location.search), v=p.get('v');
   if(v){{var t=parseFloat(p.get('t'));if(t>0)pendingTime=t;
-    openPlayer('https://media.playfullife.com/'+v,v.split('/').pop().replace('.mp4','').replace(/_/g,' '));
+    openPlayer('https://tennis.playfullife.com/'+v,v.split('/').pop().replace('.mp4','').replace(/_/g,' '));
   }}
 }})();
 
@@ -763,7 +769,7 @@ function renderGallery() {{
 
       var thumbInner;
       if(v.has_thumb) {{
-        thumbInner = '<img class="card-thumb" src="https://media.playfullife.com/thumbs/'+v.id+'.jpg" alt="'+v.id+'" loading="lazy">';
+        thumbInner = '<img class="card-thumb" src="https://tennis.playfullife.com/thumbs/'+v.id+'.jpg" alt="'+v.id+'" loading="lazy">';
       }} else {{
         thumbInner = '<div class="card-thumb-placeholder">'+v.id+'</div>';
       }}
@@ -771,7 +777,7 @@ function renderGallery() {{
 
       var linksHtml = '';
       v.links.forEach(function(lk) {{
-        var url = 'https://media.playfullife.com/'+v.id+'/'+lk.file;
+        var url = 'https://tennis.playfullife.com/'+v.id+'/'+lk.file;
         linksHtml += '<a href="'+url+'" data-title="'+lk.label+' \\u2014 '+v.id+'" '
           +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
           +'style="background:'+lk.color+'">'+lk.label+'</a>';
@@ -1051,7 +1057,7 @@ def update_index():
     c.upload(tmp.name, 'highlights/', content_type='text/html')
     os.unlink(tmp.name)
     print(f'Updated index: {len(all_meta)} videos')
-    print('https://media.playfullife.com/')
+    print('https://tennis.playfullife.com/')
 
 
 if __name__ == '__main__':

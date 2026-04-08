@@ -225,7 +225,7 @@ def check_r2_gallery():
     header("R2 Gallery")
     try:
         import urllib.request
-        req = urllib.request.Request("https://media.playfullife.com/",
+        req = urllib.request.Request("https://tennis.playfullife.com/",
                                      headers={"User-Agent": "tennis-healthcheck/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             body = resp.read().decode("utf-8", errors="replace")

@@ -26,7 +26,7 @@ from pathlib import Path
 COORDINATOR_URL = os.environ.get("COORDINATOR_URL", "http://localhost:8080")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "60"))  # seconds
 WORKER_ID = os.environ.get("WORKER_ID", socket.gethostname())
-WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://media.playfullife.com")
+WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://tennis.playfullife.com")
 UPLOAD_PASSWORD = os.environ.get("UPLOAD_PASSWORD", "")
 
 # Project paths (auto-detect)
