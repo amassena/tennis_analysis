@@ -124,8 +124,8 @@ async function handleAsset(request, env, path) {
     return new Response(null, { status: 304, headers });
   }
 
-  // Range response → 206
-  if (obj.range) {
+  // Range response → 206 (skip for downloads — must return 200)
+  if (obj.range && !isDownload) {
     const { offset, length } = obj.range;
     headers.set(
       'content-range',
