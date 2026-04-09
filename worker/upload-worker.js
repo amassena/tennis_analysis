@@ -99,6 +99,13 @@ async function handleAsset(request, env, path) {
   headers.set('accept-ranges', 'bytes');
   headers.set('access-control-allow-origin', '*');
 
+  // Force download when ?dl=1 is present
+  const url = new URL(request.url);
+  if (url.searchParams.get('dl') === '1') {
+    const filename = key.split('/').pop();
+    headers.set('content-disposition', `attachment; filename="${filename}"`);
+  }
+
   // Cache: videos 24h, html always revalidate, images 1h
   const ct = (headers.get('content-type') || '').toLowerCase();
   const isHtml = ct.includes('html') || key.endsWith('.html') || key === 'highlights/';

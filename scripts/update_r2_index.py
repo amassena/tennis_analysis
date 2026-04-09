@@ -312,6 +312,9 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-links a{{color:#fff;text-decoration:none;font-size:0.72em;font-weight:600;
   padding:4px 10px;border-radius:5px;opacity:.9;transition:opacity .15s}}
 .card-links a:hover{{opacity:1}}
+.dl-btn{{display:inline-block;padding:4px 6px;font-size:.68em;color:#888;cursor:pointer;
+  text-decoration:none;opacity:.6;transition:opacity .15s;vertical-align:middle}}
+.dl-btn:hover{{opacity:1;color:#fff}}
 
 /* ── Upload Modal ── */
 .modal-overlay{{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
@@ -443,6 +446,7 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
       </div>
       <span class="time-display" id="timeDisplay">0:00.0</span>
       <button onclick="copyTimeLink()" class="share-btn" id="shareBtn">Copy link at time</button>
+      <button onclick="downloadCurrent()" class="share-btn" style="background:#555!important">Download</button>
     </div>
   </div>
 </div>
@@ -493,6 +497,10 @@ function stepFrame(dir) {{
   vid.pause();
   if(Math.abs(dir) >= 2) {{ vid.currentTime = Math.max(0, vid.currentTime + dir); }}
   else {{ vid.currentTime = Math.max(0, vid.currentTime + dir/60); }}
+}}
+
+function downloadCurrent() {{
+  if(vid.src) window.open(vid.src + (vid.src.includes('?')?'&':'?') + 'dl=1', '_blank');
 }}
 
 function copyTimeLink() {{
@@ -780,7 +788,8 @@ function renderGallery() {{
         var url = 'https://tennis.playfullife.com/'+v.id+'/'+lk.file;
         linksHtml += '<a href="'+url+'" data-title="'+lk.label+' \\u2014 '+v.id+'" '
           +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-          +'style="background:'+lk.color+'">'+lk.label+'</a>';
+          +'style="background:'+lk.color+'">'+lk.label+'</a>'
+          +'<a href="'+url+'?dl=1" class="dl-btn" onclick="event.stopPropagation()" title="Download '+lk.label+'">&#8681;</a>';
       }});
 
       html += '<div class="card" onclick="toggleCard(this)">';
@@ -1011,7 +1020,11 @@ def update_index():
             continue
         parts = k.split('/')
         if len(parts) == 3:
-            videos.setdefault(parts[1], []).append(parts[2])
+            fname = parts[2]
+            # Skip non-video files (meta.json, etc.)
+            if not fname.endswith('.mp4'):
+                continue
+            videos.setdefault(parts[1], []).append(fname)
 
     # Gather metadata + ensure thumbnails
     all_meta = {}
