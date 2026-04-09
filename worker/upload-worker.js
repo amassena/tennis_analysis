@@ -71,8 +71,10 @@ async function handleAsset(request, env, path) {
     return handleHead(env, key);
   }
 
-  // GET — supports range requests for video streaming
-  const rangeHeader = request.headers.get('range');
+  // GET — supports range requests for video streaming (skip for downloads)
+  const reqUrl = new URL(request.url);
+  const isDownload = reqUrl.searchParams.get('dl') === '1';
+  const rangeHeader = isDownload ? null : request.headers.get('range');
   const r2Range = parseRange(rangeHeader);
   const getOpts = {};
   if (r2Range) getOpts.range = r2Range;
@@ -100,8 +102,7 @@ async function handleAsset(request, env, path) {
   headers.set('access-control-allow-origin', '*');
 
   // Force download when ?dl=1 is present
-  const url = new URL(request.url);
-  if (url.searchParams.get('dl') === '1') {
+  if (isDownload) {
     const filename = key.split('/').pop();
     headers.set('content-disposition', `attachment; filename="${filename}"`);
   }

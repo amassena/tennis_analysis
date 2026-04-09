@@ -500,7 +500,7 @@ function stepFrame(dir) {{
 }}
 
 function downloadCurrent() {{
-  if(vid.src) window.open(vid.src + (vid.src.includes('?')?'&':'?') + 'dl=1', '_blank');
+  if(vid.src) location.href = vid.src + (vid.src.includes('?')?'&':'?') + 'dl=1';
 }}
 
 function copyTimeLink() {{
