@@ -499,8 +499,14 @@ function stepFrame(dir) {{
   else {{ vid.currentTime = Math.max(0, vid.currentTime + dir/60); }}
 }}
 
+function dlFile(url) {{
+  var f = document.getElementById('dlframe');
+  if(!f) {{ f = document.createElement('iframe'); f.id='dlframe'; f.style.display='none'; document.body.appendChild(f); }}
+  f.src = url + (url.includes('?')?'&':'?') + 'dl=1';
+}}
+
 function downloadCurrent() {{
-  if(vid.src) location.href = vid.src + (vid.src.includes('?')?'&':'?') + 'dl=1';
+  if(vid.src) dlFile(vid.src);
 }}
 
 function copyTimeLink() {{
@@ -789,7 +795,7 @@ function renderGallery() {{
         linksHtml += '<a href="'+url+'" data-title="'+lk.label+' \\u2014 '+v.id+'" '
           +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
           +'style="background:'+lk.color+'">'+lk.label+'</a>'
-          +'<a href="'+url+'?dl=1" class="dl-btn" onclick="event.stopPropagation()" title="Download '+lk.label+'">&#8681;</a>';
+          +'<span class="dl-btn" data-action="download" data-url="'+url+'" title="Download '+lk.label+'">&#8681;</span>';
       }});
 
       html += '<div class="card" onclick="toggleCard(this)">';
@@ -980,6 +986,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   if(action === 'addtag') addTagToSession(dk);
   else if(action === 'rmtag') removeTag(dk, el.dataset.name);
   else if(action === 'share') shareSession(dk);
+  else if(action === 'download') dlFile(el.dataset.url);
 }});
 
 // ── Init ──
