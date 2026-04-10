@@ -861,7 +861,7 @@ def main():
     parser.add_argument('--after', type=float, default=2.0,
                         help='Seconds after each shot for highlights (default: 2.0)')
     parser.add_argument('--types', nargs='+', default=['all'],
-                        choices=['all', 'timeline', 'highlights', 'grouped', 'rally', 'comparison'],
+                        choices=['all', 'timeline', 'highlights', 'grouped', 'bytype', 'rally', 'comparison'],
                         help='Which export types to generate')
     parser.add_argument('--point-gap', type=float, default=8.0,
                         help='Max inter-shot gap within a point for rally mode (default: 8.0)')
@@ -905,8 +905,8 @@ def main():
 
         export_types = args.types
         if 'all' in export_types:
-            export_types = ['timeline', 'highlights', 'grouped', 'rally']
-            # 'comparison' excluded from 'all' — must be requested explicitly
+            export_types = ['timeline', 'rally', 'bytype']
+            # 'comparison', 'highlights', 'grouped' excluded from 'all' — request explicitly
 
         # Determine speed variants to generate
         speeds = []

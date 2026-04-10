@@ -226,6 +226,11 @@ async function handleApi(request, env, path) {
       return await handleSetTags(request, env, cors);
     }
 
+    const deleteMatch = path.match(/^\/api\/video\/([^/]+)\/delete$/);
+    if (deleteMatch && request.method === 'POST') {
+      return await handleDeleteVideo(request, env, cors, deleteMatch[1]);
+    }
+
     return jsonResponse({ error: 'Not found' }, 404, cors);
   } catch (err) {
     return jsonResponse({ error: err.message }, 500, cors);
@@ -417,6 +422,53 @@ async function handleQueue(env, cors) {
   items.sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
 
   return jsonResponse({ queue: items }, 200, cors);
+}
+
+// ---------------------------------------------------------------------------
+// Delete a video and all its files (videos, thumbnail, meta.json)
+// ---------------------------------------------------------------------------
+
+async function handleDeleteVideo(request, env, cors, vid) {
+  const body = await request.json();
+  const { password } = body;
+
+  if (password !== 'deletevideo') {
+    return jsonResponse({ error: 'Invalid delete password' }, 403, cors);
+  }
+
+  // Sanitize vid: only allow safe characters
+  if (!/^[A-Za-z0-9_-]+$/.test(vid)) {
+    return jsonResponse({ error: 'Invalid video id' }, 400, cors);
+  }
+
+  const deleted = [];
+  // List all files under highlights/{vid}/
+  const listed = await env.BUCKET.list({ prefix: `highlights/${vid}/` });
+  for (const obj of listed.objects) {
+    await env.BUCKET.delete(obj.key);
+    deleted.push(obj.key);
+  }
+  // Also delete thumbnails
+  for (const thumbKey of [`highlights/thumbs/${vid}.jpg`, `thumbs/${vid}.jpg`]) {
+    try { await env.BUCKET.delete(thumbKey); deleted.push(thumbKey); } catch {}
+  }
+
+  // Append to deletion log
+  let log = [];
+  try {
+    const logObj = await env.BUCKET.get('highlights/deleted.json');
+    if (logObj) log = await logObj.json();
+  } catch {}
+  log.push({
+    video_id: vid,
+    deleted_at: new Date().toISOString(),
+    files_removed: deleted.length,
+  });
+  await env.BUCKET.put('highlights/deleted.json', JSON.stringify(log), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return jsonResponse({ ok: true, deleted: deleted.length, files: deleted }, 200, cors);
 }
 
 // ---------------------------------------------------------------------------

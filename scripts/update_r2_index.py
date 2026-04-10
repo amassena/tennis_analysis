@@ -179,8 +179,8 @@ def build_index_html(videos_meta):
         'backhands', 'backhands_slowmo',
         'serves', 'serves_slowmo',
         'volleys', 'volleys_slowmo',
-        'grouped', 'grouped_slowmo',
         'highlights', 'highlights_slowmo',
+        'grouped', 'grouped_slowmo',  # legacy: shown only if no per-type files exist
         'comparisons',
     ]
 
@@ -195,15 +195,22 @@ def build_index_html(videos_meta):
             key = f.replace(vid + '_', '').replace('.mp4', '')
             file_keys[key] = f
 
+        # Hide legacy 'grouped' files if any per-type files exist (cleaner UX)
+        has_per_type = any(k in file_keys for k in
+                           ['forehands', 'backhands', 'serves', 'volleys'])
+        skip_keys = set()
+        if has_per_type:
+            skip_keys.update(['grouped', 'grouped_slowmo', 'highlights', 'highlights_slowmo'])
+
         links = []
         for key in link_order:
-            if key not in file_keys:
+            if key not in file_keys or key in skip_keys:
                 continue
             f = file_keys[key]
             label, color = label_map.get(key, (key, '#5DADE2'))
             links.append({'key': key, 'file': f, 'label': label, 'color': color})
         for key, f in file_keys.items():
-            if key not in link_order:
+            if key not in link_order and key not in skip_keys:
                 label, color = label_map.get(key, (key, '#5DADE2'))
                 links.append({'key': key, 'file': f, 'label': label, 'color': color})
 
@@ -224,6 +231,7 @@ def build_index_html(videos_meta):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tennis Highlights</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23dbf757' stroke='%23a8c93f' stroke-width='2'/%3E%3Cpath d='M 8 35 Q 50 50 8 65' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3Cpath d='M 92 35 Q 50 50 92 65' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#eee}}
@@ -319,14 +327,22 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-time{{font-size:0.95em;font-weight:600;color:#eee}}
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
 .card-breakdown{{font-size:0.75em;color:#999;margin-top:3px}}
-.card-links{{display:none;flex-wrap:wrap;gap:4px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
+.card-links{{display:none;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
 .card.expanded .card-links{{display:flex}}
-.card-links a{{color:#fff;text-decoration:none;font-size:0.72em;font-weight:600;
-  padding:4px 10px;border-radius:5px;opacity:.9;transition:opacity .15s}}
-.card-links a:hover{{opacity:1}}
+.link-row{{display:flex;align-items:center;gap:6px}}
+.link-row a.play-btn{{flex:1;color:#fff;text-decoration:none;font-size:0.74em;font-weight:600;
+  padding:5px 10px;border-radius:5px;opacity:.9;transition:opacity .15s}}
+.link-row a.play-btn:hover{{opacity:1}}
+.link-row a.slow-btn{{color:#aaa;text-decoration:none;font-size:.65em;font-weight:600;
+  padding:3px 8px;border-radius:4px;background:#2a2a2a;border:1px solid #333;
+  text-transform:uppercase;letter-spacing:.05em;transition:all .15s}}
+.link-row a.slow-btn:hover{{color:#fff;background:#3a3a3a;border-color:#555}}
 .dl-btn{{display:inline-block;padding:4px 6px;font-size:.68em;color:#888;cursor:pointer;
   text-decoration:none;opacity:.6;transition:opacity .15s;vertical-align:middle}}
 .dl-btn:hover{{opacity:1;color:#fff}}
+.del-btn{{display:inline-block;padding:6px 10px;font-size:.78em;color:#666;cursor:pointer;
+  text-align:center;border-top:1px solid #222;margin-top:4px;opacity:.5;transition:all .15s}}
+.del-btn:hover{{opacity:1;color:#E74C3C}}
 
 /* ── Upload Modal ── */
 .modal-overlay{{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
@@ -515,6 +531,23 @@ function dlFile(url) {{
   var f = document.getElementById('dlframe');
   if(!f) {{ f = document.createElement('iframe'); f.id='dlframe'; f.style.display='none'; document.body.appendChild(f); }}
   f.src = url + (url.includes('?')?'&':'?') + 'dl=1';
+}}
+
+function deleteVideo(vid) {{
+  if(!confirm('Permanently delete '+vid+' and all its files?')) return;
+  var pwd = prompt('Enter delete password:');
+  if(!pwd) return;
+  fetch('/api/video/'+vid+'/delete', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    body:JSON.stringify({{password:pwd}})
+  }}).then(function(r){{return r.json()}}).then(function(d) {{
+    if(d.error) {{ alert('Delete failed: '+d.error); return; }}
+    alert('Deleted '+vid+' ('+d.deleted+' files removed)');
+    // Remove from local data and re-render
+    VIDEOS = VIDEOS.filter(function(v){{ return v.id !== vid; }});
+    buildFilters();
+    renderGallery();
+  }}).catch(function(e){{ alert('Error: '+e); }});
 }}
 
 function downloadCurrent() {{
@@ -801,13 +834,39 @@ function renderGallery() {{
       }}
       var thumbHtml = '<div class="card-thumb-wrap">'+thumbInner+'<span class="card-id">'+v.id+'</span></div>';
 
-      var linksHtml = '';
+      // Group links by base type (e.g. "rally" + "rally_slowmo" → one row)
+      var groups = {{}};
+      var groupOrder = [];
       v.links.forEach(function(lk) {{
-        var url = 'https://tennis.playfullife.com/'+v.id+'/'+lk.file;
-        linksHtml += '<a href="'+url+'" data-title="'+lk.label+' \\u2014 '+v.id+'" '
+        var isSlow = lk.key.endsWith('_slowmo');
+        var baseKey = isSlow ? lk.key.replace('_slowmo','') : lk.key;
+        if(!groups[baseKey]) {{ groups[baseKey] = {{normal:null, slow:null, label:'', color:''}}; groupOrder.push(baseKey); }}
+        if(isSlow) groups[baseKey].slow = lk;
+        else {{ groups[baseKey].normal = lk; groups[baseKey].label = lk.label; groups[baseKey].color = lk.color; }}
+        if(!groups[baseKey].label) {{ groups[baseKey].label = lk.label.replace(' Slow-Mo',''); groups[baseKey].color = lk.color; }}
+      }});
+
+      var linksHtml = '';
+      groupOrder.forEach(function(baseKey) {{
+        var g = groups[baseKey];
+        var primary = g.normal || g.slow;
+        var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
+        linksHtml += '<div class="link-row">';
+        linksHtml += '<a href="'+primaryUrl+'" class="play-btn" data-title="'+g.label+' \\u2014 '+v.id+'" '
           +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-          +'style="background:'+lk.color+'">'+lk.label+'</a>'
-          +'<span class="dl-btn" data-action="download" data-url="'+url+'" title="Download '+lk.label+'">&#8681;</span>';
+          +'style="background:'+g.color+'">'+g.label+'</a>';
+        if(g.normal) {{
+          var nUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.normal.file;
+          linksHtml += '<span class="dl-btn" data-action="download" data-url="'+nUrl+'" title="Download">&#8681;</span>';
+        }}
+        if(g.slow) {{
+          var sUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.slow.file;
+          linksHtml += '<a href="'+sUrl+'" class="slow-btn" data-title="'+g.label+' (Slow-Mo) \\u2014 '+v.id+'" '
+            +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
+            +'title="Slow Motion">slow</a>';
+          linksHtml += '<span class="dl-btn" data-action="download" data-url="'+sUrl+'" title="Download Slow-Mo">&#8681;</span>';
+        }}
+        linksHtml += '</div>';
       }});
 
       html += '<div class="card" onclick="toggleCard(this)">';
@@ -819,7 +878,9 @@ function renderGallery() {{
       if(v.shots) html += '<span>'+v.shots+' shots</span>';
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
-      html += '<div class="card-links">'+linksHtml+'</div>';
+      html += '<div class="card-links">'+linksHtml
+        +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
+        +'</div>';
       html += '</div></div>';
     }});
 
@@ -999,6 +1060,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'rmtag') removeTag(dk, el.dataset.name);
   else if(action === 'share') shareSession(dk);
   else if(action === 'download') dlFile(el.dataset.url);
+  else if(action === 'delete') deleteVideo(el.dataset.vid);
 }});
 
 // ── Init ──
