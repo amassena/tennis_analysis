@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from .state import StateBackend, VideoJob, VideoStatus, ProcessingStage
 
 # R2 Configuration
-R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "https://media.playfullife.com")
+R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "https://tennis.playfullife.com")
 from .state_sqlite import SQLiteStateBackend
 
 # Configuration

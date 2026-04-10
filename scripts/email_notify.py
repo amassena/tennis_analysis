@@ -311,7 +311,7 @@ Duration: {duration_str}
 """
 
     # SMS with just the gallery link
-    gallery_url = "https://media.playfullife.com/"
+    gallery_url = "https://tennis.playfullife.com/"
     sms_upload_complete(video_name, gallery_url)
     return send_email(subject, body, html_body)
 

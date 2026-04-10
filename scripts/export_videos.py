@@ -759,7 +759,7 @@ def upload_to_r2(local_path, remote_key):
     from storage.r2_client import R2Client
     client = R2Client()
     client.upload(local_path, remote_key)
-    public_url = f"https://media.playfullife.com/{remote_key}"
+    public_url = f"https://tennis.playfullife.com/{remote_key}"
     print(f"  Public URL: {public_url}")
     return public_url
 
