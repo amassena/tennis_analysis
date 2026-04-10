@@ -692,6 +692,94 @@ def export_highlights_grouped(video_path, det_data, output_path,
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def export_by_shot_type(video_path, det_data, export_dir, video_name,
+                        width, height, duration, fps=60, before=2.0, after=2.0,
+                        speed=1.0):
+    """Export separate video for each shot type (forehands.mp4, backhands.mp4, etc.).
+
+    Volleys (forehand_volley + backhand_volley) are combined into a single volleys video.
+    Returns list of output file paths.
+    """
+    label = " (slow motion)" if speed < 1.0 else ""
+    suffix = "_slowmo" if speed < 1.0 else ""
+    print(f"\nExporting individual shot type videos{label}...")
+
+    detections = [d for d in det_data['detections']
+                  if d.get('shot_type', 'unknown_shot') not in EXCLUDED_FROM_HIGHLIGHTS]
+
+    # Group detections — combine volley types
+    groups = {}
+    for det in detections:
+        st = det.get('shot_type', 'unknown_shot')
+        if st in ('forehand_volley', 'backhand_volley'):
+            key = 'volleys'
+        elif st == 'overhead':
+            key = 'volleys'  # group with volleys for now
+        else:
+            key = st
+        groups.setdefault(key, []).append(det)
+
+    output_names = {
+        'forehand': 'forehands',
+        'backhand': 'backhands',
+        'serve': 'serves',
+        'volleys': 'volleys',
+        'unknown_shot': 'other',
+    }
+
+    title_labels = {
+        'forehand': 'FOREHANDS',
+        'backhand': 'BACKHANDS',
+        'serve': 'SERVES',
+        'volleys': 'VOLLEYS',
+        'unknown_shot': 'OTHER SHOTS',
+    }
+
+    exported = []
+    for shot_key in ['forehand', 'backhand', 'serve', 'volleys', 'unknown_shot']:
+        if shot_key not in groups:
+            continue
+
+        group_dets = groups[shot_key]
+        if len(group_dets) < 2:
+            continue  # skip types with < 2 shots
+
+        name = output_names.get(shot_key, shot_key)
+        title = title_labels.get(shot_key, shot_key.upper())
+        count = len(group_dets)
+        out_path = os.path.join(export_dir, f"{video_name}_{name}{suffix}.mp4")
+        print(f"  {title}: {count} shots -> {os.path.basename(out_path)}")
+
+        tmpdir = tempfile.mkdtemp(prefix=f'tennis_{name}_')
+        all_paths = []
+
+        try:
+            # Title card
+            title_path = os.path.join(tmpdir, "title.mp4")
+            title_text = f"{title}  ({count})"
+            if create_title_card(title_text, width, height, 2.0, title_path, fps=fps,
+                                no_audio=(speed != 1.0)):
+                all_paths.append(title_path)
+
+            segments = compute_segments(group_dets, duration, before, after)
+
+            for i, seg in enumerate(segments):
+                seg_path = os.path.join(tmpdir, f"seg_{i:03d}.mp4")
+                seg_dur = seg['end'] - seg['start']
+                if extract_segment(video_path, seg['start'], seg_dur, seg_path, fps=fps,
+                                   speed=speed):
+                    all_paths.append(seg_path)
+
+            if len(all_paths) > 1 and concat_videos(all_paths, out_path, reencode=True):
+                size_mb = os.path.getsize(out_path) / (1024 * 1024)
+                print(f"    Saved: {os.path.basename(out_path)} ({size_mb:.0f}MB)")
+                exported.append(out_path)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    return exported
+
+
 def export_rally_points(video_path, det_data, output_path,
                          width, height, duration, fps=60,
                          point_gap=8.0, before=3.5, after=4.5, speed=1.0):
@@ -858,6 +946,14 @@ def main():
                 )
                 if os.path.exists(out):
                     exported_files.append(out)
+
+            if 'bytype' in export_types:
+                bytype_files = export_by_shot_type(
+                    video_path, det_data, export_dir, video_name,
+                    width, height, duration, fps=fps,
+                    before=args.before, after=args.after, speed=speed
+                )
+                exported_files.extend(bytype_files)
 
             if 'rally' in export_types:
                 out = f"{export_dir}/{video_name}_rally{suffix}.mp4"
