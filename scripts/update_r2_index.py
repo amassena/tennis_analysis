@@ -331,20 +331,26 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-time{{font-size:0.95em;font-weight:600;color:#eee}}
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
 .card-breakdown{{font-size:0.75em;color:#999;margin-top:3px}}
-.card-coach{{display:none;margin-top:8px;padding:10px 12px;background:#0f1a14;
-  border:1px solid #1e3624;border-radius:6px;font-size:.78em;color:#ccc}}
+.card-coach{{display:none;margin-top:10px;padding:14px 16px;background:#161a17;
+  border-left:3px solid #5ed694;border-radius:4px;font-size:.88em;color:#e5e5e5;
+  line-height:1.5}}
 .card.expanded .card-coach{{display:block}}
-.coach-head{{color:#5ed694;font-weight:700;margin-bottom:4px;font-size:.9em}}
-.coach-headline{{font-style:italic;color:#aaa;margin-bottom:8px}}
-.coach-section{{margin-top:8px}}
-.coach-section-title{{color:#8ae6ae;font-size:.78em;text-transform:uppercase;
-  letter-spacing:.05em;margin-bottom:3px}}
-.coach-item{{margin:3px 0 3px 12px;line-height:1.35}}
-.coach-item b{{color:#e0e0e0}}
-.coach-drill{{margin-top:8px;padding:8px;background:rgba(94,214,148,.08);
-  border-left:2px solid #5ed694;border-radius:3px;color:#ddd}}
-.coach-loading{{color:#666;font-style:italic}}
-.coach-none{{color:#555;font-size:.75em;font-style:italic}}
+.coach-head{{color:#5ed694;font-weight:700;margin-bottom:6px;font-size:.95em;
+  text-transform:uppercase;letter-spacing:.04em}}
+.coach-headline{{color:#f5f5f5;font-weight:500;margin-bottom:12px;font-size:1.02em;
+  line-height:1.4}}
+.coach-section{{margin-top:12px}}
+.coach-section-title{{color:#8ae6ae;font-size:.75em;text-transform:uppercase;
+  letter-spacing:.08em;font-weight:700;margin-bottom:6px}}
+.coach-item{{margin:6px 0;padding-left:14px;position:relative;color:#d8d8d8}}
+.coach-item::before{{content:"";position:absolute;left:0;top:.6em;width:5px;height:5px;
+  background:#5ed694;border-radius:50%;opacity:.6}}
+.coach-item b{{color:#ffffff;font-weight:600}}
+.coach-drill{{margin-top:14px;padding:10px 12px;background:rgba(94,214,148,.09);
+  border-radius:4px;color:#eaeaea;line-height:1.45}}
+.coach-drill b{{color:#8ae6ae;font-weight:700;letter-spacing:.03em}}
+.coach-loading{{color:#888;font-style:italic;font-size:.85em}}
+.coach-none{{color:#666;font-size:.82em;font-style:italic}}
 .card-links{{display:none;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
 .card.expanded .card-links{{display:flex}}
 .link-row{{display:flex;align-items:center;gap:6px}}
