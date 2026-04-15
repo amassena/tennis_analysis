@@ -27,6 +27,109 @@ TIMELINE_H = 36
 LEGEND_H = 28
 LABEL_H = 48
 
+# Form deviation thresholds (degrees from ideal)
+FORM_GREEN = 15   # within 15° = green
+FORM_YELLOW = 30  # 15-30° = yellow, >30° = red
+
+# Ideal joint angles per shot type (recreational → advanced targets)
+IDEAL_ANGLES = {
+    "serve":    {"knee_bend": 120, "trunk_rot": 45, "arm_ext": 165},
+    "forehand": {"knee_bend": 120, "trunk_rot": 50, "arm_ext": 165},
+    "backhand": {"knee_bend": 120, "trunk_rot": 55, "arm_ext": 165},
+}
+
+
+def form_color(delta):
+    """BGR color for a joint-angle delta from ideal. Green <15°, yellow <30°, red else."""
+    d = abs(delta)
+    if d <= FORM_GREEN:
+        return (80, 200, 80)    # green
+    if d <= FORM_YELLOW:
+        return (0, 200, 220)    # yellow
+    return (60, 60, 220)        # red
+
+
+def calc_angle(a, b, c):
+    """Angle ABC in degrees, given three (x, y) points."""
+    import math
+    ba = (a[0] - b[0], a[1] - b[1])
+    bc = (c[0] - b[0], c[1] - b[1])
+    dot = ba[0] * bc[0] + ba[1] * bc[1]
+    mag = (math.hypot(*ba) * math.hypot(*bc)) or 1e-9
+    cos = max(-1.0, min(1.0, dot / mag))
+    return math.degrees(math.acos(cos))
+
+
+def draw_form_panel(frame, seg, pose_frame, w, h):
+    """Draw a small form-deviation panel with color-coded joint angle dots.
+
+    pose_frame: landmark dict from poses JSON for the current frame.
+    Shows knee bend, trunk rotation, arm extension vs ideals for the shot type.
+    """
+    if seg is None or not pose_frame or not pose_frame.get("detected"):
+        return
+    ideals = IDEAL_ANGLES.get(seg["shot_type"])
+    if not ideals:
+        return
+    lms = pose_frame.get("landmarks")
+    if not lms or len(lms) < 29:
+        return
+
+    # MediaPipe indexes: 12=R_shoulder, 14=R_elbow, 16=R_wrist,
+    # 24=R_hip, 26=R_knee, 28=R_ankle
+    # 11=L_shoulder, 13=L_elbow, 15=L_wrist, 23=L_hip, 25=L_knee, 27=L_ankle
+    def pt(i):
+        lm = lms[i]
+        if lm.get("visibility", 0) < 0.3:
+            return None
+        return (lm["x"] * w, lm["y"] * h)
+
+    measurements = []  # (label, measured, ideal, delta)
+    # Dominant side: pick side with better visibility at knee
+    side = "right" if (lms[26].get("visibility", 0) >= lms[25].get("visibility", 0)) else "left"
+    if side == "right":
+        sh, el, wr, hp, kn, an = pt(12), pt(14), pt(16), pt(24), pt(26), pt(28)
+    else:
+        sh, el, wr, hp, kn, an = pt(11), pt(13), pt(15), pt(23), pt(25), pt(27)
+
+    if hp and kn and an:
+        k = calc_angle(hp, kn, an)
+        measurements.append(("KNEE", int(k), ideals["knee_bend"], int(k - ideals["knee_bend"])))
+    if sh and el and wr:
+        a = calc_angle(sh, el, wr)
+        measurements.append(("ARM", int(a), ideals["arm_ext"], int(a - ideals["arm_ext"])))
+    # Trunk rotation: angle between shoulder line and hip line, projected
+    if sh and hp and pt(11) and pt(23):
+        l_sh, r_sh = pt(11), pt(12)
+        l_hp, r_hp = pt(23), pt(24)
+        if l_sh and r_sh and l_hp and r_hp:
+            import math
+            sh_vec = (r_sh[0] - l_sh[0], r_sh[1] - l_sh[1])
+            hp_vec = (r_hp[0] - l_hp[0], r_hp[1] - l_hp[1])
+            a_sh = math.degrees(math.atan2(sh_vec[1], sh_vec[0]))
+            a_hp = math.degrees(math.atan2(hp_vec[1], hp_vec[0]))
+            rot = abs(((a_sh - a_hp) + 180) % 360 - 180)
+            measurements.append(("TRUNK", int(rot), ideals["trunk_rot"], int(rot - ideals["trunk_rot"])))
+
+    if not measurements:
+        return
+
+    # Draw panel top-right
+    panel_w, panel_h = 180, 28 + 22 * len(measurements)
+    px, py = w - panel_w - 12, LABEL_H + 12
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (px, py), (px + panel_w, py + panel_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
+    cv2.putText(frame, "FORM", (px + 10, py + 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
+    for i, (lbl, measured, ideal, delta) in enumerate(measurements):
+        yy = py + 28 + 22 * i + 16
+        color = form_color(delta)
+        cv2.circle(frame, (px + 16, yy - 4), 5, color, -1)
+        cv2.putText(frame, f"{lbl:5s} {measured:3d}° vs {ideal}°",
+                    (px + 28, yy), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                    (230, 230, 230), 1, cv2.LINE_AA)
+
 
 def build_frame_lookup(segments, total_frames):
     """Map every frame index to its segment (or None)."""
@@ -116,6 +219,8 @@ def main():
     parser.add_argument("-o", "--output", help="Output video path")
     parser.add_argument("--skeleton", action="store_true", help="Use skeleton video instead of preprocessed")
     parser.add_argument("--no-label", action="store_true", help="Skip text label bar at top (timeline only)")
+    parser.add_argument("--show-form", action="store_true",
+                        help="Overlay color-coded form deviation panel (requires poses JSON)")
     parser.add_argument("--max-frames", type=int, default=0, help="Stop after N frames (0=all)")
     args = parser.parse_args()
 
@@ -170,6 +275,18 @@ def main():
 
     lookup = build_frame_lookup(segments, total_frames)
 
+    # Optional pose data for form overlay
+    pose_frames = None
+    if args.show_form:
+        poses_path = os.path.join(POSES_DIR, f"{video_name}.json")
+        if os.path.exists(poses_path):
+            with open(poses_path) as pf:
+                pd = json.load(pf)
+            pose_frames = pd.get("frames", [])
+            print(f"  Form overlay: loaded {len(pose_frames)} pose frames")
+        else:
+            print(f"  --show-form requested but no poses at {poses_path}")
+
     # Collect unique segment types for legend
     segment_types = list(dict.fromkeys(s["shot_type"] for s in segments))
 
@@ -186,6 +303,8 @@ def main():
             draw_label_bar(frame, seg, idx, fps, w)
         draw_timeline(frame, segments, idx, total_frames, w, h)
         draw_legend(frame, segment_types, w, h)
+        if pose_frames and idx < len(pose_frames):
+            draw_form_panel(frame, seg, pose_frames[idx], w, h)
 
         out.write(frame)
         idx += 1

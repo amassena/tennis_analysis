@@ -327,6 +327,20 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-time{{font-size:0.95em;font-weight:600;color:#eee}}
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
 .card-breakdown{{font-size:0.75em;color:#999;margin-top:3px}}
+.card-coach{{display:none;margin-top:8px;padding:10px 12px;background:#0f1a14;
+  border:1px solid #1e3624;border-radius:6px;font-size:.78em;color:#ccc}}
+.card.expanded .card-coach{{display:block}}
+.coach-head{{color:#5ed694;font-weight:700;margin-bottom:4px;font-size:.9em}}
+.coach-headline{{font-style:italic;color:#aaa;margin-bottom:8px}}
+.coach-section{{margin-top:8px}}
+.coach-section-title{{color:#8ae6ae;font-size:.78em;text-transform:uppercase;
+  letter-spacing:.05em;margin-bottom:3px}}
+.coach-item{{margin:3px 0 3px 12px;line-height:1.35}}
+.coach-item b{{color:#e0e0e0}}
+.coach-drill{{margin-top:8px;padding:8px;background:rgba(94,214,148,.08);
+  border-left:2px solid #5ed694;border-radius:3px;color:#ddd}}
+.coach-loading{{color:#666;font-style:italic}}
+.coach-none{{color:#555;font-size:.75em;font-style:italic}}
 .card-links{{display:none;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
 .card.expanded .card-links{{display:flex}}
 .link-row{{display:flex;align-items:center;gap:6px}}
@@ -580,7 +594,55 @@ document.addEventListener('keydown', function(e) {{
   }}
 }})();
 
-function toggleCard(el) {{ el.classList.toggle('expanded'); }}
+function toggleCard(el) {{
+  el.classList.toggle('expanded');
+  if(el.classList.contains('expanded')) {{
+    var coach = el.querySelector('.card-coach');
+    if(coach && coach.dataset.loaded === '0') {{
+      coach.dataset.loaded = '1';
+      var vid = coach.id.replace('coach-','');
+      loadCoaching(vid, coach);
+    }}
+  }}
+}}
+
+function loadCoaching(vid, container) {{
+  fetch('/'+vid+'/coaching.json', {{cache:'no-store'}})
+    .then(function(r){{ if(!r.ok) throw new Error('404'); return r.json(); }})
+    .then(function(d){{ renderCoaching(d, container); }})
+    .catch(function(){{
+      container.innerHTML = '<div class="coach-head">Coach</div>'
+        +'<div class="coach-none">No coaching summary available yet.</div>';
+    }});
+}}
+
+function renderCoaching(d, container) {{
+  var html = '<div class="coach-head">Coach</div>';
+  if(d.headline) html += '<div class="coach-headline">'+escapeHtml(d.headline)+'</div>';
+  if(d.strengths && d.strengths.length) {{
+    html += '<div class="coach-section"><div class="coach-section-title">Strengths</div>';
+    d.strengths.forEach(function(s){{
+      html += '<div class="coach-item"><b>'+escapeHtml(s.point)+':</b> '+escapeHtml(s.detail)+'</div>';
+    }});
+    html += '</div>';
+  }}
+  if(d.work_on && d.work_on.length) {{
+    html += '<div class="coach-section"><div class="coach-section-title">Work On</div>';
+    d.work_on.forEach(function(s){{
+      html += '<div class="coach-item"><b>'+escapeHtml(s.point)+':</b> '+escapeHtml(s.detail)+'</div>';
+    }});
+    html += '</div>';
+  }}
+  if(d.drill) html += '<div class="coach-drill"><b>Drill:</b> '+escapeHtml(d.drill)+'</div>';
+  container.innerHTML = html;
+}}
+
+function escapeHtml(s) {{
+  if(!s) return '';
+  return String(s).replace(/[&<>"']/g, function(c){{
+    return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c];
+  }});
+}}
 
 function shareSession(dk) {{
   var link = location.origin + location.pathname + '#' + dk;
@@ -878,6 +940,9 @@ function renderGallery() {{
       if(v.shots) html += '<span>'+v.shots+' shots</span>';
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
+      html += '<div class="card-coach" id="coach-'+v.id+'" data-loaded="0">'
+        +'<div class="coach-head">Coach</div>'
+        +'<div class="coach-loading">Loading insights...</div></div>';
       html += '<div class="card-links">'+linksHtml
         +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
         +'</div>';

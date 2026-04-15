@@ -434,13 +434,102 @@ def compute_rally_segments(detections, duration, point_gap=8.0, before=3.5, afte
     return segments
 
 
-def extract_segment(video_path, start, duration, output_path, fps=60, speed=1.0):
+def compute_zoom_crop(poses_data, start, end, video_w, video_h, padding=0.35, min_ratio=0.4):
+    """Compute a static crop rectangle covering the player across [start, end] seconds.
+
+    Returns (crop_w, crop_h, crop_x, crop_y) in pixels, or None if no poses available.
+    Crop preserves 16:9 aspect ratio. min_ratio ensures we don't zoom too tight
+    (keeps crop at least 40% of original dimension).
+    """
+    if not poses_data:
+        return None
+
+    vi = poses_data.get("video_info", {})
+    fps = vi.get("fps", 60.0)
+    start_idx = int(start * fps)
+    end_idx = int(end * fps)
+
+    xs, ys = [], []
+    for frame in poses_data.get("frames", [])[start_idx:end_idx]:
+        if not frame.get("detected") or not frame.get("landmarks"):
+            continue
+        for lm in frame["landmarks"]:
+            v = lm.get("visibility", 0)
+            if v < 0.3:
+                continue
+            xs.append(lm["x"])
+            ys.append(lm["y"])
+
+    if len(xs) < 10:  # need reasonable coverage
+        return None
+
+    # Bounding box of player in normalized coords
+    xs.sort(); ys.sort()
+    # Use 5th-95th percentile to ignore outliers
+    lo = max(0, int(len(xs) * 0.05))
+    hi = min(len(xs) - 1, int(len(xs) * 0.95))
+    x_min, x_max = xs[lo], xs[hi]
+    y_min, y_max = ys[lo], ys[hi]
+
+    # Add padding
+    w_norm = (x_max - x_min) + 2 * padding
+    h_norm = (y_max - y_min) + 2 * padding
+    cx_norm = (x_min + x_max) / 2
+    cy_norm = (y_min + y_max) / 2
+
+    # Enforce minimum crop ratio
+    w_norm = max(w_norm, min_ratio)
+    h_norm = max(h_norm, min_ratio)
+
+    # Enforce 16:9 aspect ratio
+    target_aspect = 16.0 / 9.0
+    video_aspect = video_w / video_h
+    # Convert normalized to target aspect (normalized coords are in video aspect)
+    # w_norm is in video's normalized space (1.0 wide). h_norm same. So aspect of crop = (w_norm * video_w) / (h_norm * video_h)
+    current_aspect = (w_norm * video_w) / (h_norm * video_h)
+    if current_aspect < target_aspect:
+        # Too tall — widen
+        w_norm = (h_norm * video_h * target_aspect) / video_w
+    else:
+        # Too wide — taller
+        h_norm = (w_norm * video_w / target_aspect) / video_h
+
+    # Clamp to video bounds
+    w_norm = min(w_norm, 1.0)
+    h_norm = min(h_norm, 1.0)
+    x_start = max(0.0, min(1.0 - w_norm, cx_norm - w_norm / 2))
+    y_start = max(0.0, min(1.0 - h_norm, cy_norm - h_norm / 2))
+
+    crop_w = int(w_norm * video_w)
+    crop_h = int(h_norm * video_h)
+    # Ensure even dimensions (H.264 requirement)
+    crop_w -= crop_w % 2
+    crop_h -= crop_h % 2
+    crop_x = int(x_start * video_w)
+    crop_y = int(y_start * video_h)
+    crop_x -= crop_x % 2
+    crop_y -= crop_y % 2
+
+    return (crop_w, crop_h, crop_x, crop_y)
+
+
+def extract_segment(video_path, start, duration, output_path, fps=60, speed=1.0,
+                    crop=None, out_size=None):
     """Extract a video segment with re-encoding for precise cuts.
 
     speed: playback speed multiplier. 0.25 = 4x slow motion.
+    crop: optional (w, h, x, y) tuple for auto-zoom crop.
+    out_size: optional (w, h) to scale output to after cropping.
     """
     vf_filters = []
     drop_audio = False
+
+    if crop:
+        cw, ch, cx, cy = crop
+        vf_filters.append(f"crop={cw}:{ch}:{cx}:{cy}")
+        if out_size:
+            ow, oh = out_size
+            vf_filters.append(f"scale={ow}:{oh}")
 
     if speed != 1.0:
         # setpts: divide by speed (0.25x speed → multiply PTS by 4)
@@ -694,15 +783,34 @@ def export_highlights_grouped(video_path, det_data, output_path,
 
 def export_by_shot_type(video_path, det_data, export_dir, video_name,
                         width, height, duration, fps=60, before=2.0, after=2.0,
-                        speed=1.0):
+                        speed=1.0, auto_zoom=True):
     """Export separate video for each shot type (forehands.mp4, backhands.mp4, etc.).
 
     Volleys (forehand_volley + backhand_volley) are combined into a single volleys video.
+    When auto_zoom=True, each segment is cropped around the player using pose data.
     Returns list of output file paths.
     """
     label = " (slow motion)" if speed < 1.0 else ""
     suffix = "_slowmo" if speed < 1.0 else ""
     print(f"\nExporting individual shot type videos{label}...")
+
+    # Load pose data for auto-zoom
+    poses_data = None
+    if auto_zoom:
+        poses_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "poses_full_videos", f"{video_name}.json"
+        )
+        if os.path.exists(poses_path):
+            try:
+                with open(poses_path) as pf:
+                    poses_data = json.load(pf)
+                print(f"  Auto-zoom enabled (poses: {len(poses_data.get('frames',[]))} frames)")
+            except Exception as e:
+                print(f"  Auto-zoom disabled: {e}")
+                poses_data = None
+        else:
+            print(f"  Auto-zoom disabled: no pose file at {poses_path}")
 
     detections = [d for d in det_data['detections']
                   if d.get('shot_type', 'unknown_shot') not in EXCLUDED_FROM_HIGHLIGHTS]
@@ -766,8 +874,17 @@ def export_by_shot_type(video_path, det_data, export_dir, video_name,
             for i, seg in enumerate(segments):
                 seg_path = os.path.join(tmpdir, f"seg_{i:03d}.mp4")
                 seg_dur = seg['end'] - seg['start']
+                # Auto-zoom: compute player bbox from pose data for this segment
+                crop = None
+                out_size = None
+                if poses_data:
+                    crop = compute_zoom_crop(poses_data, seg['start'], seg['end'],
+                                             width, height)
+                    if crop:
+                        # Scale zoomed crop back up to consistent output resolution
+                        out_size = (width, height)
                 if extract_segment(video_path, seg['start'], seg_dur, seg_path, fps=fps,
-                                   speed=speed):
+                                   speed=speed, crop=crop, out_size=out_size):
                     all_paths.append(seg_path)
 
             if len(all_paths) > 1 and concat_videos(all_paths, out_path, reencode=True):

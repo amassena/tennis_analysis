@@ -601,6 +601,46 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     except Exception as e:
         log(f"Metadata upload failed (non-fatal): {e}", "WARN")
 
+    # Step 5c: Biomechanical analysis
+    try:
+        log("Step 5c: Biomechanical analysis")
+        analysis_dir = PROJECT_ROOT / "analysis"
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+        biomech_out = analysis_dir / f"{video_name}_biomech.json"
+        det_path2 = DETECTIONS_DIR / f"{video_name}_fused_detections.json"
+        if not det_path2.exists():
+            det_path2 = DETECTIONS_DIR / f"{video_name}_fused.json"
+        poses_path = POSES_DIR / f"{video_name}.json"
+        if det_path2.exists() and poses_path.exists():
+            r = subprocess.run(
+                [python, str(PROJECT_ROOT / "scripts" / "biomechanical_analysis.py"),
+                 "--detections", str(det_path2),
+                 "--poses", str(poses_path),
+                 "--output", str(biomech_out)],
+                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=300,
+            )
+            if r.returncode != 0:
+                log(f"Biomech failed: {r.stderr[-300:]}", "WARN")
+            else:
+                log(f"Biomech saved: {biomech_out.name}")
+    except Exception as e:
+        log(f"Biomech step failed (non-fatal): {e}", "WARN")
+
+    # Step 5d: Claude coaching summary
+    try:
+        log("Step 5d: Claude coaching summary")
+        r = subprocess.run(
+            [python, str(PROJECT_ROOT / "scripts" / "claude_coach.py"),
+             video_name, "--upload"],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=120,
+        )
+        if r.returncode != 0:
+            log(f"Coaching failed: {r.stderr[-300:]}", "WARN")
+        else:
+            log("Coaching summary uploaded")
+    except Exception as e:
+        log(f"Coaching step failed (non-fatal): {e}", "WARN")
+
     # Step 6: Export videos and upload to R2
     log("Step 6: Exporting videos to R2")
     stage("clips", 0, "Exporting video formats + uploading to R2")
