@@ -124,8 +124,10 @@ async function handleAsset(request, env, path) {
     return new Response(null, { status: 304, headers });
   }
 
-  // Range response → 206 (skip for downloads — must return 200)
-  if (obj.range && !isDownload) {
+  // Range response → 206 only when the client actually sent a Range header
+  // (R2 sometimes populates obj.range anyway; returning 206 to a non-range
+  // request breaks <img> tags and download managers)
+  if (obj.range && rangeHeader && !isDownload) {
     const { offset, length } = obj.range;
     headers.set(
       'content-range',
