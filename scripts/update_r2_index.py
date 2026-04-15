@@ -44,15 +44,19 @@ def generate_thumbnail(vid):
         except Exception:
             pass
 
-    # Try generating from local preprocessed video
+    # Try generating from local preprocessed video — use thumbnail filter to
+    # pick a representative (non-black) frame automatically
     for pp in [
         os.path.join(PROJECT_ROOT, 'preprocessed', f'{vid}.mp4'),
         os.path.join(PROJECT_ROOT, 'preprocessed', f'{vid}_240fps.mp4'),
     ]:
         if os.path.exists(pp):
+            # thumbnail filter picks the most representative frame from the first ~100 frames
+            # after seeking to 25% into the video (avoids title cards / dark intros)
             subprocess.run(
-                ['ffmpeg', '-y', '-ss', '5', '-i', pp, '-vframes', '1',
-                 '-q:v', '8', '-vf', 'scale=480:-1', thumb],
+                ['ffmpeg', '-y', '-ss', '30', '-i', pp, '-vf',
+                 'thumbnail=100,scale=480:-1', '-frames:v', '1',
+                 '-q:v', '6', thumb],
                 capture_output=True, timeout=30
             )
             if os.path.exists(thumb):
@@ -894,7 +898,14 @@ function renderGallery() {{
       }} else {{
         thumbInner = '<div class="card-thumb-placeholder">'+v.id+'</div>';
       }}
-      var thumbHtml = '<div class="card-thumb-wrap">'+thumbInner+'<span class="card-id">'+v.id+'</span></div>';
+      // Clicking the thumbnail plays the first available video (timeline → rally → first link)
+      var primaryPlay = v.links.length ? v.links[0] : null;
+      var thumbAction = '';
+      if(primaryPlay) {{
+        var thumbUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primaryPlay.file;
+        thumbAction = ' data-action="play" data-url="'+thumbUrl+'" data-title="'+primaryPlay.label+' \\u2014 '+v.id+'" style="cursor:pointer"';
+      }}
+      var thumbHtml = '<div class="card-thumb-wrap"'+thumbAction+'>'+thumbInner+'<span class="card-id">'+v.id+'</span></div>';
 
       // Group links by base type (e.g. "rally" + "rally_slowmo" → one row)
       var groups = {{}};
@@ -1126,6 +1137,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'share') shareSession(dk);
   else if(action === 'download') dlFile(el.dataset.url);
   else if(action === 'delete') deleteVideo(el.dataset.vid);
+  else if(action === 'play') openPlayer(el.dataset.url, el.dataset.title);
 }});
 
 // ── Init ──
