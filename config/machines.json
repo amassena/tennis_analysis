@@ -1,0 +1,31 @@
+{
+  "machines": {
+    "andrew-pc": {
+      "ssh_alias": "windows",
+      "project_path": "C:/Users/amass/tennis_analysis",
+      "gpu": "RTX 5080",
+      "enabled": false,
+      "roles": ["preprocess", "pose_extract", "render", "train"]
+    },
+    "tmassena": {
+      "ssh_alias": "tmassena",
+      "project_path": "C:/Users/amass/tennis_analysis",
+      "gpu": "RTX 4080",
+      "enabled": true,
+      "roles": ["preprocess", "pose_extract", "render", "train"]
+    },
+    "mac": {
+      "ssh_alias": null,
+      "project_path": "/Users/andrewhome/tennis_analysis",
+      "gpu": null,
+      "enabled": true,
+      "roles": ["detect", "label", "validate", "orchestrate"]
+    }
+  },
+  "preferences": {
+    "primary_gpu": "tmassena",
+    "backup_gpu": "andrew-pc",
+    "parallel_processing": true,
+    "notes": "Set primary_gpu to whichever machine is free. Set enabled=false to skip a machine."
+  }
+}

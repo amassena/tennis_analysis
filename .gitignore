@@ -91,3 +91,9 @@ training/regression_baselines/
 
 # Logs
 logs/
+
+# Session outputs (not source)
+coaching/
+backups/
+.wrangler/
+osxphotos_crash.log

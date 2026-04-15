@@ -1,24 +1,222 @@
 {
-  "version": 1,
-  "description": "Pro clip library for side-by-side comparison. Each clip is a 3-5s window around contact point.",
+  "version": 2,
+  "description": "Pro clip library for side-by-side comparison. Each clip is a 4-5s window around a stroke.",
   "clip_spec": {
     "format": "mp4",
     "target_fps": 60,
-    "duration_range": "3-5 seconds",
-    "contact_frame": "Frame index of racket-ball contact"
+    "resolution": "640x480",
+    "duration_range": "4-5 seconds",
+    "contact_frame": "Frame index of racket-ball contact (approximate)"
   },
   "players": {
-    "federer": {
-      "name": "Roger Federer",
-      "clips": []
+    "alcaraz": {
+      "name": "Carlos Alcaraz",
+      "clips": [
+        {
+          "file": "forehand_001.mp4",
+          "type": "forehand",
+          "contact_frame": 120,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "behind",
+          "event": "Indian Wells 2024"
+        },
+        {
+          "file": "forehand_002.mp4",
+          "type": "forehand",
+          "contact_frame": 120,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "side",
+          "event": "Australian Open 2022"
+        },
+        {
+          "file": "forehand_003.mp4",
+          "type": "forehand",
+          "contact_frame": 120,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "behind",
+          "event": "Australian Open 2022"
+        },
+        {
+          "file": "backhand_001.mp4",
+          "type": "backhand",
+          "contact_frame": 120,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "behind",
+          "event": "Indian Wells 2024"
+        },
+        {
+          "file": "backhand_002.mp4",
+          "type": "backhand",
+          "contact_frame": 120,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "behind",
+          "event": "Indian Wells 2024"
+        },
+        {
+          "file": "serve_001.mp4",
+          "type": "serve",
+          "contact_frame": 120,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "side",
+          "event": "Australian Open 2022"
+        }
+      ]
     },
     "djokovic": {
       "name": "Novak Djokovic",
-      "clips": []
+      "clips": [
+        {
+          "file": "forehand_001.mp4",
+          "type": "forehand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Cincinnati 2013"
+        },
+        {
+          "file": "forehand_002.mp4",
+          "type": "forehand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Cincinnati 2013"
+        },
+        {
+          "file": "backhand_001.mp4",
+          "type": "backhand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Cincinnati 2013"
+        },
+        {
+          "file": "backhand_002.mp4",
+          "type": "backhand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Cincinnati 2013"
+        },
+        {
+          "file": "serve_001.mp4",
+          "type": "serve",
+          "contact_frame": 180,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Cincinnati 2013"
+        },
+        {
+          "file": "serve_002.mp4",
+          "type": "serve",
+          "contact_frame": 180,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Cincinnati 2013"
+        },
+        {
+          "file": "forehand_003.mp4",
+          "type": "forehand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "behind",
+          "event": "Indian Wells 2025"
+        },
+        {
+          "file": "backhand_003.mp4",
+          "type": "backhand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:SlowMoTennis",
+          "angle": "behind",
+          "event": "Indian Wells 2025"
+        }
+      ]
+    },
+    "federer": {
+      "name": "Roger Federer",
+      "clips": [
+        {
+          "file": "forehand_001.mp4",
+          "type": "forehand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        },
+        {
+          "file": "backhand_001.mp4",
+          "type": "backhand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        },
+        {
+          "file": "serve_001.mp4",
+          "type": "serve",
+          "contact_frame": 180,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        }
+      ]
     },
     "nadal": {
       "name": "Rafael Nadal",
-      "clips": []
+      "clips": [
+        {
+          "file": "forehand_001.mp4",
+          "type": "forehand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        },
+        {
+          "file": "forehand_002.mp4",
+          "type": "forehand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        },
+        {
+          "file": "backhand_001.mp4",
+          "type": "backhand",
+          "contact_frame": 150,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        },
+        {
+          "file": "serve_001.mp4",
+          "type": "serve",
+          "contact_frame": 180,
+          "fps": 60,
+          "source": "youtube:EssentialTennis",
+          "angle": "side",
+          "event": "Indian Wells 2013"
+        }
+      ]
     }
   }
 }
