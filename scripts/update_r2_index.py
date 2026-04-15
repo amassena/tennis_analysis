@@ -349,8 +349,10 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card.expanded .card-links{{display:flex}}
 .link-row{{display:flex;align-items:center;gap:6px}}
 .link-row a.play-btn{{flex:1;color:#fff;text-decoration:none;font-size:0.74em;font-weight:600;
-  padding:5px 10px;border-radius:5px;opacity:.9;transition:opacity .15s}}
+  padding:5px 10px;border-radius:5px;opacity:.9;transition:opacity .15s;
+  display:flex;justify-content:space-between;align-items:center;gap:8px}}
 .link-row a.play-btn:hover{{opacity:1}}
+.link-row a.play-btn .ct{{font-weight:500;opacity:.75;font-size:.9em}}
 .link-row a.slow-btn{{color:#aaa;text-decoration:none;font-size:.65em;font-weight:600;
   padding:3px 8px;border-radius:4px;background:#2a2a2a;border:1px solid #333;
   text-transform:uppercase;letter-spacing:.05em;transition:all .15s}}
@@ -919,15 +921,28 @@ function renderGallery() {{
         if(!groups[baseKey].label) {{ groups[baseKey].label = lk.label.replace(' Slow-Mo',''); groups[baseKey].color = lk.color; }}
       }});
 
+      var bd = v.breakdown || {{}};
+      var countFor = function(baseKey) {{
+        if(baseKey === 'forehands') return bd.forehand || 0;
+        if(baseKey === 'backhands') return bd.backhand || 0;
+        if(baseKey === 'serves')    return bd.serve || 0;
+        if(baseKey === 'volleys')   return (bd.forehand_volley||0) + (bd.backhand_volley||0) + (bd.overhead||0);
+        if(baseKey === 'other')     return bd.unknown_shot || 0;
+        // timeline / rally / grouped / highlights — show total shots
+        return v.shots || 0;
+      }};
+
       var linksHtml = '';
       groupOrder.forEach(function(baseKey) {{
         var g = groups[baseKey];
         var primary = g.normal || g.slow;
         var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
+        var cnt = countFor(baseKey);
+        var countBadge = cnt > 0 ? ' <span class="ct">('+cnt+')</span>' : '';
         linksHtml += '<div class="link-row">';
         linksHtml += '<a href="'+primaryUrl+'" class="play-btn" data-title="'+g.label+' \\u2014 '+v.id+'" '
           +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-          +'style="background:'+g.color+'">'+g.label+'</a>';
+          +'style="background:'+g.color+'">'+g.label+countBadge+'</a>';
         if(g.normal) {{
           var nUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.normal.file;
           linksHtml += '<span class="dl-btn" data-action="download" data-url="'+nUrl+'" title="Download">&#8681;</span>';
