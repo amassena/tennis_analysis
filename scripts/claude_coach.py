@@ -29,23 +29,44 @@ MODEL = "claude-sonnet-4-5"  # strong reasoning on structured metrics
 MAX_TOKENS = 1800
 
 SYSTEM_PROMPT = """You are an experienced tennis coach analyzing biomechanical metrics \
-from a recreational player's session. Give specific, actionable feedback grounded in \
-the numbers provided. Reference metric values directly ("your average knee bend was \
-128° — pros average 110-120°"). Avoid generic advice.
+and a per-shot timeline from a recreational player's session. Give specific, \
+actionable feedback grounded in the numbers. Reference metric values directly \
+("your average knee bend was 128° — pros average 110-120°"). Avoid generic advice.
+
+For EACH strength and work_on point, pick 1-3 specific example shots from the \
+per-shot timeline that best illustrate the point, and include their timestamps \
+so the viewer can jump to them in the video.
 
 Respond ONLY with valid JSON matching this schema:
 {
   "headline": "One-sentence summary (<100 chars) of the session's theme",
   "strengths": [
-    {"point": "short label", "detail": "1-2 sentence explanation referencing metrics"}
+    {
+      "point": "short label (3-6 words)",
+      "detail": "1-2 sentence explanation referencing metrics",
+      "examples": [
+        {"t": 45.2, "type": "forehand", "note": "best knee drive"}
+      ]
+    }
   ],
   "work_on": [
-    {"point": "short label", "detail": "1-2 sentence actionable suggestion referencing metrics"}
+    {
+      "point": "short label",
+      "detail": "1-2 sentence actionable suggestion referencing metrics",
+      "examples": [
+        {"t": 120.5, "type": "backhand", "note": "rushed recovery"}
+      ]
+    }
   ],
   "drill": "One concrete drill for the next practice (2-3 sentences)"
 }
 
-Give 2-3 strengths and 2-3 work_on items. Be concise and specific. No platitudes."""
+Rules:
+- "t" is the shot timestamp in seconds (use the exact value from the timeline).
+- "type" is the shot type from the timeline.
+- "note" is a very short phrase (<8 words) describing what the shot exemplifies.
+- Give 2-3 strengths and 2-3 work_on items.
+- Be concise and specific. No platitudes."""
 
 
 def load_metrics(vid: str) -> dict | None:
@@ -67,6 +88,24 @@ def load_metrics(vid: str) -> dict | None:
     dets = det.get("detections", [])
     metrics["duration_seconds"] = round(det.get("duration", 0), 1)
     metrics["total_shots"] = len(dets)
+
+    # Per-shot timeline (up to 50 shots evenly distributed — keeps prompt small)
+    timeline = []
+    step = max(1, len(dets) // 50)
+    for i in range(0, len(dets), step):
+        d = dets[i]
+        t = d.get("timestamp") or d.get("contact_time") or d.get("peak_time") or d.get("time") or d.get("t")
+        if t is None and d.get("frame") is not None:
+            t = d["frame"] / 60.0
+        if t is None and d.get("contact_frame") is not None:
+            t = d["contact_frame"] / 60.0
+        if t is None:
+            continue
+        timeline.append({
+            "t": round(float(t), 1),
+            "type": d.get("shot_type", "unknown"),
+        })
+    metrics["per_shot_timeline"] = timeline
 
     # Shot breakdown
     breakdown = {}
@@ -130,6 +169,19 @@ def format_user_message(metrics: dict) -> str:
         lines.append("- Kinetic chain correct: >80% is solid")
     else:
         lines.append("(No per-shot biomechanical data — analyze from shot breakdown only)")
+
+    # Per-shot timeline
+    timeline = metrics.get("per_shot_timeline") or []
+    if timeline:
+        lines.append("")
+        lines.append("## Per-shot timeline (timestamp in seconds, shot type)")
+        lines.append("```")
+        for s in timeline:
+            lines.append(f"t={s['t']:7.1f}s  {s['type']}")
+        lines.append("```")
+        lines.append("")
+        lines.append("When you reference example shots in your feedback, pick timestamps "
+                     "from this list that best illustrate the point.")
 
     return "\n".join(lines)
 

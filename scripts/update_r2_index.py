@@ -331,26 +331,54 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-time{{font-size:0.95em;font-weight:600;color:#eee}}
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
 .card-breakdown{{font-size:0.75em;color:#999;margin-top:3px}}
-.card-coach{{display:none;margin-top:10px;padding:14px 16px;background:#161a17;
-  border-left:3px solid #5ed694;border-radius:4px;font-size:.88em;color:#e5e5e5;
-  line-height:1.5}}
-.card.expanded .card-coach{{display:block}}
-.coach-head{{color:#5ed694;font-weight:700;margin-bottom:6px;font-size:.95em;
-  text-transform:uppercase;letter-spacing:.04em}}
-.coach-headline{{color:#f5f5f5;font-weight:500;margin-bottom:12px;font-size:1.02em;
-  line-height:1.4}}
-.coach-section{{margin-top:12px}}
-.coach-section-title{{color:#8ae6ae;font-size:.75em;text-transform:uppercase;
-  letter-spacing:.08em;font-weight:700;margin-bottom:6px}}
-.coach-item{{margin:6px 0;padding-left:14px;position:relative;color:#d8d8d8}}
-.coach-item::before{{content:"";position:absolute;left:0;top:.6em;width:5px;height:5px;
-  background:#5ed694;border-radius:50%;opacity:.6}}
-.coach-item b{{color:#ffffff;font-weight:600}}
-.coach-drill{{margin-top:14px;padding:10px 12px;background:rgba(94,214,148,.09);
-  border-radius:4px;color:#eaeaea;line-height:1.45}}
-.coach-drill b{{color:#8ae6ae;font-weight:700;letter-spacing:.03em}}
-.coach-loading{{color:#888;font-style:italic;font-size:.85em}}
-.coach-none{{color:#666;font-size:.82em;font-style:italic}}
+/* Compact coach summary on card (always visible when coaching exists) */
+.card-coach-summary{{margin-top:8px;padding:8px 10px;background:#161a17;
+  border-left:3px solid #5ed694;border-radius:3px;cursor:pointer;
+  transition:background .15s;display:none}}
+.card-coach-summary.loaded{{display:block}}
+.card-coach-summary:hover{{background:#1c211d}}
+.coach-summary-label{{color:#5ed694;font-size:.65em;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;display:flex;
+  justify-content:space-between;align-items:center}}
+.coach-summary-label .more{{color:#8ae6ae;font-size:.9em;opacity:.8}}
+.coach-summary-text{{color:#eaeaea;font-size:.82em;line-height:1.35;font-weight:500}}
+
+/* Full coach modal */
+.coach-modal-overlay{{display:none;position:fixed;inset:0;z-index:800;
+  background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;
+  overflow-y:auto;padding:40px 20px}}
+.coach-modal-overlay.open{{display:flex}}
+.coach-modal{{background:#181b19;border-radius:10px;max-width:720px;width:100%;
+  padding:28px 32px;color:#e5e5e5;line-height:1.55;font-size:.95em;
+  border:1px solid #2a332d;box-shadow:0 20px 60px rgba(0,0,0,.5)}}
+.coach-modal h2{{color:#5ed694;font-size:.8em;text-transform:uppercase;
+  letter-spacing:.1em;margin-bottom:8px;font-weight:700}}
+.coach-modal .vid-label{{color:#888;font-size:.75em;margin-bottom:14px;
+  font-family:monospace}}
+.coach-modal .headline{{font-size:1.25em;font-weight:600;color:#ffffff;
+  margin-bottom:22px;line-height:1.35}}
+.coach-modal .section-title{{color:#8ae6ae;font-size:.72em;text-transform:uppercase;
+  letter-spacing:.1em;font-weight:700;margin:22px 0 10px}}
+.coach-modal .item{{margin:12px 0;padding:12px 14px;background:#1f2320;
+  border-radius:6px;border-left:2px solid #334035}}
+.coach-modal .item .pt{{color:#ffffff;font-weight:600;margin-bottom:4px;
+  font-size:1.02em}}
+.coach-modal .item .dt{{color:#d8d8d8;font-size:.92em}}
+.coach-modal .ex{{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}}
+.coach-modal .ex-btn{{background:#2a3a2f;color:#aee8c3;border:1px solid #3a5944;
+  font-size:.78em;padding:4px 10px;border-radius:4px;cursor:pointer;
+  transition:all .15s;display:inline-flex;align-items:center;gap:6px;font-family:inherit}}
+.coach-modal .ex-btn:hover{{background:#3a5944;color:#fff;border-color:#5ed694}}
+.coach-modal .ex-btn .ts{{font-family:monospace;font-weight:700;color:#5ed694}}
+.coach-modal .ex-btn:hover .ts{{color:#fff}}
+.coach-modal .drill{{margin-top:24px;padding:16px 18px;
+  background:rgba(94,214,148,.08);border-left:3px solid #5ed694;border-radius:4px}}
+.coach-modal .drill-label{{color:#5ed694;font-size:.72em;text-transform:uppercase;
+  letter-spacing:.1em;font-weight:700;margin-bottom:6px}}
+.coach-modal .drill-body{{color:#f0f0f0;line-height:1.5}}
+.coach-modal .close{{position:absolute;top:20px;right:24px;background:none;
+  border:none;color:#999;font-size:1.8em;cursor:pointer;line-height:1}}
+.coach-modal .close:hover{{color:#fff}}
 .card-links{{display:none;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
 .card.expanded .card-links{{display:flex}}
 .link-row{{display:flex;align-items:center;gap:6px}}
@@ -478,6 +506,17 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 </div>
 
 <!-- Video Player Overlay -->
+<!-- Coach Modal -->
+<div class="coach-modal-overlay" id="coachModal" onclick="if(event.target===this)closeCoachModal()">
+  <div class="coach-modal" style="position:relative">
+    <button class="close" onclick="closeCoachModal()">&times;</button>
+    <h2>Coach Analysis</h2>
+    <div class="vid-label" id="coachVid"></div>
+    <div class="headline" id="coachHeadline"></div>
+    <div id="coachBody"></div>
+  </div>
+</div>
+
 <div id="playerOverlay" onclick="if(event.target===this)closePlayer()">
   <div class="player-wrap">
     <div class="player-head">
@@ -591,6 +630,9 @@ function copyTimeLink() {{
 }}
 
 document.addEventListener('keydown', function(e) {{
+  if(e.key==='Escape' && document.getElementById('coachModal').classList.contains('open')) {{
+    closeCoachModal(); return;
+  }}
   if(overlay.style.display!=='flex')return;
   if(e.key==='Escape')closePlayer();
   if(e.key==='ArrowLeft'){{e.preventDefault();vid.currentTime=Math.max(0,vid.currentTime-5)}}
@@ -606,47 +648,86 @@ document.addEventListener('keydown', function(e) {{
   }}
 }})();
 
-function toggleCard(el) {{
-  el.classList.toggle('expanded');
-  if(el.classList.contains('expanded')) {{
-    var coach = el.querySelector('.card-coach');
-    if(coach && coach.dataset.loaded === '0') {{
-      coach.dataset.loaded = '1';
-      var vid = coach.id.replace('coach-','');
-      loadCoaching(vid, coach);
-    }}
-  }}
-}}
+function toggleCard(el) {{ el.classList.toggle('expanded'); }}
 
-function loadCoaching(vid, container) {{
+// Cache of coaching JSON keyed by video id
+var coachCache = {{}};
+
+function loadCoachingSummary(vid) {{
+  if(coachCache[vid] !== undefined) {{ applySummary(vid, coachCache[vid]); return; }}
   fetch('/'+vid+'/coaching.json', {{cache:'no-store'}})
     .then(function(r){{ if(!r.ok) throw new Error('404'); return r.json(); }})
-    .then(function(d){{ renderCoaching(d, container); }})
-    .catch(function(){{
-      container.innerHTML = '<div class="coach-head">Coach</div>'
-        +'<div class="coach-none">No coaching summary available yet.</div>';
-    }});
+    .then(function(d){{ coachCache[vid] = d; applySummary(vid, d); }})
+    .catch(function(){{ coachCache[vid] = null; }});
 }}
 
-function renderCoaching(d, container) {{
-  var html = '<div class="coach-head">Coach</div>';
-  if(d.headline) html += '<div class="coach-headline">'+escapeHtml(d.headline)+'</div>';
-  if(d.strengths && d.strengths.length) {{
-    html += '<div class="coach-section"><div class="coach-section-title">Strengths</div>';
-    d.strengths.forEach(function(s){{
-      html += '<div class="coach-item"><b>'+escapeHtml(s.point)+':</b> '+escapeHtml(s.detail)+'</div>';
+function applySummary(vid, d) {{
+  var box = document.getElementById('coachSum-'+vid);
+  if(!box || !d || !d.headline) return;
+  box.querySelector('.coach-summary-text').textContent = d.headline;
+  box.classList.add('loaded');
+}}
+
+function openCoachModal(vid) {{
+  var d = coachCache[vid];
+  if(!d) return;
+  document.getElementById('coachVid').textContent = vid;
+  document.getElementById('coachHeadline').textContent = d.headline || '';
+  var body = document.getElementById('coachBody');
+  var html = '';
+  function renderItems(items, title) {{
+    if(!items || !items.length) return '';
+    var h = '<div class="section-title">'+title+'</div>';
+    items.forEach(function(s){{
+      h += '<div class="item">';
+      h += '<div class="pt">'+escapeHtml(s.point||'')+'</div>';
+      h += '<div class="dt">'+escapeHtml(s.detail||'')+'</div>';
+      if(s.examples && s.examples.length) {{
+        h += '<div class="ex">';
+        s.examples.forEach(function(ex){{
+          var ts = fmtTs(ex.t);
+          var note = ex.note ? ' — '+escapeHtml(ex.note) : '';
+          h += '<button class="ex-btn" onclick="jumpToExample(\\''+vid+'\\','+ex.t+')">'
+            + '<span class="ts">'+ts+'</span> '+escapeHtml(ex.type||'')+note+'</button>';
+        }});
+        h += '</div>';
+      }}
+      h += '</div>';
     }});
-    html += '</div>';
+    return h;
   }}
-  if(d.work_on && d.work_on.length) {{
-    html += '<div class="coach-section"><div class="coach-section-title">Work On</div>';
-    d.work_on.forEach(function(s){{
-      html += '<div class="coach-item"><b>'+escapeHtml(s.point)+':</b> '+escapeHtml(s.detail)+'</div>';
-    }});
-    html += '</div>';
+  html += renderItems(d.strengths, 'Strengths');
+  html += renderItems(d.work_on, 'Work On');
+  if(d.drill) {{
+    html += '<div class="drill"><div class="drill-label">Suggested Drill</div>'
+      + '<div class="drill-body">'+escapeHtml(d.drill)+'</div></div>';
   }}
-  if(d.drill) html += '<div class="coach-drill"><b>Drill:</b> '+escapeHtml(d.drill)+'</div>';
-  container.innerHTML = html;
+  body.innerHTML = html;
+  document.getElementById('coachModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}}
+
+function closeCoachModal() {{
+  document.getElementById('coachModal').classList.remove('open');
+  document.body.style.overflow = '';
+}}
+
+function fmtTs(t) {{
+  t = Math.max(0, Math.round(t));
+  var m = Math.floor(t/60), s = t%60;
+  return m+':'+(s<10?'0':'')+s;
+}}
+
+function jumpToExample(vid, t) {{
+  // Find the video's timeline mp4 from VIDEOS and open at timestamp
+  var v = VIDEOS.find(function(x){{ return x.id === vid; }});
+  if(!v) return;
+  var link = v.links.find(function(l){{ return l.key === 'timeline'; }}) || v.links[0];
+  if(!link) return;
+  var url = 'https://tennis.playfullife.com/'+vid+'/'+link.file;
+  pendingTime = t;
+  closeCoachModal();
+  openPlayer(url, link.label+' — '+vid+' @ '+fmtTs(t));
 }}
 
 function escapeHtml(s) {{
@@ -972,9 +1053,9 @@ function renderGallery() {{
       if(v.shots) html += '<span>'+v.shots+' shots</span>';
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
-      html += '<div class="card-coach" id="coach-'+v.id+'" data-loaded="0">'
-        +'<div class="coach-head">Coach</div>'
-        +'<div class="coach-loading">Loading insights...</div></div>';
+      html += '<div class="card-coach-summary" id="coachSum-'+v.id+'" data-action="coach" data-vid="'+v.id+'">'
+        +'<div class="coach-summary-label"><span>Coach</span><span class="more">Details &rsaquo;</span></div>'
+        +'<div class="coach-summary-text"></div></div>';
       html += '<div class="card-links">'+linksHtml
         +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
         +'</div>';
@@ -985,6 +1066,8 @@ function renderGallery() {{
   }});
 
   document.getElementById('content').innerHTML = html;
+  // Trigger coaching summary loads for visible cards
+  filtered.forEach(function(v){{ loadCoachingSummary(v.id); }});
 }}
 
 // ── Filters ──
@@ -1159,6 +1242,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'download') dlFile(el.dataset.url);
   else if(action === 'delete') deleteVideo(el.dataset.vid);
   else if(action === 'play') openPlayer(el.dataset.url, el.dataset.title);
+  else if(action === 'coach') openCoachModal(el.dataset.vid);
 }});
 
 // ── Init ──
