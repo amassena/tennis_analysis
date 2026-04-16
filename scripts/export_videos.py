@@ -951,6 +951,147 @@ def export_rally_points(video_path, det_data, output_path,
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def _positions_for_segments(shot_ts_list, segments, title_prelude_s, speed):
+    """For each shot timestamp, return its output-video position.
+
+    Given ordered [{start, end, ...}] segments (source-time) and a `title_prelude_s`
+    duration prepended, compute where each shot lands in the concatenated output
+    after speed adjustment. Returns a dict {shot_ts: out_t} for shots found in segs.
+    Shots outside all segments are omitted.
+    """
+    out = {}
+    cursor = title_prelude_s
+    for seg in segments:
+        s, e = seg['start'], seg['end']
+        seg_src_dur = e - s
+        for ts in shot_ts_list:
+            if s <= ts <= e:
+                out[ts] = cursor + (ts - s) / speed
+        cursor += seg_src_dur / speed
+    return out
+
+
+def compute_all_shot_positions(det_data, duration, args):
+    """For a video, compute per-shot positions in every produced output variant.
+
+    Returns {variant_key: {shot_idx: out_t_sec}}.
+    Only includes variants that would have been produced based on args.
+    """
+    all_detections = det_data['detections']
+    filtered = [d for d in all_detections
+                if d.get('shot_type', 'unknown_shot') not in EXCLUDED_FROM_HIGHLIGHTS]
+    ts_list = [d['timestamp'] for d in filtered]
+    # Map shot_ts -> global index within the full detections list (so the gallery
+    # can reference any shot by idx regardless of whether it was filtered out)
+    ts_to_idx = {d['timestamp']: i for i, d in enumerate(all_detections)}
+
+    speeds = [1.0]
+    if args.slow_motion:
+        speeds.append(0.25)
+
+    positions = {}
+    export_types = args.types
+    if 'all' in export_types:
+        export_types = ['timeline', 'rally', 'bytype']
+
+    # timeline: 1:1 mapping for every detection
+    if 'timeline' in export_types:
+        positions['timeline'] = {
+            i: round(d['timestamp'], 3)
+            for i, d in enumerate(all_detections)
+        }
+
+    # rally + rally_slowmo
+    if 'rally' in export_types:
+        rally_segs = compute_rally_segments(
+            filtered, duration,
+            point_gap=args.point_gap,
+            before=args.rally_before, after=args.rally_after,
+        )
+        for speed in speeds:
+            key = 'rally' + ('_slowmo' if speed < 1.0 else '')
+            pos = _positions_for_segments(ts_list, rally_segs, 0.0, speed)
+            positions[key] = {ts_to_idx[ts]: round(v, 3) for ts, v in pos.items()}
+
+    # bytype: forehands / backhands / serves / volleys (combined) / unknown
+    if 'bytype' in export_types:
+        # Group filtered detections by output key
+        groups = {}
+        for det in filtered:
+            st = det.get('shot_type', 'unknown_shot')
+            if st in ('forehand_volley', 'backhand_volley', 'overhead'):
+                key = 'volleys'
+            elif st == 'forehand':
+                key = 'forehands'
+            elif st == 'backhand':
+                key = 'backhands'
+            elif st == 'serve':
+                key = 'serves'
+            else:
+                key = 'other'
+            groups.setdefault(key, []).append(det)
+
+        title_s = 2.0  # title card per type
+        for bucket_key, group_dets in groups.items():
+            if len(group_dets) < 2:
+                continue
+            segs = compute_segments(group_dets, duration, args.before, args.after)
+            group_ts = [d['timestamp'] for d in group_dets]
+            for speed in speeds:
+                out_key = bucket_key + ('_slowmo' if speed < 1.0 else '')
+                pos = _positions_for_segments(group_ts, segs, title_s, speed)
+                positions[out_key] = {ts_to_idx[ts]: round(v, 3) for ts, v in pos.items()}
+
+    # grouped (legacy): ordered types in one file with title cards between
+    if 'grouped' in export_types:
+        grouped = {}
+        for det in filtered:
+            grouped.setdefault(det.get('shot_type', 'unknown_shot'), []).append(det)
+        for speed in speeds:
+            key = 'grouped' + ('_slowmo' if speed < 1.0 else '')
+            cursor = 0.0
+            out_map = {}
+            for st in ['forehand', 'backhand', 'serve', 'unknown_shot']:
+                if st not in grouped:
+                    continue
+                gds = grouped[st]
+                cursor += 2.0  # title card
+                segs = compute_segments(gds, duration, args.before, args.after)
+                ts_set = {d['timestamp'] for d in gds}
+                pos = _positions_for_segments(list(ts_set), segs, 0.0, speed)
+                for ts, v in pos.items():
+                    out_map[ts_to_idx[ts]] = round(cursor + v, 3)
+                total_seg_dur = sum((s['end'] - s['start']) / speed for s in segs)
+                cursor += total_seg_dur
+            positions[key] = out_map
+
+    return positions
+
+
+def emit_shots_json(video_name, det_data, duration, args, output_dir):
+    """Write {output_dir}/shots.json with per-shot positions per variant."""
+    positions = compute_all_shot_positions(det_data, duration, args)
+    shots = []
+    for idx, d in enumerate(det_data['detections']):
+        entry = {
+            'idx': idx,
+            't': round(d['timestamp'], 3),
+            'type': d.get('shot_type', 'unknown'),
+            'confidence': round(d.get('confidence', 0), 3),
+            'positions': {},
+        }
+        for variant, idx_map in positions.items():
+            if idx in idx_map:
+                entry['positions'][variant] = idx_map[idx]
+        shots.append(entry)
+
+    out_path = os.path.join(output_dir, 'shots.json')
+    with open(out_path, 'w') as f:
+        json.dump({'video': video_name, 'shots': shots}, f, separators=(',', ':'))
+    print(f"  Wrote {out_path} ({len(shots)} shots, {len(positions)} variants)")
+    return out_path
+
+
 def upload_to_r2(local_path, remote_key):
     """Upload a file to Cloudflare R2 storage."""
     from dotenv import load_dotenv
@@ -1095,13 +1236,26 @@ def main():
             except Exception as e:
                 print(f"  [WARN] Comparison generation failed: {e}")
 
+        # Emit shots.json with per-shot positions in each output variant
+        try:
+            shots_path = emit_shots_json(video_name, det_data, duration, args, export_dir)
+            exported_files.append(shots_path)
+        except Exception as e:
+            print(f"  [WARN] shots.json emission failed: {e}")
+
         # Upload to R2 if requested
         if args.upload and exported_files:
             print(f"\nUploading {len(exported_files)} files to R2...")
             for filepath in exported_files:
                 filename = os.path.basename(filepath)
                 remote_key = f"highlights/{video_name}/{filename}"
-                upload_to_r2(filepath, remote_key)
+                ct = 'application/json' if filename.endswith('.json') else None
+                if ct:
+                    from storage.r2_client import R2Client
+                    R2Client().upload(filepath, remote_key, content_type=ct)
+                    print(f"  Public URL: https://tennis.playfullife.com/{remote_key}")
+                else:
+                    upload_to_r2(filepath, remote_key)
 
     print("\nDone!")
 

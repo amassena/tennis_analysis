@@ -430,6 +430,26 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .player-bar button{{padding:6px 14px;background:#333;color:#ddd;border:none;border-radius:6px;font-size:.85em;cursor:pointer}}
 .player-bar button:hover{{background:#444}}
 .player-bar button.active{{background:#FF8C00;color:#fff}}
+
+/* Shot strip */
+.shot-strip{{display:none;gap:6px;overflow-x:auto;padding:8px 4px;margin-top:4px;
+  border-top:1px solid #222;max-width:100%;scrollbar-width:thin}}
+.shot-strip.show{{display:flex}}
+.shot-chip{{flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  padding:5px 9px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:5px;
+  cursor:pointer;transition:all .15s;min-width:52px}}
+.shot-chip:hover{{border-color:#555;background:#222}}
+.shot-chip.active{{border-color:#FF8C00;background:#2a1e10}}
+.shot-chip .t{{font-size:.7em;color:#888;font-family:monospace}}
+.shot-chip .ty{{font-size:.65em;font-weight:700;margin-top:2px;letter-spacing:.03em}}
+.shot-chip.serve .ty{{color:#FF8C00}}
+.shot-chip.forehand .ty{{color:#27AE60}}
+.shot-chip.backhand .ty{{color:#5DADE2}}
+.shot-chip.forehand_volley .ty,.shot-chip.backhand_volley .ty{{color:#9B59B6}}
+.shot-chip.overhead .ty,.shot-chip.unknown_shot .ty{{color:#aaa}}
+.shot-strip-hdr{{font-size:.7em;color:#666;text-transform:uppercase;letter-spacing:.08em;
+  padding:4px 0 0;display:none}}
+.shot-strip-hdr.show{{display:block}}
 .speed-group,.frame-group{{display:flex;gap:4px}}
 .share-btn{{margin-left:auto!important;background:#2a7!important}}
 .share-btn:hover{{background:#3b8!important}}
@@ -541,6 +561,8 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
       <button onclick="copyTimeLink()" class="share-btn" id="shareBtn">Copy link at time</button>
       <button onclick="downloadCurrent()" class="share-btn" style="background:#555!important">Download</button>
     </div>
+    <div class="shot-strip-hdr" id="shotStripHdr">Jump to shot</div>
+    <div class="shot-strip" id="shotStrip"></div>
   </div>
 </div>
 
@@ -562,6 +584,9 @@ vid.addEventListener('timeupdate', function() {{
 }});
 
 var pausedOnOpen = false;  // set by jumpToExample so coach examples open paused
+var currentShots = null;   // {{video, shots[]}} loaded from shots.json
+var currentVariant = null; // e.g. "timeline" / "rally_slowmo" — derived from url
+
 function openPlayer(url, title) {{
   vid.src = url;
   document.getElementById('playerTitle').textContent = title;
@@ -576,7 +601,89 @@ function openPlayer(url, title) {{
   if (pausedOnOpen) {{ vid.pause(); }}
   else {{ vid.play().catch(function(){{}}); }}
   history.replaceState(null,'','?v='+encodeURIComponent(url.replace('https://tennis.playfullife.com/','')));
+  // Parse "<vid>/<vid>_<variant>.mp4" from the URL and load shots.json
+  var m = url.match(/\\/([A-Za-z0-9_]+)\\/\\1_(\\w+)\\.mp4$/);
+  if (m) loadShotsStrip(m[1], m[2]);
+  else {{ currentShots = null; currentVariant = null; document.getElementById('shotStrip').classList.remove('show'); document.getElementById('shotStripHdr').classList.remove('show'); }}
 }}
+
+function loadShotsStrip(vidId, variant) {{
+  currentVariant = variant;
+  var doRender = function() {{ renderShotStrip(); }};
+  if (currentShots && currentShots.video === vidId) {{ doRender(); return; }}
+  fetch('/' + vidId + '/shots.json', {{cache: 'no-store'}})
+    .then(function(r) {{ if(!r.ok) throw new Error('404'); return r.json(); }})
+    .then(function(d) {{ currentShots = d; doRender(); }})
+    .catch(function() {{
+      currentShots = null;
+      document.getElementById('shotStrip').classList.remove('show');
+      document.getElementById('shotStripHdr').classList.remove('show');
+    }});
+}}
+
+function renderShotStrip() {{
+  var strip = document.getElementById('shotStrip');
+  var hdr = document.getElementById('shotStripHdr');
+  if (!currentShots || !currentVariant) return;
+  // Only shots with a position in the current variant are clickable
+  var shots = currentShots.shots.filter(function(s) {{
+    return s.positions && s.positions[currentVariant] !== undefined;
+  }});
+  if (shots.length === 0) {{
+    strip.classList.remove('show'); hdr.classList.remove('show');
+    return;
+  }}
+  var html = '';
+  shots.forEach(function(s, i) {{
+    var pos = s.positions[currentVariant];
+    var label = ({{'serve':'S','forehand':'FH','backhand':'BH','forehand_volley':'FV','backhand_volley':'BV','overhead':'OH','unknown_shot':'?'}})[s.type] || '?';
+    html += '<div class="shot-chip ' + s.type + '" data-action="jumpshot" data-t="' + pos + '" data-idx="' + i + '">'
+      + '<span class="t">' + fmtShotTime(pos) + '</span>'
+      + '<span class="ty">' + label + '</span></div>';
+  }});
+  strip.innerHTML = html;
+  strip.classList.add('show');
+  hdr.classList.add('show');
+  updateActiveShotChip();
+}}
+
+function fmtShotTime(s) {{
+  s = Math.max(0, Math.round(s));
+  var m = Math.floor(s / 60);
+  var sec = s % 60;
+  return m + ':' + (sec < 10 ? '0' : '') + sec;
+}}
+
+function updateActiveShotChip() {{
+  if (!currentShots || !currentVariant) return;
+  var strip = document.getElementById('shotStrip');
+  var chips = strip.querySelectorAll('.shot-chip');
+  var now = vid.currentTime;
+  var activeIdx = -1;
+  var bestDelta = 999;
+  chips.forEach(function(chip, i) {{
+    var t = parseFloat(chip.dataset.t);
+    if (now >= t - 0.5 && now <= t + 3.5) {{
+      var delta = Math.abs(now - t);
+      if (delta < bestDelta) {{ bestDelta = delta; activeIdx = i; }}
+    }}
+  }});
+  chips.forEach(function(c, i) {{
+    if (i === activeIdx) c.classList.add('active'); else c.classList.remove('active');
+  }});
+}}
+
+vid.addEventListener('timeupdate', updateActiveShotChip);
+
+document.getElementById('shotStrip').addEventListener('click', function(e) {{
+  var chip = e.target.closest('.shot-chip');
+  if (!chip) return;
+  var t = parseFloat(chip.dataset.t);
+  if (!isNaN(t)) {{
+    vid.currentTime = Math.max(0, t - 0.3);  // slight lead-in
+    vid.play().catch(function(){{}});
+  }}
+}});
 
 function closePlayer() {{
   vid.pause(); vid.removeAttribute('src'); vid.load();
