@@ -96,21 +96,35 @@ SHOT_WINDOW_SEC = 1.5  # overlay visible ±1.5s around contact
 
 
 def calc_angle(a, b, c):
-    """Angle ABC in degrees from three (x, y) points."""
-    ba = (a[0] - b[0], a[1] - b[1])
-    bc = (c[0] - b[0], c[1] - b[1])
-    dot = ba[0] * bc[0] + ba[1] * bc[1]
-    mag = (math.hypot(*ba) * math.hypot(*bc)) or 1e-9
+    """Angle ABC in degrees from three N-D points (2D or 3D)."""
+    # Works for any dimensionality by only using the components both share
+    n = min(len(a), len(b), len(c))
+    ba = [a[i] - b[i] for i in range(n)]
+    bc = [c[i] - b[i] for i in range(n)]
+    dot = sum(ba[i] * bc[i] for i in range(n))
+    mag = (math.sqrt(sum(v * v for v in ba)) * math.sqrt(sum(v * v for v in bc))) or 1e-9
     return math.degrees(math.acos(max(-1.0, min(1.0, dot / mag))))
 
 
-def lm(frame_entry, idx):
-    """Pull landmark idx as (x, y) if visible enough, else None.
+def _angle_between_vectors_on_plane(v1, v2, plane_normal):
+    """Signed angle between v1 and v2 projected onto a plane defined by its normal.
 
-    Handles both formats:
-      - dict: {"x": ..., "y": ..., "visibility": ...}
-      - list/tuple: [x, y, z, visibility]
+    Returns unsigned magnitude in degrees [0, 180].
     """
+    import numpy as np
+    n = np.array(plane_normal, dtype=float)
+    n = n / (np.linalg.norm(n) or 1e-9)
+    def proj(v):
+        v = np.array(v, dtype=float)
+        return v - np.dot(v, n) * n
+    p1 = proj(v1); p2 = proj(v2)
+    m = (np.linalg.norm(p1) * np.linalg.norm(p2)) or 1e-9
+    cos = max(-1.0, min(1.0, float(np.dot(p1, p2) / m)))
+    return math.degrees(math.acos(cos))
+
+
+def lm(frame_entry, idx):
+    """Pull landmark idx as (x, y) in normalized image coords. Projection-dependent."""
     if not frame_entry or not frame_entry.get("detected"):
         return None
     lms = frame_entry.get("landmarks")
@@ -121,61 +135,111 @@ def lm(frame_entry, idx):
         if entry.get("visibility", 0) < 0.3:
             return None
         return (entry["x"], entry["y"])
-    # list/tuple form: [x, y, z, visibility]
     if len(entry) >= 4 and entry[3] < 0.3:
         return None
     return (entry[0], entry[1])
 
 
-def compute_shot_metrics(pose_frames, contact_frame, shot_type):
-    """Compute knee / trunk / arm angles at the frame closest to contact
-    where all required landmarks are visible. Returns dict or None."""
-    # Try the exact contact frame first, then expand outward ±12 frames
+def lm3d(frame_entry, idx):
+    """Pull landmark idx as (x, y, z) from world_landmarks — hip-centered metric 3D space.
+
+    World landmarks are camera-invariant: same pose returns same angles
+    regardless of shooting angle. Preferred over 2D `lm()` for angle calcs.
+    """
+    if not frame_entry or not frame_entry.get("detected"):
+        return None
+    lms = frame_entry.get("world_landmarks") or frame_entry.get("landmarks")
+    if not lms or idx >= len(lms):
+        return None
+    entry = lms[idx]
+    # Use visibility from 2D landmarks — world_landmarks doesn't always have it
+    vis_source = frame_entry.get("landmarks")
+    if vis_source and idx < len(vis_source):
+        v2d = vis_source[idx]
+        vis = v2d.get("visibility", 1.0) if isinstance(v2d, dict) else (
+            v2d[3] if len(v2d) >= 4 else 1.0)
+        if vis < 0.3:
+            return None
+    if isinstance(entry, dict):
+        return (entry["x"], entry["y"], entry.get("z", 0.0))
+    # [x, y, z, visibility] or [x, y, z]
+    if len(entry) >= 3:
+        return (entry[0], entry[1], entry[2])
+    return None
+
+
+def compute_shot_metrics(pose_frames, contact_frame, shot_type, use_3d=True):
+    """Compute knee / trunk / arm angles at the frame closest to contact.
+
+    When use_3d=True (default), uses MediaPipe's `world_landmarks` — a hip-
+    centered, metric, camera-invariant 3D coordinate system. Joint angles
+    are then TRUE angles in 3D space, not image-plane projections.
+
+    Trunk rotation in 3D is measured as the angle between the shoulder line
+    and the hip line projected onto the horizontal (X-Z) plane. Vertical
+    component is ignored since we only care about rotation about the
+    longitudinal (Y) axis.
+
+    Falls back to 2D calc if world_landmarks aren't available.
+
+    Returns dict or None.
+    """
+    picker = lm3d if use_3d else lm
     for delta in [0] + [d for i in range(1, 13) for d in (-i, i)]:
         idx = contact_frame + delta
         if idx < 0 or idx >= len(pose_frames):
             continue
         pf = pose_frames[idx]
-        # MediaPipe landmark indices
-        # 11=L_shoulder 12=R_shoulder 13=L_elbow 14=R_elbow 15=L_wrist 16=R_wrist
-        # 23=L_hip 24=R_hip 25=L_knee 26=R_knee 27=L_ankle 28=R_ankle
-        l_sh, r_sh = lm(pf, 11), lm(pf, 12)
-        l_el, r_el = lm(pf, 13), lm(pf, 14)
-        l_wr, r_wr = lm(pf, 15), lm(pf, 16)
-        l_hp, r_hp = lm(pf, 23), lm(pf, 24)
-        l_kn, r_kn = lm(pf, 25), lm(pf, 26)
-        l_an, r_an = lm(pf, 27), lm(pf, 28)
+
+        # If we asked for 3D but this frame has no world_landmarks, degrade to 2D
+        if use_3d and not pf.get("world_landmarks"):
+            picker = lm
+
+        l_sh, r_sh = picker(pf, 11), picker(pf, 12)
+        l_el, r_el = picker(pf, 13), picker(pf, 14)
+        l_wr, r_wr = picker(pf, 15), picker(pf, 16)
+        l_hp, r_hp = picker(pf, 23), picker(pf, 24)
+        l_kn, r_kn = picker(pf, 25), picker(pf, 26)
+        l_an, r_an = picker(pf, 27), picker(pf, 28)
 
         if not (l_sh and r_sh and l_hp and r_hp):
             continue
 
-        # Always use RIGHT side (racket arm for right-handed player)
+        # Always use right side (racket arm for right-handed player); fall back to left
         hp, kn, an = r_hp, r_kn, r_an
         if not (hp and kn and an):
-            hp, kn, an = l_hp, l_kn, l_an  # fallback
+            hp, kn, an = l_hp, l_kn, l_an
         if not (hp and kn and an):
             continue
         knee = calc_angle(hp, kn, an)
 
-        sh, el, wr = r_sh, r_el, r_wr  # racket arm
+        sh, el, wr = r_sh, r_el, r_wr
         if not (sh and el and wr):
             sh, el, wr = l_sh, l_el, l_wr
         if not (sh and el and wr):
             continue
         arm = calc_angle(sh, el, wr)
 
-        # Trunk rotation: angle between shoulder line and hip line
-        sh_vec = (r_sh[0] - l_sh[0], r_sh[1] - l_sh[1])
-        hp_vec = (r_hp[0] - l_hp[0], r_hp[1] - l_hp[1])
-        a_sh = math.degrees(math.atan2(sh_vec[1], sh_vec[0]))
-        a_hp = math.degrees(math.atan2(hp_vec[1], hp_vec[0]))
-        trunk = abs(((a_sh - a_hp) + 180) % 360 - 180)
+        # Trunk rotation
+        sh_vec = tuple(r_sh[i] - l_sh[i] for i in range(len(r_sh)))
+        hp_vec = tuple(r_hp[i] - l_hp[i] for i in range(len(r_hp)))
+        if use_3d and len(sh_vec) >= 3:
+            # Project onto horizontal plane: in MediaPipe world coords, Y is vertical.
+            # So rotation about the vertical axis = angle between shoulder_line and
+            # hip_line after zeroing out the Y component.
+            trunk = _angle_between_vectors_on_plane(sh_vec, hp_vec, (0.0, 1.0, 0.0))
+        else:
+            # 2D: atan2 image-plane angle difference
+            a_sh = math.degrees(math.atan2(sh_vec[1], sh_vec[0]))
+            a_hp = math.degrees(math.atan2(hp_vec[1], hp_vec[0]))
+            trunk = abs(((a_sh - a_hp) + 180) % 360 - 180)
 
         return {
             "knee": int(knee),
             "trunk": int(trunk),
             "arm": int(arm),
             "frame_used": idx,
+            "mode": "3d" if use_3d and picker is lm3d else "2d",
         }
     return None
 
