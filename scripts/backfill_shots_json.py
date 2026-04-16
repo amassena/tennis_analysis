@@ -177,6 +177,18 @@ def main():
             p.stem.replace('_fused_detections', '').replace('_fused', '')
             for p in DETECTIONS_DIR.glob("*_fused*.json")
         })
+        # Respect permanent batch-exclusion list
+        try:
+            from config.batch_exclude import excluded_set
+            excl = excluded_set()
+            if excl:
+                before = len(targets)
+                targets = [t for t in targets if t not in excl]
+                skipped = before - len(targets)
+                if skipped:
+                    print(f"Skipping {skipped} videos per config/exclude_from_batch.json")
+        except ImportError:
+            pass
 
     print(f"Backfilling shots.json for {len(targets)} videos")
     success = fail = 0

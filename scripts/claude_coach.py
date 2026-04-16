@@ -291,6 +291,19 @@ def main():
     else:
         parser.error("Provide video_id or --all")
 
+    # Respect the permanent batch-exclusion list
+    try:
+        from config.batch_exclude import excluded_set
+        excl = excluded_set()
+        if args.all and excl:
+            before = len(targets)
+            targets = [t for t in targets if t not in excl]
+            skipped = before - len(targets)
+            if skipped:
+                print(f"Skipping {skipped} videos per config/exclude_from_batch.json")
+    except ImportError:
+        pass
+
     out_dir = PROJECT_ROOT / "coaching"
     out_dir.mkdir(exist_ok=True)
 

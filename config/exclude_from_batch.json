@@ -1,0 +1,25 @@
+{
+  "comment": "Videos that batch operations (claude_coach --all, backfill_shots_json, batch grade overlay renders, index rebuilds that trigger re-processing, etc.) MUST skip. These videos stay in the gallery with whatever content they already have on R2 — we just don't reprocess them.",
+  "reason": "Files (preprocessed/poses/detections) no longer reside on any GPU machine and the user has decided they are not worth the cost of syncing + reprocessing.",
+  "added_2026_04_16": [
+    "IMG_1044",
+    "IMG_1051",
+    "IMG_1052",
+    "IMG_1065",
+    "IMG_1066",
+    "IMG_1068",
+    "IMG_1069",
+    "IMG_1070",
+    "IMG_1071",
+    "IMG_1072",
+    "IMG_1120",
+    "IMG_1126",
+    "IMG_1132",
+    "IMG_6965",
+    "IMG_6966",
+    "IMG_6967",
+    "IMG_6976",
+    "IMG_6977",
+    "IMG_6978"
+  ]
+}
