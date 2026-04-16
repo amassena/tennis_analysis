@@ -25,7 +25,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 DETECTIONS_DIR = PROJECT_ROOT / "detections"
 ANALYSIS_DIR = PROJECT_ROOT / "analysis"
 
-MODEL = "claude-sonnet-4-5"  # strong reasoning on structured metrics
+MODEL = "claude-sonnet-4-6"  # latest Sonnet — best cost/quality for structured metrics
 MAX_TOKENS = 1800
 
 SYSTEM_PROMPT = """You are an experienced tennis coach analyzing biomechanical metrics \
