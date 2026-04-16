@@ -561,6 +561,7 @@ vid.addEventListener('timeupdate', function() {{
   document.getElementById('timeDisplay').textContent = fmtTime(vid.currentTime);
 }});
 
+var pausedOnOpen = false;  // set by jumpToExample so coach examples open paused
 function openPlayer(url, title) {{
   vid.src = url;
   document.getElementById('playerTitle').textContent = title;
@@ -569,9 +570,11 @@ function openPlayer(url, title) {{
   if (pendingTime !== null) {{
     vid.addEventListener('loadedmetadata', function() {{
       vid.currentTime = pendingTime; pendingTime = null;
+      if (pausedOnOpen) {{ vid.pause(); pausedOnOpen = false; }}
     }}, {{once:true}});
   }}
-  vid.play().catch(function(){{}});
+  if (pausedOnOpen) {{ vid.pause(); }}
+  else {{ vid.play().catch(function(){{}}); }}
   history.replaceState(null,'','?v='+encodeURIComponent(url.replace('https://tennis.playfullife.com/','')));
 }}
 
@@ -726,6 +729,7 @@ function jumpToExample(vid, t) {{
   if(!link) return;
   var url = 'https://tennis.playfullife.com/'+vid+'/'+link.file;
   pendingTime = t;
+  pausedOnOpen = true;  // open paused so user sees the exact frame AI referenced
   closeCoachModal();
   openPlayer(url, link.label+' — '+vid+' @ '+fmtTs(t));
 }}
