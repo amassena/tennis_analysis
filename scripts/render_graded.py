@@ -27,8 +27,31 @@ import os
 import sys
 
 import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _load_font(size):
+    """Load a TTF font that supports Unicode (degree symbol, etc.)."""
+    candidates = [
+        # macOS
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        # Windows
+        r"C:\Windows\Fonts\arial.ttf",
+        r"C:\Windows\Fonts\segoeui.ttf",
+        # Linux
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -194,52 +217,72 @@ def flag_color(level):
     return [(80, 200, 80), (0, 200, 220), (60, 60, 220)][level]
 
 
-def draw_overlay(frame, w, h, det, metrics, grade, rows, ts):
-    """Draw the label bar with grade + metric badges."""
-    # Background bar
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (0, 0), (w, LABEL_H), (0, 0, 0), -1)
-    cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
+def build_shot_tile(w, det, grade, rows, ts):
+    """Build a numpy BGR tile (w × LABEL_H+4) with the label bar fully rendered.
+
+    Uses PIL for all text so we get true Unicode (°) and better antialiasing.
+    Returns BGR uint8 array to paste directly onto frames during playback.
+    """
+    # PIL wants RGB; we'll convert to BGR at the end
+    img = Image.new("RGB", (w, LABEL_H + 4), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    font_lg = _load_font(32)
+    font_md = _load_font(22)
+    font_sm = _load_font(18)
 
     shot = det.get("shot_type", "unknown").upper()
-    color = SHOT_COLORS.get(det.get("shot_type"), (200, 200, 200))
+    shot_color = SHOT_COLORS.get(det.get("shot_type"), (200, 200, 200))
     grade_color = GRADE_COLORS.get(grade, (200, 200, 200))
 
-    # Shot type
-    cv2.putText(frame, shot, (14, 38), cv2.FONT_HERSHEY_SIMPLEX, 1.05, color, 2, cv2.LINE_AA)
+    # BGR → RGB for PIL
+    def to_rgb(c): return (c[2], c[1], c[0])
 
-    # Grade chip (colored rounded box)
+    # Shot label
+    draw.text((14, 10), shot, font=font_lg, fill=to_rgb(shot_color))
+
+    # Grade chip
     gx = 230
-    cv2.rectangle(frame, (gx, 12), (gx + 58, 44), grade_color, -1)
-    (gw, gh), _ = cv2.getTextSize(grade, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 3)
-    cv2.putText(frame, grade, (gx + (58 - gw) // 2, 40),
-                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 3, cv2.LINE_AA)
+    draw.rectangle([gx, 10, gx + 58, 46], fill=to_rgb(grade_color))
+    gw = draw.textlength(grade, font=font_lg)
+    draw.text((gx + (58 - gw) / 2, 8), grade, font=font_lg, fill=(0, 0, 0))
 
-    # Metric badges: Knee / Trunk / Arm
+    # Metric badges
     mx = 310
     if rows:
         for label, v, ideal, level in rows:
             fcol = flag_color(level)
-            text = f"{label} {v}"  # no unit — Hershey font lacks the degree symbol
-            # dot
-            cv2.circle(frame, (mx + 9, 28), 7, fcol, -1)
-            cv2.putText(frame, text, (mx + 22, 34),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (230, 230, 230), 1, cv2.LINE_AA)
-            (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-            mx += 22 + tw + 24
+            # Dot
+            draw.ellipse([mx + 2, 20, mx + 18, 36], fill=to_rgb(fcol))
+            text = f"{label} {v}\u00b0"  # degree symbol works via PIL/TTF
+            draw.text((mx + 24, 12), text, font=font_md, fill=(230, 230, 230))
+            tw = draw.textlength(text, font=font_md)
+            mx += 24 + int(tw) + 22
     else:
-        cv2.putText(frame, "(no pose at contact)", (mx, 34),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (170, 170, 170), 1, cv2.LINE_AA)
+        draw.text((mx, 14), "(no pose at contact)", font=font_md, fill=(170, 170, 170))
 
     # Confidence + timestamp on right
     conf = det.get("confidence", 0)
     right = f"{conf:.0%}  |  {ts:.1f}s"
-    (tw, _), _ = cv2.getTextSize(right, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-    cv2.putText(frame, right, (w - tw - 14, 38),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+    rw = draw.textlength(right, font=font_md)
+    draw.text((w - rw - 14, 14), right, font=font_md, fill=(255, 255, 255))
 
-    # Grade color accent bar under the label bar
-    cv2.rectangle(frame, (0, LABEL_H), (w, LABEL_H + 4), grade_color, -1)
+    # Grade accent bar
+    draw.rectangle([0, LABEL_H, w, LABEL_H + 4], fill=to_rgb(grade_color))
+
+    rgb = np.array(img)
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    return bgr
+
+
+def apply_shot_tile(frame, tile):
+    """Blend the pre-built shot tile onto the top of the frame with 65% opacity."""
+    th, tw = tile.shape[:2]
+    roi = frame[0:th, 0:tw]
+    # Only the bar area (top LABEL_H rows) gets blended; the 4px accent is solid
+    cv2.addWeighted(tile[:LABEL_H], 0.75, roi[:LABEL_H], 0.25, 0, roi[:LABEL_H])
+    # Solid accent bar below
+    roi[LABEL_H:LABEL_H + 4] = tile[LABEL_H:LABEL_H + 4]
 
 
 def draw_timeline(frame, detections, fps, total_frames, frame_idx, w, h):
@@ -298,7 +341,17 @@ def main():
 
     # Pre-compute grade + metrics for each shot
     print("Computing per-shot grades...")
-    shot_info = []  # (start_frame, end_frame, det, grade, rows)
+    # We need actual video dims for tile width; open cap early to get w
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"[ERROR] Cannot open {video_path}")
+        sys.exit(1)
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    src_fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    shot_info = []  # (start_frame, end_frame, tile)
     window = int(SHOT_WINDOW_SEC * fps)
     grade_counts = {}
     for d in detections:
@@ -309,24 +362,17 @@ def main():
         else:
             grade, rows = "?", []
         grade_counts[grade] = grade_counts.get(grade, 0) + 1
-        shot_info.append((max(0, cf - window), cf + window, d, grade, rows))
+        ts = cf / src_fps
+        tile = build_shot_tile(w, d, grade, rows, ts)
+        shot_info.append((max(0, cf - window), cf + window, tile))
     print(f"  Grades: {dict(sorted(grade_counts.items()))}")
 
-    # Build frame -> shot info lookup
+    # Build frame -> tile lookup
     lookup = [None] * max(total_frames, len(pose_frames))
-    for start, end, d, g, r in shot_info:
+    for start, end, tile in shot_info:
         for f_idx in range(start, min(end + 1, len(lookup))):
-            lookup[f_idx] = (d, g, r)
+            lookup[f_idx] = tile
 
-    # Render
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"[ERROR] Cannot open {video_path}")
-        sys.exit(1)
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    src_fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"  Video: {w}x{h} @ {src_fps} fps, {frame_count} frames")
     print(f"  Output: {out_path}")
 
@@ -339,12 +385,9 @@ def main():
         ok, frame = cap.read()
         if not ok:
             break
-        entry = lookup[idx] if idx < len(lookup) else None
-        if entry:
-            d, grade, rows = entry
-            ts = idx / src_fps
-            metrics = {"knee": 0, "trunk": 0, "arm": 0}
-            draw_overlay(frame, w, h, d, metrics, grade, rows, ts)
+        tile = lookup[idx] if idx < len(lookup) else None
+        if tile is not None:
+            apply_shot_tile(frame, tile)
         draw_timeline(frame, detections, src_fps, total_frames, idx, w, h)
         out.write(frame)
         idx += 1
