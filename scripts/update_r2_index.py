@@ -829,16 +829,52 @@ function fmtTs(t) {{
 }}
 
 function jumpToExample(vid, t) {{
-  // Find the video's timeline mp4 from VIDEOS and open at timestamp
+  // Prefer a slow-mo variant so the user can actually study the form.
+  // Priority of variants to check: rally_slowmo > forehands_slowmo > backhands_slowmo
+  // > serves_slowmo > volleys_slowmo > timeline (fallback).
   var v = VIDEOS.find(function(x){{ return x.id === vid; }});
   if(!v) return;
-  var link = v.links.find(function(l){{ return l.key === 'timeline'; }}) || v.links[0];
-  if(!link) return;
-  var url = 'https://tennis.playfullife.com/'+vid+'/'+link.file;
-  pendingTime = t;
-  pausedOnOpen = true;  // open paused so user sees the exact frame AI referenced
+
+  var SLOWMO_PREF = ['rally_slowmo','forehands_slowmo','backhands_slowmo','serves_slowmo','volleys_slowmo','grouped_slowmo'];
+  var haveLink = function(key){{ return v.links.find(function(l){{ return l.key === key; }}); }};
+
   closeCoachModal();
-  openPlayer(url, link.label+' — '+vid+' @ '+fmtTs(t));
+
+  // Fetch shots.json to map the example's original timestamp into the slow-mo variant.
+  fetch('/' + vid + '/shots.json', {{cache:'no-store'}})
+    .then(function(r){{ if(!r.ok) throw new Error('404'); return r.json(); }})
+    .then(function(data){{
+      // Find the shot whose original t is closest to the example's t
+      var best = null, bestDelta = 999;
+      (data.shots || []).forEach(function(s){{
+        var d = Math.abs((s.t||0) - t);
+        if (d < bestDelta) {{ bestDelta = d; best = s; }}
+      }});
+      if (!best || bestDelta > 3) {{ openTimeline(t); return; }}
+      // Pick the first slow-mo variant this shot actually appears in
+      for (var i = 0; i < SLOWMO_PREF.length; i++) {{
+        var key = SLOWMO_PREF[i];
+        if (best.positions && best.positions[key] !== undefined && haveLink(key)) {{
+          var link = haveLink(key);
+          var url = 'https://tennis.playfullife.com/'+vid+'/'+link.file;
+          pendingTime = best.positions[key];
+          pausedOnOpen = true;
+          openPlayer(url, link.label+' — '+vid+' @ '+fmtTs(t));
+          return;
+        }}
+      }}
+      openTimeline(t);
+    }})
+    .catch(function(){{ openTimeline(t); }});
+
+  function openTimeline(tt) {{
+    var link = haveLink('timeline') || v.links[0];
+    if (!link) return;
+    var url = 'https://tennis.playfullife.com/'+vid+'/'+link.file;
+    pendingTime = tt;
+    pausedOnOpen = true;
+    openPlayer(url, link.label+' — '+vid+' @ '+fmtTs(tt));
+  }}
 }}
 
 function escapeHtml(s) {{
