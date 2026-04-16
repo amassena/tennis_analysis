@@ -306,19 +306,57 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--video", required=True, help="Video ID, e.g. IMG_1141")
     parser.add_argument("--output", help="Output path (default: <video>_graded.mp4)")
+    parser.add_argument("--variant", default="timeline",
+                        help="Which output variant to grade: timeline | rally | "
+                             "rally_slowmo | forehands | forehands_slowmo | "
+                             "backhands | backhands_slowmo | serves | serves_slowmo | "
+                             "volleys | volleys_slowmo. Non-timeline variants read the "
+                             "variant .mp4 already in exports/ and use shots.json positions.")
+    parser.add_argument("--input", help="Override input mp4 (useful for non-timeline variants)")
+    parser.add_argument("--shots-json", help="Path to shots.json for variant positions")
     parser.add_argument("--max-frames", type=int, default=0)
     args = parser.parse_args()
 
     vid = args.video
-    video_path = os.path.join(PREPROCESSED_DIR, f"{vid}.mp4")
+    variant = args.variant
+    is_timeline = (variant == "timeline")
+
+    # Input video
+    if args.input:
+        video_path = args.input
+    elif is_timeline:
+        video_path = os.path.join(PREPROCESSED_DIR, f"{vid}.mp4")
+    else:
+        # Look in exports/{vid}/ first, fall back to exports/ root
+        c1 = os.path.join(PROJECT_ROOT, "exports", vid, f"{vid}_{variant}.mp4")
+        c2 = os.path.join(PROJECT_ROOT, "exports", f"{vid}_{variant}.mp4")
+        video_path = c1 if os.path.exists(c1) else c2
     detections_path = os.path.join(DETECTIONS_DIR, f"{vid}_fused_detections.json")
     if not os.path.exists(detections_path):
         detections_path = os.path.join(DETECTIONS_DIR, f"{vid}_fused.json")
     poses_path = os.path.join(POSES_DIR, f"{vid}.json")
-    out_path = args.output or os.path.join(PROJECT_ROOT, "exports", f"{vid}_graded.mp4")
+
+    # Shots.json (only needed for non-timeline variants)
+    shots_path = args.shots_json
+    if not shots_path and not is_timeline:
+        for cand in [os.path.join(PROJECT_ROOT, "exports", vid, "shots.json"),
+                     os.path.join(PROJECT_ROOT, "exports", f"{vid}_shots.json"),
+                     os.path.join(PROJECT_ROOT, "shots", f"{vid}.json")]:
+            if os.path.exists(cand):
+                shots_path = cand; break
+
+    default_out = f"{vid}_{variant}_graded.mp4" if not is_timeline else f"{vid}_graded.mp4"
+    out_path = args.output or os.path.join(PROJECT_ROOT, "exports", default_out)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    for p in (video_path, detections_path, poses_path):
+    required = [video_path, detections_path, poses_path]
+    if not is_timeline:
+        if not shots_path:
+            print(f"[ERROR] --variant {variant} requires shots.json. Provide via "
+                  f"--shots-json or place at exports/{vid}/shots.json")
+            sys.exit(1)
+        required.append(shots_path)
+    for p in required:
         if not os.path.exists(p):
             print(f"[ERROR] Missing: {p}")
             sys.exit(1)
@@ -351,10 +389,27 @@ def main():
     src_fps = cap.get(cv2.CAP_PROP_FPS)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+    # Load shots.json for non-timeline variants (maps source frame → output time)
+    variant_positions = None
+    if not is_timeline and shots_path:
+        with open(shots_path) as sf:
+            shots_data = json.load(sf)
+        # idx → output time (seconds) in the target variant
+        variant_positions = {}
+        for s in shots_data.get("shots", []):
+            pos = s.get("positions", {}).get(variant)
+            if pos is not None:
+                variant_positions[s.get("idx")] = float(pos)
+        # For slow-mo variants the on-screen shot window should be stretched
+        # to cover the slowed playback (e.g. 0.25x ⇒ 4× window)
+        speed = 0.25 if variant.endswith("_slowmo") else 1.0
+        shot_window_frames = int(SHOT_WINDOW_SEC * src_fps / speed)
+    else:
+        shot_window_frames = int(SHOT_WINDOW_SEC * src_fps)
+
     shot_info = []  # (start_frame, end_frame, tile)
-    window = int(SHOT_WINDOW_SEC * fps)
     grade_counts = {}
-    for d in detections:
+    for idx, d in enumerate(detections):
         cf = int(d.get("frame", 0))
         metrics = compute_shot_metrics(pose_frames, cf, d.get("shot_type"))
         if metrics:
@@ -362,13 +417,28 @@ def main():
         else:
             grade, rows = "?", []
         grade_counts[grade] = grade_counts.get(grade, 0) + 1
-        ts = cf / src_fps
+        ts = cf / fps  # source-timeline ts (shown on the tile)
         tile = build_shot_tile(w, d, grade, rows, ts)
-        shot_info.append((max(0, cf - window), cf + window, tile))
-    print(f"  Grades: {dict(sorted(grade_counts.items()))}")
 
-    # Build frame -> tile lookup
-    lookup = [None] * max(total_frames, len(pose_frames))
+        if is_timeline:
+            # 1:1 mapping: tile active around cf
+            shot_info.append((max(0, cf - shot_window_frames),
+                              cf + shot_window_frames, tile))
+        else:
+            # Shot may or may not appear in this variant
+            if idx not in variant_positions:
+                continue
+            out_center = int(variant_positions[idx] * src_fps)
+            shot_info.append((max(0, out_center - shot_window_frames),
+                              out_center + shot_window_frames, tile))
+    print(f"  Grades: {dict(sorted(grade_counts.items()))}  (variant={variant})")
+
+    # Build frame -> tile lookup. For non-timeline variants the total output
+    # frame count isn't total_frames — use the video's own frame count.
+    lookup_size = max(total_frames, len(pose_frames))
+    if not is_timeline:
+        lookup_size = max(lookup_size, int(cap.get(cv2.CAP_PROP_FRAME_COUNT)))
+    lookup = [None] * lookup_size
     for start, end, tile in shot_info:
         for f_idx in range(start, min(end + 1, len(lookup))):
             lookup[f_idx] = tile
@@ -388,7 +458,8 @@ def main():
         tile = lookup[idx] if idx < len(lookup) else None
         if tile is not None:
             apply_shot_tile(frame, tile)
-        draw_timeline(frame, detections, src_fps, total_frames, idx, w, h)
+        if is_timeline:
+            draw_timeline(frame, detections, src_fps, total_frames, idx, w, h)
         out.write(frame)
         idx += 1
         if idx % 1800 == 0:

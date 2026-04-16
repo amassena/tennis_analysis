@@ -588,18 +588,27 @@ var currentShots = null;   // {{video, shots[]}} loaded from shots.json
 var currentVariant = null; // e.g. "timeline" / "rally_slowmo" — derived from url
 
 function openPlayer(url, title) {{
+  // Reset to a clean paused state before loading new source so native
+  // controls don't flash the wrong play/pause icon.
+  try {{ vid.pause(); }} catch (e) {{}}
+  vid.removeAttribute('autoplay');
+  vid.autoplay = false;
   vid.src = url;
   document.getElementById('playerTitle').textContent = title;
   overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  if (pendingTime !== null) {{
-    vid.addEventListener('loadedmetadata', function() {{
-      vid.currentTime = pendingTime; pendingTime = null;
-      if (pausedOnOpen) {{ vid.pause(); pausedOnOpen = false; }}
-    }}, {{once:true}});
-  }}
-  if (pausedOnOpen) {{ vid.pause(); }}
-  else {{ vid.play().catch(function(){{}}); }}
+  var wantPaused = pausedOnOpen; pausedOnOpen = false;
+  var wantT = pendingTime; pendingTime = null;
+  vid.addEventListener('loadedmetadata', function() {{
+    if (wantT !== null) vid.currentTime = wantT;
+    if (wantPaused) {{
+      // Double pause defeats browser race where autoplay heuristic fires on seek
+      try {{ vid.pause(); }} catch (e) {{}}
+      setTimeout(function(){{ try {{ vid.pause(); }} catch(e){{}} }}, 50);
+    }} else {{
+      vid.play().catch(function(){{}});
+    }}
+  }}, {{once:true}});
   history.replaceState(null,'','?v='+encodeURIComponent(url.replace('https://tennis.playfullife.com/','')));
   // Parse "<vid>/<vid>_<variant>.mp4" from the URL and load shots.json
   var m = url.match(/\\/([A-Za-z0-9_]+)\\/\\1_(\\w+)\\.mp4$/);
