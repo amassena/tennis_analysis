@@ -149,21 +149,18 @@ def compute_shot_metrics(pose_frames, contact_frame, shot_type):
         if not (l_sh and r_sh and l_hp and r_hp):
             continue
 
-        # Pick dominant side by knee visibility
-        if r_kn and r_hp and r_an:
-            hp, kn, an = r_hp, r_kn, r_an
-        elif l_kn and l_hp and l_an:
-            hp, kn, an = l_hp, l_kn, l_an
-        else:
+        # Always use RIGHT side (racket arm for right-handed player)
+        hp, kn, an = r_hp, r_kn, r_an
+        if not (hp and kn and an):
+            hp, kn, an = l_hp, l_kn, l_an  # fallback
+        if not (hp and kn and an):
             continue
         knee = calc_angle(hp, kn, an)
 
-        # Arm: dominant = same side as knee unless visibility differs
-        if r_sh and r_el and r_wr:
-            sh, el, wr = r_sh, r_el, r_wr
-        elif l_sh and l_el and l_wr:
+        sh, el, wr = r_sh, r_el, r_wr  # racket arm
+        if not (sh and el and wr):
             sh, el, wr = l_sh, l_el, l_wr
-        else:
+        if not (sh and el and wr):
             continue
         arm = calc_angle(sh, el, wr)
 
@@ -188,7 +185,7 @@ def grade_shot(metrics, shot_type):
     ideals = IDEALS.get(shot_type, IDEALS["forehand"])
     rows = []
     yellow = red = 0
-    for key, label in [("knee", "Knee"), ("trunk", "Trunk"), ("arm", "Arm")]:
+    for key, label in [("knee", "Knee"), ("trunk", "Trunk"), ("arm", "R.Arm")]:
         v = metrics[key]
         ideal = ideals[key]
         d = abs(v - ideal)
@@ -254,10 +251,13 @@ def build_shot_tile(w, det, grade, rows, ts):
             fcol = flag_color(level)
             # Dot
             draw.ellipse([mx + 2, 20, mx + 18, 36], fill=to_rgb(fcol))
-            text = f"{label} {v}\u00b0"  # degree symbol works via PIL/TTF
-            draw.text((mx + 24, 12), text, font=font_md, fill=(230, 230, 230))
-            tw = draw.textlength(text, font=font_md)
-            mx += 24 + int(tw) + 22
+            val_text = f"{label} {v}\u00b0"
+            ideal_text = f"/{ideal}\u00b0"
+            draw.text((mx + 24, 12), val_text, font=font_md, fill=(230, 230, 230))
+            vw = draw.textlength(val_text, font=font_md)
+            draw.text((mx + 24 + vw + 2, 16), ideal_text, font=font_sm, fill=(120, 120, 120))
+            iw = draw.textlength(ideal_text, font=font_sm)
+            mx += 24 + int(vw) + int(iw) + 22
     else:
         draw.text((mx, 14), "(no pose at contact)", font=font_md, fill=(170, 170, 170))
 
