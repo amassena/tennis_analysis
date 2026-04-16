@@ -220,7 +220,7 @@ def draw_overlay(frame, w, h, det, metrics, grade, rows, ts):
     if rows:
         for label, v, ideal, level in rows:
             fcol = flag_color(level)
-            text = f"{label} {v}\xb0"  # ° symbol
+            text = f"{label} {v}"  # no unit — Hershey font lacks the degree symbol
             # dot
             cv2.circle(frame, (mx + 9, 28), 7, fcol, -1)
             cv2.putText(frame, text, (mx + 22, 34),
