@@ -238,11 +238,23 @@ def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     cookie_dir = PROJECT_ROOT / "config" / "icloud_session"
     cookie_dir.mkdir(parents=True, exist_ok=True)
 
+    # Self-healing: pull fresh iCloud cookies from R2 before auth.
+    # The Hetzner watcher pushes its cookies to R2 after each successful auth,
+    # so these are always ≤60s old if the watcher is running.
+    _pull_icloud_cookies_from_r2(cookie_dir)
+
     log(f"Connecting to iCloud as {apple_id}")
     api = PyiCloudService(apple_id, password, cookie_directory=str(cookie_dir))
 
     if api.requires_2fa:
-        raise RuntimeError("iCloud requires 2FA - authenticate manually first")
+        # Last resort: clear local cookies and try once more with R2 cookies
+        log("2FA required — clearing local cookies and retrying with R2 cookies", "WARN")
+        for f in cookie_dir.glob("*"):
+            f.unlink()
+        _pull_icloud_cookies_from_r2(cookie_dir)
+        api = PyiCloudService(apple_id, password, cookie_directory=str(cookie_dir))
+        if api.requires_2fa:
+            raise RuntimeError("iCloud requires 2FA even after cookie refresh — watcher session may be expired too")
 
     # Find the asset — try smart albums first (much faster), then full scan
     log(f"Looking for asset {icloud_asset_id}")
@@ -346,6 +358,43 @@ def generate_thumbnail(video_path: Path, output_path: Path = None) -> Path:
 
     log(f"Generated thumbnail: {output_path}")
     return output_path
+
+
+def _pull_icloud_cookies_from_r2(cookie_dir: Path):
+    """Download fresh iCloud session cookies from R2.
+
+    The Hetzner watcher pushes its cookies to R2 after each successful auth.
+    GPU workers pull them before each iCloud download — so cookies are always
+    fresh and no manual SCP is needed.
+    """
+    client, bucket = _get_r2_client()
+    if not client:
+        return
+    cookie_dir.mkdir(parents=True, exist_ok=True)
+    for key in ["config/icloud_cookies/cookiejar", "config/icloud_cookies/session"]:
+        local_name = "amassenagmailcom." + key.split("/")[-1]
+        local_path = cookie_dir / local_name
+        try:
+            client.download_file(bucket, key, str(local_path))
+        except Exception:
+            pass  # R2 may not have cookies yet — not fatal
+
+
+def _push_icloud_cookies_to_r2(cookie_dir: Path):
+    """Push local iCloud cookies to R2 so other machines can use them."""
+    client, bucket = _get_r2_client()
+    if not client:
+        return
+    for local_name, r2_key in [
+        ("amassenagmailcom.cookiejar", "config/icloud_cookies/cookiejar"),
+        ("amassenagmailcom.session", "config/icloud_cookies/session"),
+    ]:
+        local_path = cookie_dir / local_name
+        if local_path.exists():
+            try:
+                client.upload_file(str(local_path), bucket, r2_key)
+            except Exception:
+                pass
 
 
 def _get_icloud_created(video_name: str) -> str:
