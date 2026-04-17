@@ -588,6 +588,15 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
             for d in det_data.get("detections", []):
                 st = d.get("shot_type", "unknown")
                 meta["breakdown"][st] = meta["breakdown"].get(st, 0) + 1
+            # Ball tracking summary (if enriched)
+            ball_speeds = [d.get("ball_speed_at_contact") for d in det_data.get("detections", [])
+                           if d.get("ball_visible_at_contact") and d.get("ball_speed_at_contact")]
+            if ball_speeds:
+                meta["ball_avg_speed"] = round(sum(ball_speeds) / len(ball_speeds), 1)
+                meta["ball_max_speed"] = round(max(ball_speeds), 1)
+                meta["ball_detection_rate"] = round(
+                    sum(1 for d in det_data.get("detections", []) if d.get("ball_visible_at_contact"))
+                    / max(1, len(det_data.get("detections", []))), 2)
             meta_json = _json.dumps(meta).encode()
             # Upload to R2
             from pathlib import Path as _P

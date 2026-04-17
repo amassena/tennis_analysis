@@ -127,6 +127,22 @@ def load_metrics(vid: str) -> dict | None:
     else:
         metrics["per_type_biomech"] = None
 
+    # Ball tracking (enriched detection data)
+    ball_speeds = [d.get("ball_speed_at_contact") for d in dets
+                   if d.get("ball_visible_at_contact") and d.get("ball_speed_at_contact")]
+    ball_traj_changes = [d.get("ball_trajectory_change") for d in dets
+                         if d.get("ball_trajectory_change") is not None]
+    if ball_speeds:
+        import statistics as _st
+        metrics["ball_tracking"] = {
+            "avg_speed": round(_st.mean(ball_speeds), 1),
+            "max_speed": round(max(ball_speeds), 1),
+            "min_speed": round(min(ball_speeds), 1),
+            "detection_rate": round(
+                sum(1 for d in dets if d.get("ball_visible_at_contact")) / max(1, len(dets)), 2),
+            "avg_trajectory_change": round(_st.mean(ball_traj_changes), 1) if ball_traj_changes else None,
+        }
+
     return metrics
 
 
@@ -169,6 +185,21 @@ def format_user_message(metrics: dict) -> str:
         lines.append("- Kinetic chain correct: >80% is solid")
     else:
         lines.append("(No per-shot biomechanical data — analyze from shot breakdown only)")
+
+    # Ball tracking summary
+    bt = metrics.get("ball_tracking")
+    if bt:
+        lines.append("")
+        lines.append("## Ball tracking")
+        lines.append(f"- Avg ball speed at contact: {bt['avg_speed']}")
+        lines.append(f"- Max ball speed: {bt['max_speed']}")
+        lines.append(f"- Min ball speed: {bt['min_speed']}")
+        lines.append(f"- Ball detection rate: {bt['detection_rate']:.0%}")
+        if bt.get("avg_trajectory_change"):
+            lines.append(f"- Avg trajectory change through contact: {bt['avg_trajectory_change']}°")
+        lines.append("")
+        lines.append("Higher ball speed generally correlates with better racket-head speed and "
+                     "clean contact. Large trajectory-change values indicate solid shot contact.")
 
     # Per-shot timeline
     timeline = metrics.get("per_shot_timeline") or []

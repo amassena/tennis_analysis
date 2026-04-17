@@ -226,6 +226,8 @@ def build_index_html(videos_meta):
             'breakdown': bd,
             'has_thumb': m.get('has_thumb', False),
             'links': links,
+            'ball_avg_speed': m.get('ball_avg_speed'),
+            'ball_detection_rate': m.get('ball_detection_rate'),
         })
 
     video_json = json.dumps(video_data, separators=(',', ':'))
@@ -1207,6 +1209,7 @@ function renderGallery() {{
       html += '<div class="card-meta">';
       if(dur) html += '<span>'+dur+'</span>';
       if(v.shots) html += '<span>'+v.shots+' shots</span>';
+      if(v.ball_avg_speed) html += '<span style="color:#FFD700">\u26be '+v.ball_avg_speed.toFixed(0)+' avg</span>';
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
       html += '<div class="card-coach-summary" id="coachSum-'+v.id+'" data-action="coach" data-vid="'+v.id+'">'

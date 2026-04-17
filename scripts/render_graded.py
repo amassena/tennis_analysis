@@ -330,6 +330,15 @@ def build_shot_tile(w, det, grade, rows, ts):
     else:
         draw.text((mx, 14), "(no pose at contact)", font=font_md, fill=(170, 170, 170))
 
+    # Ball speed badge (if ball tracking data enriched the detection)
+    ball_speed = det.get("ball_speed_at_contact")
+    ball_visible = det.get("ball_visible_at_contact", False)
+    if ball_speed is not None and ball_visible:
+        mx += 8
+        ball_text = f"\u26be {ball_speed:.0f}"  # ⚾ + speed
+        draw.text((mx, 12), ball_text, font=font_md, fill=(255, 200, 80))
+        mx += int(draw.textlength(ball_text, font=font_md)) + 8
+
     # Confidence + timestamp on right
     conf = det.get("confidence", 0)
     right = f"{conf:.0%}  |  {ts:.1f}s"
