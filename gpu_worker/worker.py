@@ -728,11 +728,13 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     # Step 7: Update R2 gallery index
     log("Step 7: Updating gallery index")
     stage("uploading", 0, "Updating gallery index")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     result = subprocess.run(
         [python, str(PROJECT_ROOT / "scripts" / "update_r2_index.py")],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
+        env=env,
     )
     if result.returncode != 0:
         log(f"Index update failed: {result.stderr[-300:]}", "WARN")

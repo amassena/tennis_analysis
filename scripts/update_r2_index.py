@@ -1461,7 +1461,7 @@ def update_index():
 
     # Build and upload index
     html = build_index_html(all_meta)
-    tmp = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w')
+    tmp = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w', encoding='utf-8')
     tmp.write(html)
     tmp.close()
 
@@ -1470,7 +1470,7 @@ def update_index():
         import re as _re
         scripts = _re.findall(r'<script>(.*?)</script>', html, _re.DOTALL)
         if scripts:
-            js_tmp = tempfile.NamedTemporaryFile(suffix='.js', delete=False, mode='w')
+            js_tmp = tempfile.NamedTemporaryFile(suffix='.js', delete=False, mode='w', encoding='utf-8')
             js_tmp.write('(function(){\n')
             for s in scripts:
                 js_tmp.write(s + '\n')
