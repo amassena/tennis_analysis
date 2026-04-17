@@ -77,14 +77,19 @@ GRADE_COLORS = {
     "F": (60, 60, 220),     # red
 }
 
-# Ideal joint angles at/near contact per shot type
+# Ideal joint angles in 3D (world_landmarks) at/near contact.
+# Calibrated from the player's personal-best quartile across 3476
+# high-visibility shots:
+#   knee = p25 (lower = deeper bend = more power transfer)
+#   trunk = p75 (higher = more rotation = more racket-head speed)
+#   arm = p75 (higher = more extension = better contact point)
 IDEALS = {
-    "serve":           {"knee": 120, "trunk": 45, "arm": 165},
-    "forehand":        {"knee": 120, "trunk": 50, "arm": 165},
-    "backhand":        {"knee": 120, "trunk": 55, "arm": 165},
-    "forehand_volley": {"knee": 130, "trunk": 30, "arm": 160},
-    "backhand_volley": {"knee": 130, "trunk": 35, "arm": 160},
-    "overhead":        {"knee": 115, "trunk": 50, "arm": 165},
+    "forehand":        {"knee": 136, "trunk": 30, "arm": 137},
+    "backhand":        {"knee": 126, "trunk": 18, "arm": 139},
+    "serve":           {"knee": 145, "trunk": 21, "arm": 143},
+    "forehand_volley": {"knee": 140, "trunk": 25, "arm": 145},
+    "backhand_volley": {"knee": 140, "trunk": 20, "arm": 145},
+    "overhead":        {"knee": 135, "trunk": 25, "arm": 150},
 }
 FLAG_YELLOW = 15  # degrees delta from ideal
 FLAG_RED = 30
