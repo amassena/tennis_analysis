@@ -454,11 +454,19 @@ def compute_zoom_crop(poses_data, start, end, video_w, video_h, padding=0.35, mi
         if not frame.get("detected") or not frame.get("landmarks"):
             continue
         for lm in frame["landmarks"]:
-            v = lm.get("visibility", 0)
-            if v < 0.3:
-                continue
-            xs.append(lm["x"])
-            ys.append(lm["y"])
+            # Handle both dict {"x":..,"visibility":..} and list [x,y,z,vis] formats
+            if isinstance(lm, dict):
+                v = lm.get("visibility", 0)
+                if v < 0.3:
+                    continue
+                xs.append(lm["x"])
+                ys.append(lm["y"])
+            else:
+                v = lm[3] if len(lm) >= 4 else 1.0
+                if v < 0.3:
+                    continue
+                xs.append(lm[0])
+                ys.append(lm[1])
 
     if len(xs) < 10:  # need reasonable coverage
         return None
