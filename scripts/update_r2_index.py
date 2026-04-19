@@ -95,17 +95,23 @@ def get_video_metadata(vid, r2_client=None):
             break
 
     # 2. R2 meta.json (uploaded by GPU worker — has metadata even when local files missing)
-    if not info.get('shots') and r2_client:
+    if r2_client:
         meta_key = f'highlights/{vid}/meta.json'
         try:
             obj = r2_client.client.get_object(
                 Bucket=r2_client.bucket_name, Key=meta_key)
             meta = json.loads(obj['Body'].read())
-            info['duration'] = meta.get('duration', 0)
-            info['shots'] = meta.get('shots', 0)
-            info['breakdown'] = meta.get('breakdown', {})
-            if meta.get('created'):
+            # Fill in any fields not already set by local detection JSON
+            if not info.get('shots'):
+                info['duration'] = meta.get('duration', 0)
+                info['shots'] = meta.get('shots', 0)
+                info['breakdown'] = meta.get('breakdown', {})
+            if meta.get('created') and 'created' not in info:
                 info['created'] = meta['created']
+            # Always pull ball tracking stats (only live on R2 meta)
+            for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate'):
+                if meta.get(bk) is not None:
+                    info[bk] = meta[bk]
         except Exception:
             pass
 
@@ -345,6 +351,34 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .coach-summary-label .more{{color:#8ae6ae;font-size:.9em;opacity:.8}}
 .coach-summary-text{{color:#eaeaea;font-size:.82em;line-height:1.35;font-weight:500}}
 
+/* Sequences button on card */
+.seq-btn{{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;
+  background:#1a1a2e;border:1px solid #2a2a4e;border-radius:5px;color:#a0a0ff;
+  font-size:.72em;font-weight:600;cursor:pointer;transition:all .15s;margin-top:6px}}
+.seq-btn:hover{{background:#2a2a4e;color:#fff;border-color:#5555aa}}
+
+/* Sequences modal */
+.seq-modal-overlay{{display:none;position:fixed;inset:0;z-index:900;
+  background:rgba(0,0,0,.9);overflow-y:auto;padding:40px 20px;
+  align-items:flex-start;justify-content:center}}
+.seq-modal-overlay.open{{display:flex}}
+.seq-modal{{max-width:1100px;width:100%;color:#eee}}
+.seq-modal h2{{color:#a0a0ff;font-size:.85em;text-transform:uppercase;
+  letter-spacing:.1em;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}}
+.seq-modal .close{{background:none;border:none;color:#999;font-size:1.8em;cursor:pointer}}
+.seq-modal .close:hover{{color:#fff}}
+.seq-grid{{display:flex;flex-direction:column;gap:12px}}
+.seq-item{{border-radius:6px;overflow:hidden;background:#111;cursor:pointer;transition:transform .15s}}
+.seq-item:hover{{transform:scale(1.01)}}
+.seq-item img{{width:100%;display:block}}
+.seq-item .seq-label{{padding:6px 10px;font-size:.75em;color:#aaa;
+  display:flex;justify-content:space-between}}
+
+/* Coach modal filmstrip inline */
+.coach-filmstrip{{margin-top:8px;border-radius:4px;overflow:hidden;display:none}}
+.coach-filmstrip.loaded{{display:block}}
+.coach-filmstrip img{{width:100%;display:block;border-radius:4px}}
+
 /* Full coach modal */
 .coach-modal-overlay{{display:none;position:fixed;inset:0;z-index:800;
   background:rgba(0,0,0,.85);align-items:flex-start;justify-content:center;
@@ -528,6 +562,14 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 </div>
 
 <!-- Video Player Overlay -->
+<!-- Sequences Modal -->
+<div class="seq-modal-overlay" id="seqModal" onclick="if(event.target===this)closeSeqModal()">
+  <div class="seq-modal">
+    <h2><span id="seqTitle">Swing Sequences</span><button class="close" onclick="closeSeqModal()">&times;</button></h2>
+    <div class="seq-grid" id="seqGrid"></div>
+  </div>
+</div>
+
 <!-- Coach Modal -->
 <div class="coach-modal-overlay" id="coachModal" onclick="if(event.target===this)closeCoachModal()">
   <div class="coach-modal" style="position:relative">
@@ -751,6 +793,9 @@ function copyTimeLink() {{
 }}
 
 document.addEventListener('keydown', function(e) {{
+  if(e.key==='Escape' && document.getElementById('seqModal').classList.contains('open')) {{
+    closeSeqModal(); return;
+  }}
   if(e.key==='Escape' && document.getElementById('coachModal').classList.contains('open')) {{
     closeCoachModal(); return;
   }}
@@ -805,13 +850,23 @@ function openCoachModal(vid) {{
       h += '<div class="dt">'+escapeHtml(s.detail||'')+'</div>';
       if(s.examples && s.examples.length) {{
         h += '<div class="ex">';
-        s.examples.forEach(function(ex){{
+        s.examples.forEach(function(ex, ei){{
           var ts = fmtTs(ex.t);
           var note = ex.note ? ' — '+escapeHtml(ex.note) : '';
           h += '<button class="ex-btn" onclick="jumpToExample(\\''+vid+'\\','+ex.t+')">'
             + '<span class="ts">'+ts+'</span> '+escapeHtml(ex.type||'')+note+'</button>';
         }});
         h += '</div>';
+        // Filmstrip for first example (most illustrative)
+        var firstEx = s.examples[0];
+        if(firstEx && firstEx.type) {{
+          var filmId = 'film_'+vid+'_'+Math.round(firstEx.t);
+          h += '<div class="coach-filmstrip" id="'+filmId+'">'
+            + '<img loading="lazy" onerror="this.parentNode.style.display=\\'none\\'" '
+            + 'onload="this.parentNode.classList.add(\\'loaded\\')" '
+            + 'src="https://tennis.playfullife.com/'+vid+'/sequences/shot_'+matchShotIdx(vid, firstEx.t, firstEx.type)+'_'+firstEx.type+'.jpg">'
+            + '</div>';
+        }}
       }}
       h += '</div>';
     }});
@@ -831,6 +886,61 @@ function openCoachModal(vid) {{
 function closeCoachModal() {{
   document.getElementById('coachModal').classList.remove('open');
   document.body.style.overflow = '';
+}}
+
+// ── Sequences Modal ──
+function openSeqModal(vid) {{
+  var modal = document.getElementById('seqModal');
+  var grid = document.getElementById('seqGrid');
+  document.getElementById('seqTitle').textContent = 'Swing Sequences — ' + vid;
+  grid.innerHTML = '<div style="color:#888;padding:20px">Loading sequences...</div>';
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Fetch shots.json to get shot list, then load sequence images
+  fetch('/' + vid + '/shots.json', {{cache:'no-store'}})
+    .then(function(r){{ if(!r.ok) throw new Error('no shots.json'); return r.json(); }})
+    .then(function(data) {{
+      var shots = data.shots || [];
+      if(shots.length === 0) {{ grid.innerHTML = '<div style="color:#888;padding:20px">No shots detected</div>'; return; }}
+
+      var html = '';
+      shots.forEach(function(s) {{
+        if(s.type === 'practice' || s.type === 'offscreen' || s.type === 'not_shot') return;
+        var idx = ('00' + s.idx).slice(-3);
+        var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/shot_' + idx + '_' + s.type + '.jpg';
+        html += '<div class="seq-item" onclick="window.open(\\''+imgUrl+'\\',\\'_blank\\')">'
+          + '<img src="' + imgUrl + '" loading="lazy" onerror="this.parentNode.style.display=\\'none\\'">'
+          + '<div class="seq-label"><span>' + s.type.toUpperCase() + ' #' + (s.idx+1) + '</span>'
+          + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
+      }});
+      grid.innerHTML = html || '<div style="color:#888;padding:20px">No sequence images found. Run swing_composite.py first.</div>';
+    }})
+    .catch(function() {{
+      grid.innerHTML = '<div style="color:#888;padding:20px">No sequence data available for this video.</div>';
+    }});
+}}
+
+function closeSeqModal() {{
+  document.getElementById('seqModal').classList.remove('open');
+  document.body.style.overflow = '';
+}}
+
+function matchShotIdx(vid, t, type) {{
+  // Find the shot index closest to timestamp t for this type.
+  // Uses cached shots data if available, otherwise guesses from VIDEOS data.
+  if(currentShots && currentShots.video === vid) {{
+    var best = null, bestDelta = 999;
+    currentShots.shots.forEach(function(s){{
+      if(s.type === type) {{
+        var d = Math.abs(s.t - t);
+        if(d < bestDelta) {{ bestDelta = d; best = s; }}
+      }}
+    }});
+    if(best) return ('00' + best.idx).slice(-3);
+  }}
+  // Fallback: estimate from the VIDEOS array shot count
+  return '000';
 }}
 
 function fmtTs(t) {{
@@ -1216,6 +1326,7 @@ function renderGallery() {{
         +'<div class="coach-summary-label"><span>Coach</span><span class="more">Details &rsaquo;</span></div>'
         +'<div class="coach-summary-text"></div></div>';
       html += '<div class="card-links">'+linksHtml
+        +'<span class="seq-btn" data-action="sequences" data-vid="'+v.id+'">&#127910; Sequences</span>'
         +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
         +'</div>';
       html += '</div></div>';
@@ -1402,6 +1513,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'delete') deleteVideo(el.dataset.vid);
   else if(action === 'play') openPlayer(el.dataset.url, el.dataset.title);
   else if(action === 'coach') openCoachModal(el.dataset.vid);
+  else if(action === 'sequences') openSeqModal(el.dataset.vid);
 }});
 
 // ── Init ──
