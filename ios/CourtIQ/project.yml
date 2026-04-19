@@ -1,0 +1,19 @@
+name: CourtIQ
+options:
+  bundleIdPrefix: com.courtiq
+  deploymentTarget:
+    iOS: "17.0"
+
+targets:
+  CourtIQ:
+    type: application
+    platform: iOS
+    sources:
+      - CourtIQ
+    settings:
+      base:
+        INFOPLIST_KEY_NSCameraUsageDescription: "CourtIQ uses the camera to analyze your tennis form in real time."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "CourtIQ uses the microphone to detect ball-strike sounds for shot timing."
+        INFOPLIST_KEY_UILaunchStoryboardName: ""
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
