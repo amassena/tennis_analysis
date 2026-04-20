@@ -264,7 +264,17 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .stat-badge{{font-size:0.8em;color:#666;white-space:nowrap}}
 
 /* ── Filters ── */
-.filters{{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}}
+.filter-toggle{{max-width:1100px;margin:0 auto;padding:8px 20px;display:flex;align-items:center;
+  gap:8px;cursor:pointer;color:#999;font-size:.85em;font-weight:600;transition:color .15s}}
+.filter-toggle:hover{{color:#fff}}
+.filter-badge{{background:#FF8C00;color:#fff;font-size:.7em;padding:1px 7px;border-radius:10px;
+  display:none;font-weight:700}}
+.filter-badge.show{{display:inline}}
+.filter-arrow{{font-size:.6em;transition:transform .2s}}
+.filter-arrow.open{{transform:rotate(180deg)}}
+.filters{{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;
+  overflow:hidden;transition:max-height .25s ease,opacity .2s,padding .2s}}
+.filters.collapsed{{max-height:0;opacity:0;padding-top:0;padding-bottom:0}}
 .filter-sep{{width:1px;height:20px;background:#333;margin:0 6px;flex-shrink:0}}
 .filter-label{{font-size:.7em;color:#555;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}}
 .active-filter{{display:none;align-items:center;gap:6px;margin-left:auto;padding:4px 10px 4px 12px;
@@ -524,8 +534,13 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 </div>
 
 <!-- Filters -->
-<div class="filters" id="filters"></div>
-<div class="filters" style="padding-top:0">
+<div class="filter-toggle" id="filterToggle" onclick="toggleFilters()">
+  <span>Filter &amp; Sort</span>
+  <span class="filter-badge" id="filterBadge"></span>
+  <span class="filter-arrow" id="filterArrow">&#9660;</span>
+</div>
+<div class="filters collapsed" id="filters"></div>
+<div class="filters collapsed" style="padding-top:0" id="filtersRow2">
   <div class="active-filter" id="activeFilter"><span id="activeFilterText"></span><button class="clear" onclick="clearFilter()">&times;</button></div>
   <select class="sort-select" id="sortSelect" onchange="changeSort(this.value)">
     <option value="recorded-desc">Date Recorded (newest)</option>
@@ -1094,12 +1109,41 @@ var currentFilter = 'all';
 var currentSort = 'recorded-desc';
 var searchQuery = '';
 
+function toggleFilters() {{
+  var f1 = document.getElementById('filters');
+  var f2 = document.getElementById('filtersRow2');
+  var arrow = document.getElementById('filterArrow');
+  var isOpen = !f1.classList.contains('collapsed');
+  if(isOpen) {{
+    f1.classList.add('collapsed');
+    f2.classList.add('collapsed');
+    arrow.classList.remove('open');
+  }} else {{
+    f1.classList.remove('collapsed');
+    f2.classList.remove('collapsed');
+    arrow.classList.add('open');
+  }}
+}}
+
+function updateFilterBadge() {{
+  var badge = document.getElementById('filterBadge');
+  if(currentFilter === 'all') {{
+    badge.classList.remove('show');
+    badge.textContent = '';
+  }} else {{
+    var label = document.querySelector('.chip[data-filter="'+currentFilter+'"]');
+    badge.textContent = label ? label.textContent : currentFilter;
+    badge.classList.add('show');
+  }}
+}}
+
 function clearFilter() {{
   currentFilter = 'all';
   document.querySelectorAll('.chip').forEach(function(c){{c.classList.remove('active')}});
   var allChip = document.querySelector('.chip[data-filter="all"]');
   if(allChip) allChip.classList.add('active');
   updateActiveFilter();
+  updateFilterBadge();
   renderGallery();
 }}
 
@@ -1393,6 +1437,7 @@ document.getElementById('filters').addEventListener('click', function(e) {{
   document.querySelectorAll('.chip').forEach(function(c){{c.classList.remove('active')}});
   chip.classList.add('active');
   updateActiveFilter();
+  updateFilterBadge();
   renderGallery();
 }});
 
