@@ -85,7 +85,10 @@ def compute_shot_speeds(vid, output_path=None):
                     dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
                     speed_ms = dist * fps  # meters per second
                     speed_mph = speed_ms * 2.237
-                    if 5 < speed_mph < 160:  # plausible range
+                    # Per-shot-type plausible range (mph)
+                    # Serves can be 70-140 mph; groundstrokes 30-80 mph
+                    max_speed = 140 if shot_type == "serve" else 85
+                    if 5 < speed_mph < max_speed:
                         speeds.append(speed_mph)
                 except Exception:
                     pass
