@@ -2,6 +2,42 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var session = TennisSession()
+    @State private var selectedTab = 0
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            // Tab 1: Gallery (WebView of tennis.playfullife.com)
+            GalleryView()
+                .tabItem {
+                    Image(systemName: "film.stack")
+                    Text("Sessions")
+                }
+                .tag(0)
+
+            // Tab 2: Record
+            RecordView(session: session)
+                .tabItem {
+                    Image(systemName: "video.fill")
+                    Text("Record")
+                }
+                .tag(1)
+        }
+        .tint(.orange)
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Gallery Tab (WebView wrapper)
+struct GalleryView: View {
+    var body: some View {
+        WebViewWrapper(url: URL(string: "https://tennis.playfullife.com")!)
+            .ignoresSafeArea(edges: .bottom)
+    }
+}
+
+// MARK: - Record Tab
+struct RecordView: View {
+    @ObservedObject var session: TennisSession
 
     var body: some View {
         ZStack {

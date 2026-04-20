@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01AC42E09A7984D698AE98D2 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F33FB7B573676A5E3CDE8A /* CameraManager.swift */; };
+		0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */; };
 		08C44807CD9132CF8930B4CC /* ShotClassifier.onnx.data in Resources */ = {isa = PBXBuildFile; fileRef = 80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */; };
 		2E314A34A9BE3AAA9B42C968 /* PoseOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEB81EEAEEE39412B5EF60A /* PoseOverlayView.swift */; };
 		461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */; };
@@ -23,13 +24,14 @@
 		1A0E18FC4BF081E8B9FDCC00 /* CourtIQApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourtIQApp.swift; sourceTree = "<group>"; };
 		1DEB81EEAEEE39412B5EF60A /* PoseOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseOverlayView.swift; sourceTree = "<group>"; };
 		5238138C6C605707F088D692 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
+		59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewWrapper.swift; sourceTree = "<group>"; };
 		65F33FB7B573676A5E3CDE8A /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
-		74B6920863227888EF49C2A4 /* ShotClassifier.onnx */ = {isa = PBXFileReference; lastKnownFileType = file; path = ShotClassifier.onnx; sourceTree = "<group>"; };
-		80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = ShotClassifier.onnx.data; sourceTree = "<group>"; };
+		74B6920863227888EF49C2A4 /* ShotClassifier.onnx */ = {isa = PBXFileReference; path = ShotClassifier.onnx; sourceTree = "<group>"; };
+		80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */ = {isa = PBXFileReference; path = ShotClassifier.onnx.data; sourceTree = "<group>"; };
 		80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TennisSession.swift; sourceTree = "<group>"; };
 		9DA888E123D9FAD2EB645A25 /* ShotDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotDetector.swift; sourceTree = "<group>"; };
 		B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseProcessor.swift; sourceTree = "<group>"; };
-		CC65490CBBD6E27B41C0DABF /* SwingLab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwingLab.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC65490CBBD6E27B41C0DABF /* CourtIQ.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CourtIQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB29C472F8C615C04C04C14C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -47,6 +49,7 @@
 			isa = PBXGroup;
 			children = (
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
+				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -62,7 +65,7 @@
 		4FC4CC78A732C08DCF4D35DB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CC65490CBBD6E27B41C0DABF /* SwingLab.app */,
+				CC65490CBBD6E27B41C0DABF /* CourtIQ.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -133,7 +136,7 @@
 			packageProductDependencies = (
 			);
 			productName = CourtIQ;
-			productReference = CC65490CBBD6E27B41C0DABF /* SwingLab.app */;
+			productReference = CC65490CBBD6E27B41C0DABF /* CourtIQ.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -144,6 +147,8 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = 55EF04DC6C3302A6A96EE4CA /* Build configuration list for PBXProject "CourtIQ" */;
 			developmentRegion = en;
@@ -189,6 +194,7 @@
 				461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */,
 				819E8575E6E4EA07E17BEA16 /* ShotDetector.swift in Sources */,
 				9E7239CE8B982DFC6FC622EA /* TennisSession.swift in Sources */,
+				0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -200,7 +206,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwingLab;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SwingLab uses the camera to analyze your tennis form in real time.";
@@ -279,7 +284,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwingLab;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SwingLab uses the camera to analyze your tennis form in real time.";
