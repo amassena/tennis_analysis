@@ -233,7 +233,7 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True):
                     all_xs.append(x * img_w)
                     all_ys.append(y * img_h)
 
-    if len(all_xs) < 10:
+    if len(all_xs) < 30:  # need good coverage across frames — skip bad poses
         cap.release()
         return None, None
 
@@ -401,22 +401,33 @@ def main():
     for idx in shots:
         d = detections[idx]
         st = d.get("shot_type", "unknown")
-        # Skip non-shot types
         if st in ("practice", "offscreen", "not_shot", "unknown_shot"):
             continue
 
-        comp, info = generate_composite(
-            video_path, det, poses, idx, draw_skel=not args.no_skeleton
+        # Generate clean version (no skeleton) — always
+        comp_clean, info = generate_composite(
+            video_path, det, poses, idx, draw_skel=False
         )
-        if comp is None:
+        if comp_clean is None:
             continue
 
-        fname = f"shot_{idx:03d}_{st}.jpg"
-        out_path = out_dir / fname
-        cv2.imwrite(str(out_path), comp, [cv2.IMWRITE_JPEG_QUALITY, 92])
-        size_kb = os.path.getsize(out_path) / 1024
-        print(f"  [{idx + 1}/{len(detections)}] {st}: {out_path.name} ({size_kb:.0f} KB)")
-        generated.append((str(out_path), info))
+        fname_clean = f"shot_{idx:03d}_{st}.jpg"
+        out_clean = out_dir / fname_clean
+        cv2.imwrite(str(out_clean), comp_clean, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        generated.append((str(out_clean), info))
+
+        # Generate skeleton version too (unless --no-skeleton)
+        if not args.no_skeleton:
+            comp_skel, _ = generate_composite(
+                video_path, det, poses, idx, draw_skel=True
+            )
+            if comp_skel is not None:
+                fname_skel = f"shot_{idx:03d}_{st}_skel.jpg"
+                out_skel = out_dir / fname_skel
+                cv2.imwrite(str(out_skel), comp_skel, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                generated.append((str(out_skel), info))
+
+        print(f"  [{idx + 1}/{len(detections)}] {st}: {fname_clean}", flush=True)
 
     print(f"\nGenerated {len(generated)} composites in {out_dir}")
 

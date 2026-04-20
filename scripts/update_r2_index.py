@@ -912,24 +912,35 @@ function openSeqModal(vid) {{
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
 
-  // Fetch shots.json to get shot list, then load sequence images
+  var showSkel = false;
+
   fetch('/' + vid + '/shots.json', {{cache:'no-store'}})
     .then(function(r){{ if(!r.ok) throw new Error('no shots.json'); return r.json(); }})
     .then(function(data) {{
       var shots = data.shots || [];
       if(shots.length === 0) {{ grid.innerHTML = '<div style="color:#888;padding:20px">No shots detected</div>'; return; }}
 
-      var html = '';
-      shots.forEach(function(s) {{
-        if(s.type === 'practice' || s.type === 'offscreen' || s.type === 'not_shot') return;
-        var idx = ('00' + s.idx).slice(-3);
-        var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/shot_' + idx + '_' + s.type + '.jpg';
-        html += '<div class="seq-item" onclick="window.open(\\''+imgUrl+'\\',\\'_blank\\')">'
-          + '<img src="' + imgUrl + '" loading="lazy" onerror="this.parentNode.style.display=\\'none\\'">'
-          + '<div class="seq-label"><span>' + s.type.toUpperCase() + ' #' + (s.idx+1) + '</span>'
-          + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
-      }});
-      grid.innerHTML = html || '<div style="color:#888;padding:20px">No sequence images found. Run swing_composite.py first.</div>';
+      function renderSeqs() {{
+        var suffix = showSkel ? '_skel' : '';
+        var html = '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">'
+          + '<button onclick="toggleSeqSkel()" style="padding:6px 14px;background:'+(showSkel?'#5555aa':'#333')+';color:#eee;border:none;border-radius:6px;cursor:pointer;font-size:.8em">'
+          + (showSkel ? 'Skeleton: ON' : 'Skeleton: OFF') + '</button>'
+          + '<span style="color:#666;font-size:.75em">Toggle pose skeleton overlay</span></div>';
+        shots.forEach(function(s) {{
+          if(s.type === 'practice' || s.type === 'offscreen' || s.type === 'not_shot') return;
+          var idx = ('00' + s.idx).slice(-3);
+          var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/shot_' + idx + '_' + s.type + suffix + '.jpg';
+          var cleanUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/shot_' + idx + '_' + s.type + '.jpg';
+          html += '<div class="seq-item">'
+            + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.includes(\\'_skel\\'))this.src=\\''+cleanUrl+'\\';else this.parentNode.style.display=\\'none\\'">'
+            + '<div class="seq-label"><span>' + s.type.toUpperCase() + ' #' + (s.idx+1) + '</span>'
+            + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
+        }});
+        grid.innerHTML = html || '<div style="color:#888;padding:20px">No sequence images found.</div>';
+      }}
+      window.toggleSeqSkel = function() {{ showSkel = !showSkel; renderSeqs(); }};
+      window._seqRender = renderSeqs;
+      renderSeqs();
     }})
     .catch(function() {{
       grid.innerHTML = '<div style="color:#888;padding:20px">No sequence data available for this video.</div>';
