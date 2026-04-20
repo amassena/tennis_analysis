@@ -88,8 +88,19 @@ class CameraManager: NSObject, ObservableObject {
     }
 
     func start() {
-        processingQueue.async { [weak self] in
-            self?.captureSession.startRunning()
+        // Request camera + mic permission before starting
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+            guard granted else {
+                print("[CameraManager] Camera permission denied")
+                return
+            }
+            AVCaptureDevice.requestAccess(for: .audio) { _ in
+                // Audio is optional — proceed either way
+                self?.processingQueue.async {
+                    self?.captureSession.startRunning()
+                    print("[CameraManager] Session running")
+                }
+            }
         }
     }
 

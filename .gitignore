@@ -97,3 +97,10 @@ coaching/
 backups/
 .wrangler/
 osxphotos_crash.log
+exports/
+# Xcode user state
+*.xcuserstate
+xcuserdata/
+# Training NPZ (large binary)
+training/*.npz
+training/*.png

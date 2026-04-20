@@ -1,8 +1,9 @@
 name: CourtIQ
 options:
-  bundleIdPrefix: com.courtiq
+  bundleIdPrefix: com.amassena.courtiq
   deploymentTarget:
     iOS: "17.0"
+  defaultConfig: Release
 
 targets:
   CourtIQ:
@@ -12,8 +13,11 @@ targets:
       - CourtIQ
     settings:
       base:
-        INFOPLIST_KEY_NSCameraUsageDescription: "CourtIQ uses the camera to analyze your tennis form in real time."
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: "CourtIQ uses the microphone to detect ball-strike sounds for shot timing."
+        PRODUCT_NAME: "SwingLab"
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_CFBundleDisplayName: "SwingLab"
+        INFOPLIST_KEY_NSCameraUsageDescription: "SwingLab uses the camera to analyze your tennis form in real time."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "SwingLab uses the microphone to detect ball-strike sounds for shot timing."
         INFOPLIST_KEY_UILaunchStoryboardName: ""
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
