@@ -108,8 +108,9 @@ def get_video_metadata(vid, r2_client=None):
                 info['breakdown'] = meta.get('breakdown', {})
             if meta.get('created') and 'created' not in info:
                 info['created'] = meta['created']
-            # Always pull ball tracking stats (only live on R2 meta)
-            for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate'):
+            # Always pull ball/speed/line-call stats (only live on R2 meta)
+            for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate',
+                        'avg_speed_mph', 'max_speed_mph', 'in_count', 'out_count'):
                 if meta.get(bk) is not None:
                     info[bk] = meta[bk]
         except Exception:
@@ -234,6 +235,10 @@ def build_index_html(videos_meta):
             'links': links,
             'ball_avg_speed': m.get('ball_avg_speed'),
             'ball_detection_rate': m.get('ball_detection_rate'),
+            'avg_speed_mph': m.get('avg_speed_mph'),
+            'max_speed_mph': m.get('max_speed_mph'),
+            'in_count': m.get('in_count'),
+            'out_count': m.get('out_count'),
         })
 
     video_json = json.dumps(video_data, separators=(',', ':'))
@@ -1374,7 +1379,10 @@ function renderGallery() {{
       html += '<div class="card-meta">';
       if(dur) html += '<span>'+dur+'</span>';
       if(v.shots) html += '<span>'+v.shots+' shots</span>';
-      if(v.ball_avg_speed) html += '<span style="color:#FFD700">\u26be '+v.ball_avg_speed.toFixed(0)+' avg</span>';
+      if(v.avg_speed_mph) html += '<span style="color:#FFD700">\u26be '+v.avg_speed_mph+' mph</span>';
+      else if(v.ball_avg_speed) html += '<span style="color:#FFD700">\u26be '+v.ball_avg_speed.toFixed(0)+'</span>';
+      if(v.in_count || v.out_count) html += '<span style="color:#8f8"><small>IN:'+
+        (v.in_count||0)+'</small></span><span style="color:#f88"><small>OUT:'+(v.out_count||0)+'</small></span>';
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
       html += '<div class="card-coach-summary" id="coachSum-'+v.id+'" data-action="coach" data-vid="'+v.id+'">'
@@ -1601,7 +1609,7 @@ def update_index():
     from storage.r2_client import R2Client
 
     c = R2Client()
-    keys = c.list(prefix='highlights/', max_keys=1000)
+    keys = c.list(prefix='highlights/', max_keys=10000)
 
     # Group files by video
     videos = {}

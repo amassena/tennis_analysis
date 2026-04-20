@@ -186,20 +186,36 @@ def format_user_message(metrics: dict) -> str:
     else:
         lines.append("(No per-shot biomechanical data — analyze from shot breakdown only)")
 
-    # Ball tracking summary
+    # Ball tracking + calibrated speed summary
     bt = metrics.get("ball_tracking")
     if bt:
         lines.append("")
         lines.append("## Ball tracking")
         lines.append(f"- Avg ball speed at contact: {bt['avg_speed']}")
         lines.append(f"- Max ball speed: {bt['max_speed']}")
-        lines.append(f"- Min ball speed: {bt['min_speed']}")
         lines.append(f"- Ball detection rate: {bt['detection_rate']:.0%}")
-        if bt.get("avg_trajectory_change"):
-            lines.append(f"- Avg trajectory change through contact: {bt['avg_trajectory_change']}°")
+
+    # Calibrated shot speed + line calls (from court homography)
+    cal_speeds = [d.get("ball_speed_mph") for d in dets if d.get("ball_speed_mph")]
+    line_calls = [d.get("line_call") for d in dets if d.get("line_call")]
+    if cal_speeds:
         lines.append("")
-        lines.append("Higher ball speed generally correlates with better racket-head speed and "
-                     "clean contact. Large trajectory-change values indicate solid shot contact.")
+        lines.append("## Calibrated shot speed (court-calibrated mph)")
+        lines.append(f"- Avg: {sum(cal_speeds)/len(cal_speeds):.1f} mph")
+        lines.append(f"- Max: {max(cal_speeds):.1f} mph")
+        lines.append(f"- Min: {min(cal_speeds):.1f} mph")
+    if line_calls:
+        in_ct = line_calls.count("IN")
+        out_ct = line_calls.count("OUT")
+        pct = in_ct / len(line_calls) * 100
+        lines.append(f"- Accuracy: {in_ct} IN / {out_ct} OUT ({pct:.0f}% in)")
+        # Shot depth
+        depths = [d.get("shot_depth") for d in dets if d.get("shot_depth")]
+        if depths:
+            lines.append(f"- Avg shot depth: {sum(depths)/len(depths):.1f}m from net")
+        lines.append("")
+        lines.append("Reference: recreational avg ~40-60 mph groundstrokes, 70-100 mph serves. "
+                     "Accuracy >70% IN is solid for rally play.")
 
     # Per-shot timeline
     timeline = metrics.get("per_shot_timeline") or []

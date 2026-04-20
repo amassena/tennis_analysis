@@ -186,22 +186,32 @@ class R2Client:
         print(f"Deleted r2://{self.bucket_name}/{remote_key}")
         return True
 
-    def list(self, prefix: str = "", max_keys: int = 1000) -> list:
-        """List objects with optional prefix.
+    def list(self, prefix: str = "", max_keys: int = 10000) -> list:
+        """List objects with optional prefix. Paginates automatically.
 
         Args:
             prefix: Filter by key prefix (e.g., "raw/")
-            max_keys: Maximum objects to return
+            max_keys: Maximum total objects to return
 
         Returns:
             List of object keys
         """
-        response = self.client.list_objects_v2(
-            Bucket=self.bucket_name,
-            Prefix=prefix,
-            MaxKeys=max_keys,
-        )
-        return [obj["Key"] for obj in response.get("Contents", [])]
+        all_keys = []
+        continuation = None
+        while len(all_keys) < max_keys:
+            kwargs = {
+                "Bucket": self.bucket_name,
+                "Prefix": prefix,
+                "MaxKeys": min(1000, max_keys - len(all_keys)),
+            }
+            if continuation:
+                kwargs["ContinuationToken"] = continuation
+            response = self.client.list_objects_v2(**kwargs)
+            all_keys.extend(obj["Key"] for obj in response.get("Contents", []))
+            if not response.get("IsTruncated"):
+                break
+            continuation = response.get("NextContinuationToken")
+        return all_keys
 
     def exists(self, remote_key: str) -> bool:
         """Check if an object exists.

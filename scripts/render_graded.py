@@ -330,14 +330,24 @@ def build_shot_tile(w, det, grade, rows, ts):
     else:
         draw.text((mx, 14), "(no pose at contact)", font=font_md, fill=(170, 170, 170))
 
-    # Ball speed badge (if ball tracking data enriched the detection)
-    ball_speed = det.get("ball_speed_at_contact")
-    ball_visible = det.get("ball_visible_at_contact", False)
-    if ball_speed is not None and ball_visible:
+    # Ball speed badge — prefer calibrated mph, fall back to uncalibrated
+    cal_speed = det.get("ball_speed_mph")
+    raw_speed = det.get("ball_speed_at_contact") if det.get("ball_visible_at_contact") else None
+    speed_val = cal_speed or raw_speed
+    if speed_val is not None:
         mx += 8
-        ball_text = f"\u26be {ball_speed:.0f}"  # ⚾ + speed
+        unit = "mph" if cal_speed else ""
+        ball_text = f"\u26be {speed_val:.0f}{unit}"
         draw.text((mx, 12), ball_text, font=font_md, fill=(255, 200, 80))
         mx += int(draw.textlength(ball_text, font=font_md)) + 8
+
+    # Line call badge (IN/OUT)
+    line_call = det.get("line_call")
+    if line_call:
+        mx += 4
+        call_color = (80, 220, 80) if line_call == "IN" else (220, 80, 80)
+        draw.text((mx, 12), line_call, font=font_md, fill=call_color)
+        mx += int(draw.textlength(line_call, font=font_md)) + 8
 
     # Confidence + timestamp on right
     conf = det.get("confidence", 0)
