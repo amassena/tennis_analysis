@@ -13,8 +13,10 @@
 		2E314A34A9BE3AAA9B42C968 /* PoseOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEB81EEAEEE39412B5EF60A /* PoseOverlayView.swift */; };
 		461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */; };
 		4CCA774AD2B4E0C896C72374 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5238138C6C605707F088D692 /* CameraPreviewView.swift */; };
+		7D0C2D92E206699A11729D82 /* SessionReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */; };
 		819E8575E6E4EA07E17BEA16 /* ShotDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA888E123D9FAD2EB645A25 /* ShotDetector.swift */; };
 		9E7239CE8B982DFC6FC622EA /* TennisSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */; };
+		B635E0582ACE1E1C04F1ABDC /* SessionRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81919A058C6F2DB4692A72AB /* SessionRecording.swift */; };
 		BFD4823B905590FF0C40BF3D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB29C472F8C615C04C04C14C /* ContentView.swift */; };
 		D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E18FC4BF081E8B9FDCC00 /* CourtIQApp.swift */; };
 		EAE3441A1E3C5D3209248C9C /* ShotClassifier.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 74B6920863227888EF49C2A4 /* ShotClassifier.onnx */; };
@@ -25,10 +27,12 @@
 		1DEB81EEAEEE39412B5EF60A /* PoseOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseOverlayView.swift; sourceTree = "<group>"; };
 		5238138C6C605707F088D692 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
 		59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewWrapper.swift; sourceTree = "<group>"; };
+		5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionReviewView.swift; sourceTree = "<group>"; };
 		65F33FB7B573676A5E3CDE8A /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
 		74B6920863227888EF49C2A4 /* ShotClassifier.onnx */ = {isa = PBXFileReference; path = ShotClassifier.onnx; sourceTree = "<group>"; };
 		80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */ = {isa = PBXFileReference; path = ShotClassifier.onnx.data; sourceTree = "<group>"; };
 		80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TennisSession.swift; sourceTree = "<group>"; };
+		81919A058C6F2DB4692A72AB /* SessionRecording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecording.swift; sourceTree = "<group>"; };
 		9DA888E123D9FAD2EB645A25 /* ShotDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotDetector.swift; sourceTree = "<group>"; };
 		B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseProcessor.swift; sourceTree = "<group>"; };
 		CC65490CBBD6E27B41C0DABF /* CourtIQ.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CourtIQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -49,6 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
+				5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */,
 				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
 			);
 			path = Views;
@@ -73,6 +78,7 @@
 		550CA001667316F273200946 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				81919A058C6F2DB4692A72AB /* SessionRecording.swift */,
 				74B6920863227888EF49C2A4 /* ShotClassifier.onnx */,
 				80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */,
 				80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */,
@@ -192,6 +198,8 @@
 				D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */,
 				2E314A34A9BE3AAA9B42C968 /* PoseOverlayView.swift in Sources */,
 				461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */,
+				B635E0582ACE1E1C04F1ABDC /* SessionRecording.swift in Sources */,
+				7D0C2D92E206699A11729D82 /* SessionReviewView.swift in Sources */,
 				819E8575E6E4EA07E17BEA16 /* ShotDetector.swift in Sources */,
 				9E7239CE8B982DFC6FC622EA /* TennisSession.swift in Sources */,
 				0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */,

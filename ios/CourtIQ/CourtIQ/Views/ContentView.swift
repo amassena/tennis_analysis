@@ -3,14 +3,13 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var session = TennisSession()
     @State private var showingCamera = false
+    @State private var showingReview = false
 
     var body: some View {
         ZStack {
-            // Primary: Gallery
             GalleryView()
                 .ignoresSafeArea(edges: .bottom)
 
-            // Floating record button
             VStack {
                 Spacer()
                 HStack {
@@ -32,7 +31,16 @@ struct ContentView: View {
             }
         }
         .fullScreenCover(isPresented: $showingCamera) {
-            RecordView(session: session, isPresented: $showingCamera)
+            RecordView(session: session, isPresented: $showingCamera) {
+                // On recording finished → show review
+                showingReview = true
+            }
+        }
+        .sheet(isPresented: $showingReview) {
+            SessionReviewView(
+                recording: session.recording,
+                isPresented: $showingReview
+            )
         }
         .preferredColorScheme(.dark)
     }
@@ -49,6 +57,7 @@ struct GalleryView: View {
 struct RecordView: View {
     @ObservedObject var session: TennisSession
     @Binding var isPresented: Bool
+    var onFinished: (() -> Void)?
 
     var body: some View {
         ZStack {
@@ -62,8 +71,13 @@ struct RecordView: View {
                 // Top bar: close + recording info + shot counter
                 HStack {
                     Button(action: {
-                        if session.isRecording { session.toggleRecording() }
-                        isPresented = false
+                        if session.isRecording {
+                            session.toggleRecording()
+                            isPresented = false
+                            onFinished?()
+                        } else {
+                            isPresented = false
+                        }
                     }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 18, weight: .bold))

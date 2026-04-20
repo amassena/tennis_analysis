@@ -11,6 +11,7 @@ class CameraManager: NSObject, ObservableObject {
     @Published var isRecording = false
 
     var onFrameProcessed: (([VNHumanBodyPoseObservation]) -> Void)?
+    var lastCapturedFrame: CGImage?  // latest frame for swing sequence buffer
 
     private var frameSkipCounter = 0
     private let mlFrameInterval = 8  // process every 8th frame (30fps ML from 240fps capture)
@@ -123,6 +124,13 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard frameSkipCounter % mlFrameInterval == 0 else { return }
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        // Capture frame for swing sequence buffer (every ML frame)
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        if let cgImage = context.createCGImage(ciImage, from: ciImage.extent) {
+            self.lastCapturedFrame = cgImage
+        }
 
         let request = VNDetectHumanBodyPoseRequest()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up)
