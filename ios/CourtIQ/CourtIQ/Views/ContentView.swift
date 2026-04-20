@@ -2,42 +2,53 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var session = TennisSession()
-    @State private var selectedTab = 0
+    @State private var showingCamera = false
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // Tab 1: Gallery (WebView of tennis.playfullife.com)
+        ZStack {
+            // Primary: Gallery
             GalleryView()
-                .tabItem {
-                    Image(systemName: "film.stack")
-                    Text("Sessions")
-                }
-                .tag(0)
+                .ignoresSafeArea(edges: .bottom)
 
-            // Tab 2: Record
-            RecordView(session: session)
-                .tabItem {
-                    Image(systemName: "video.fill")
-                    Text("Record")
+            // Floating record button
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: { showingCamera = true }) {
+                        ZStack {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 64, height: 64)
+                                .shadow(color: .red.opacity(0.4), radius: 8)
+                            Image(systemName: "video.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 32)
                 }
-                .tag(1)
+            }
         }
-        .tint(.orange)
+        .fullScreenCover(isPresented: $showingCamera) {
+            RecordView(session: session, isPresented: $showingCamera)
+        }
         .preferredColorScheme(.dark)
     }
 }
 
-// MARK: - Gallery Tab (WebView wrapper)
+// MARK: - Gallery (WebView wrapper)
 struct GalleryView: View {
     var body: some View {
         WebViewWrapper(url: URL(string: "https://tennis.playfullife.com")!)
-            .ignoresSafeArea(edges: .bottom)
     }
 }
 
-// MARK: - Record Tab
+// MARK: - Record (full-screen camera overlay)
 struct RecordView: View {
     @ObservedObject var session: TennisSession
+    @Binding var isPresented: Bool
 
     var body: some View {
         ZStack {
@@ -48,43 +59,66 @@ struct RecordView: View {
                 .ignoresSafeArea()
 
             VStack {
-                SessionHeaderView(session: session)
-                Spacer()
-                RecordingControlsView(session: session)
-            }
-            .padding()
-        }
-        .onAppear {
-            session.startCamera()
-        }
-    }
-}
+                // Top bar: close + recording info + shot counter
+                HStack {
+                    Button(action: {
+                        if session.isRecording { session.toggleRecording() }
+                        isPresented = false
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
 
-struct SessionHeaderView: View {
-    @ObservedObject var session: TennisSession
+                    if session.isRecording {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 8, height: 8)
+                            Text(session.recordingDuration)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.5))
+                        .cornerRadius(6)
+                    }
 
-    var body: some View {
-        HStack(spacing: 16) {
-            if session.isRecording {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 10, height: 10)
-                    Text(session.recordingDuration)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.white)
+                    Spacer()
+
+                    ShotCounterView(session: session)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.black.opacity(0.6))
-                .cornerRadius(8)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+                Spacer()
+
+                // Record button
+                Button(action: { session.toggleRecording() }) {
+                    ZStack {
+                        Circle()
+                            .stroke(.white, lineWidth: 4)
+                            .frame(width: 72, height: 72)
+                        if session.isRecording {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(.red)
+                                .frame(width: 28, height: 28)
+                        } else {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 60, height: 60)
+                        }
+                    }
+                }
+                .padding(.bottom, 40)
             }
-
-            Spacer()
-
-            ShotCounterView(session: session)
         }
-        .padding(.top, 8)
+        .onAppear { session.startCamera() }
+        .statusBarHidden()
     }
 }
 
@@ -92,51 +126,25 @@ struct ShotCounterView: View {
     @ObservedObject var session: TennisSession
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             shotPill("S", count: session.serveCount, color: .orange)
             shotPill("FH", count: session.forehandCount, color: .green)
             shotPill("BH", count: session.backhandCount, color: .blue)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.black.opacity(0.6))
-        .cornerRadius(8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.5))
+        .cornerRadius(6)
     }
 
     func shotPill(_ label: String, count: Int, color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundColor(color)
             Text("\(count)")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
         }
-    }
-}
-
-struct RecordingControlsView: View {
-    @ObservedObject var session: TennisSession
-
-    var body: some View {
-        HStack(spacing: 40) {
-            Button(action: { session.toggleRecording() }) {
-                ZStack {
-                    Circle()
-                        .stroke(.white, lineWidth: 4)
-                        .frame(width: 72, height: 72)
-                    if session.isRecording {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(.red)
-                            .frame(width: 28, height: 28)
-                    } else {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 60, height: 60)
-                    }
-                }
-            }
-        }
-        .padding(.bottom, 20)
     }
 }
