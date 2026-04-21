@@ -184,9 +184,41 @@ def draw_skeleton(img, landmarks, bbox):
             cv2.circle(img, pt, 3, JOINT_DOT_COLOR, -1, cv2.LINE_AA)
 
 
-def generate_composite(video_path, det, poses, shot_idx, draw_skel=True):
+def remove_racket_from_crop(crop, racket_bbox, bx, by, bx2, by2, panel_w, panel_h, crop_w, crop_h):
+    """Inpaint the racket region from a cropped frame panel.
+    racket_bbox: [x1, y1, x2, y2] in original video pixel coords."""
+    if racket_bbox is None:
+        return crop
+
+    rx1, ry1, rx2, ry2 = racket_bbox
+    # Transform racket bbox from original video coords to crop coords then to panel coords
+    px1 = int((rx1 - bx) / max(1, crop_w) * panel_w)
+    py1 = int((ry1 - by) / max(1, crop_h) * panel_h)
+    px2 = int((rx2 - bx) / max(1, crop_w) * panel_w)
+    py2 = int((ry2 - by) / max(1, crop_h) * panel_h)
+
+    # Expand bbox slightly for better inpainting
+    margin = max(3, int(0.1 * max(px2 - px1, py2 - py1)))
+    px1 = max(0, px1 - margin)
+    py1 = max(0, py1 - margin)
+    px2 = min(panel_w, px2 + margin)
+    py2 = min(panel_h, py2 + margin)
+
+    if px2 <= px1 or py2 <= py1:
+        return crop
+    if px1 >= panel_w or py1 >= panel_h or px2 <= 0 or py2 <= 0:
+        return crop
+
+    mask = np.zeros(crop.shape[:2], dtype=np.uint8)
+    mask[py1:py2, px1:px2] = 255
+    return cv2.inpaint(crop, mask, 5, cv2.INPAINT_TELEA)
+
+
+def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
+                       racket_data=None):
     """Generate a filmstrip composite for one shot.
 
+    racket_data: optional racket detection dict with 'frames' list.
     Returns (composite_image, shot_info_dict) or (None, None).
     """
     detections = det.get("detections", [])
@@ -288,6 +320,16 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True):
         # Resize to panel size
         crop = cv2.resize(crop, (panel_w, panel_h), interpolation=cv2.INTER_LANCZOS4)
 
+        # Racket removal via inpainting
+        if racket_data:
+            racket_frames = {f["frame"]: f for f in racket_data.get("frames", [])
+                             if f.get("detected")}
+            rf = racket_frames.get(fi)
+            if rf:
+                crop = remove_racket_from_crop(
+                    crop, rf["bbox"], bx, by, bx2, by2, panel_w, panel_h, crop_w, crop_h
+                )
+
         # Track wrist position for trail
         lms = get_landmarks(pose_frames, fi)
         if lms and len(lms) > 16:
@@ -376,6 +418,8 @@ def main():
     parser.add_argument("--video", required=True, help="Video ID (e.g. IMG_1141)")
     parser.add_argument("--shot", type=int, help="Specific shot index (default: all)")
     parser.add_argument("--no-skeleton", action="store_true")
+    parser.add_argument("--racket-removal", action="store_true",
+                        help="Remove racket from composites via inpainting")
     parser.add_argument("--upload", action="store_true", help="Upload to R2")
     parser.add_argument("--max-shots", type=int, default=0, help="Limit number of shots")
     args = parser.parse_args()
@@ -383,6 +427,17 @@ def main():
     det, poses, video_path = load_data(args.video)
     if not det:
         return
+
+    # Load racket detections if available
+    racket_data = None
+    if args.racket_removal:
+        racket_path = PROJECT_ROOT / "racket_detections" / f"{args.video}.json"
+        if racket_path.exists():
+            with open(racket_path) as f:
+                racket_data = json.load(f)
+            print(f"Loaded racket detections: {racket_data.get('frames_with_racket', 0)} frames")
+        else:
+            print(f"[WARN] No racket detections at {racket_path}, generating without removal")
 
     detections = det.get("detections", [])
     out_dir = PROJECT_ROOT / "exports" / args.video / "sequences"
@@ -406,12 +461,14 @@ def main():
 
         # Generate clean version (no skeleton) — always
         comp_clean, info = generate_composite(
-            video_path, det, poses, idx, draw_skel=False
+            video_path, det, poses, idx, draw_skel=False,
+            racket_data=racket_data
         )
         if comp_clean is None:
             continue
 
-        fname_clean = f"shot_{idx:03d}_{st}.jpg"
+        suffix = "_noracket" if racket_data else ""
+        fname_clean = f"shot_{idx:03d}_{st}{suffix}.jpg"
         out_clean = out_dir / fname_clean
         cv2.imwrite(str(out_clean), comp_clean, [cv2.IMWRITE_JPEG_QUALITY, 92])
         generated.append((str(out_clean), info))
@@ -419,10 +476,11 @@ def main():
         # Generate skeleton version too (unless --no-skeleton)
         if not args.no_skeleton:
             comp_skel, _ = generate_composite(
-                video_path, det, poses, idx, draw_skel=True
+                video_path, det, poses, idx, draw_skel=True,
+                racket_data=racket_data
             )
             if comp_skel is not None:
-                fname_skel = f"shot_{idx:03d}_{st}_skel.jpg"
+                fname_skel = f"shot_{idx:03d}_{st}{suffix}_skel.jpg"
                 out_skel = out_dir / fname_skel
                 cv2.imwrite(str(out_skel), comp_skel, [cv2.IMWRITE_JPEG_QUALITY, 92])
                 generated.append((str(out_skel), info))
