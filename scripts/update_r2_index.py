@@ -391,6 +391,11 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .seq-item img{{width:100%;display:block}}
 .seq-item .seq-label{{padding:6px 10px;font-size:.75em;color:#aaa;
   display:flex;justify-content:space-between}}
+.seq-fullscreen{{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.95);
+  display:flex;align-items:center;justify-content:center;cursor:zoom-out}}
+.seq-fullscreen img{{max-width:100vw;max-height:100vh;object-fit:contain}}
+@media(max-width:600px){{.seq-item{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
+  .seq-item img{{width:auto;height:180px;min-width:100%}}}}
 
 /* Coach modal filmstrip inline */
 .coach-filmstrip{{margin-top:8px;border-radius:4px;overflow:hidden;display:none}}
@@ -951,10 +956,10 @@ function openSeqModal(vid) {{
           var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + noracket + suffix + '.jpg';
           var fallback1 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + suffix + '.jpg';
           var fallback2 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + '.jpg';
-          html += '<div class="seq-item">'
+          html += '<div class="seq-item" onclick="openSeqFullscreen(this.querySelector(\\'img\\').src)">'
             + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.indexOf(\\'noracket\\')>=0)this.src=\\''+fallback1+'\\';else if(this.src.indexOf(\\'_skel\\')>=0)this.src=\\''+fallback2+'\\';else this.parentNode.style.display=\\'none\\'">'
             + '<div class="seq-label"><span>' + s.type.toUpperCase() + ' #' + (s.idx+1) + '</span>'
-            + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
+            + '<span>t=' + fmtTs(s.t) + '  tap to zoom</span></div></div>';
         }});
 
         // Pro Comparisons section
@@ -988,6 +993,16 @@ function openSeqModal(vid) {{
 function closeSeqModal() {{
   document.getElementById('seqModal').classList.remove('open');
   document.body.style.overflow = '';
+}}
+
+function openSeqFullscreen(src) {{
+  var overlay = document.createElement('div');
+  overlay.className = 'seq-fullscreen';
+  overlay.onclick = function() {{ overlay.remove(); }};
+  var img = document.createElement('img');
+  img.src = src;
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
 }}
 
 function matchShotIdx(vid, t, type) {{
