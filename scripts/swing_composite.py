@@ -226,11 +226,27 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         return None, None
 
     d = detections[shot_idx]
-    contact_frame = int(d.get("frame", 0))
+    raw_contact = int(d.get("frame", 0))
     shot_type = d.get("shot_type", "unknown")
     fps = det.get("fps", 60.0)
 
     pose_frames = poses.get("frames", [])
+
+    # Refine contact frame to peak wrist speed (better proxy for actual contact)
+    contact_frame = raw_contact
+    search_range = int(0.3 * fps)  # search ±0.3s around detected frame
+    best_speed = 0
+    for fi in range(max(1, raw_contact - search_range), min(len(pose_frames) - 1, raw_contact + search_range)):
+        lms_prev = get_landmarks(pose_frames, fi - 1)
+        lms_curr = get_landmarks(pose_frames, fi)
+        if lms_prev and lms_curr and len(lms_prev) > 16 and len(lms_curr) > 16:
+            wx0, wy0, wv0 = lms_prev[16]
+            wx1, wy1, wv1 = lms_curr[16]
+            if wv0 > 0.3 and wv1 > 0.3:
+                speed = ((wx1 - wx0)**2 + (wy1 - wy0)**2) ** 0.5
+                if speed > best_speed:
+                    best_speed = speed
+                    contact_frame = fi
 
     # Compute frame indices to sample
     before_frames = int(BEFORE_SEC * fps)
