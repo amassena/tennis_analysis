@@ -65,29 +65,72 @@ COURT_POINTS_WORLD = {
 }
 
 
+def detect_court_surface(frame):
+    """Detect court surface color to create a mask for line search.
+    Works for green (grass/hard), blue (hard), and clay (orange/red) courts.
+    Returns a binary mask of the court area."""
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    h, w = frame.shape[:2]
+
+    masks = []
+    # Green court (grass, green hard court)
+    masks.append(cv2.inRange(hsv, (30, 30, 40), (85, 255, 200)))
+    # Blue court (hard court)
+    masks.append(cv2.inRange(hsv, (90, 30, 40), (130, 255, 200)))
+    # Clay court (orange/red)
+    masks.append(cv2.inRange(hsv, (5, 50, 80), (25, 255, 220)))
+
+    combined = masks[0]
+    for m in masks[1:]:
+        combined = cv2.bitwise_or(combined, m)
+
+    # Dilate to fill gaps, then find the largest contiguous region
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+    combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel)
+    combined = cv2.dilate(combined, kernel, iterations=2)
+
+    court_area = np.sum(combined > 0) / (h * w)
+    if court_area < 0.05:
+        return np.ones((h, w), dtype=np.uint8) * 255
+    return combined
+
+
 def detect_court_lines(frame, min_line_length=100, max_line_gap=10):
-    """Detect court lines using Canny edge detection + Hough transform.
+    """Detect court lines using multi-threshold approach with court surface awareness.
 
     Returns list of (x1, y1, x2, y2) line segments.
     """
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # Enhance contrast for court lines (usually white on green/blue)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     gray = clahe.apply(gray)
 
-    # Court lines are white — threshold to isolate
-    _, white_mask = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
+    court_mask = detect_court_surface(frame)
 
-    # Edge detection
-    edges = cv2.Canny(white_mask, 50, 150, apertureSize=3)
+    all_lines = []
+    # Multi-threshold: try different white thresholds to handle varying lighting
+    for thresh in [150, 170, 190, 210]:
+        _, white_mask = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
+        # Focus on lines within/near the court surface
+        white_mask = cv2.bitwise_and(white_mask, court_mask)
+        edges = cv2.Canny(white_mask, 50, 150, apertureSize=3)
+        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=60,
+                                minLineLength=min_line_length,
+                                maxLineGap=max_line_gap)
+        if lines is not None:
+            all_lines.extend([tuple(l[0]) for l in lines])
 
-    # Hough line detection
-    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=80,
-                            minLineLength=min_line_length,
-                            maxLineGap=max_line_gap)
-    if lines is None:
-        return []
-    return [tuple(l[0]) for l in lines]
+    # Also try adaptive threshold for challenging lighting
+    adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                     cv2.THRESH_BINARY, 31, -10)
+    adaptive = cv2.bitwise_and(adaptive, court_mask)
+    edges_a = cv2.Canny(adaptive, 50, 150, apertureSize=3)
+    lines_a = cv2.HoughLinesP(edges_a, 1, np.pi/180, threshold=60,
+                               minLineLength=min_line_length,
+                               maxLineGap=max_line_gap)
+    if lines_a is not None:
+        all_lines.extend([tuple(l[0]) for l in lines_a])
+
+    return all_lines
 
 
 def classify_lines(lines, img_w, img_h):
@@ -146,6 +189,32 @@ def line_length(line):
     return math.sqrt((x2-x1)**2 + (y2-y1)**2)
 
 
+def validate_court_geometry(corners, img_w, img_h):
+    """Validate that detected corners form a plausible court trapezoid.
+    In perspective, the bottom edge (near baseline) should be wider than top (far baseline).
+    Returns True if geometry is plausible."""
+    tl = corners["top_left"]
+    tr = corners["top_right"]
+    bl = corners["bottom_left"]
+    br = corners["bottom_right"]
+
+    top_w = abs(tr[0] - tl[0])
+    bot_w = abs(br[0] - bl[0])
+    height = abs((bl[1] + br[1]) / 2 - (tl[1] + tr[1]) / 2)
+
+    # Bottom should be wider than top (perspective)
+    if bot_w < top_w * 0.5:
+        return False
+    # Court should have reasonable proportions
+    if height < img_h * 0.1 or top_w < img_w * 0.05:
+        return False
+    # Court shouldn't be impossibly narrow
+    aspect = max(top_w, bot_w) / max(height, 1)
+    if aspect < 0.1 or aspect > 10:
+        return False
+    return True
+
+
 def find_court_corners(horizontal, vertical, img_w, img_h):
     """Find intersections of horizontal and vertical lines to identify court corners.
 
@@ -167,7 +236,6 @@ def find_court_corners(horizontal, vertical, img_w, img_h):
         return None
 
     # Sort intersections into a grid
-    # Top-left, top-right, bottom-left, bottom-right (by y then x)
     intersections.sort(key=lambda p: (p[1], p[0]))
 
     # Take the 4 extreme corners
@@ -177,6 +245,9 @@ def find_court_corners(horizontal, vertical, img_w, img_h):
         "bottom_left": min(intersections[len(intersections)//2:], key=lambda p: p[0]),
         "bottom_right": max(intersections[len(intersections)//2:], key=lambda p: p[0]),
     }
+
+    if not validate_court_geometry(corners, img_w, img_h):
+        return None
 
     return corners, intersections
 
@@ -292,10 +363,10 @@ def calibrate_video(video_path, output_path=None, visualize=False):
 
     print(f"Calibrating {video_name}: {img_w}x{img_h} @ {fps}fps, {total_frames} frames")
 
-    # Sample frames at regular intervals (skip first/last 10%)
-    sample_start = int(total_frames * 0.1)
-    sample_end = int(total_frames * 0.9)
-    sample_count = 20
+    # Sample more frames for better detection — skip first/last 5%
+    sample_start = int(total_frames * 0.05)
+    sample_end = int(total_frames * 0.95)
+    sample_count = 40
     step = max(1, (sample_end - sample_start) // sample_count)
 
     best_result = None
