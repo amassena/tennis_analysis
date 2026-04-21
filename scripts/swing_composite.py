@@ -255,54 +255,57 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     img_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Compute a UNIFIED bounding box across all frames (so panels align)
-    all_xs, all_ys = [], []
+    # Compute per-frame player center + unified crop SIZE
+    # Each panel is centered on the player independently, but all panels
+    # share the same crop dimensions for visual consistency.
+    per_frame_center = {}
+    all_widths, all_heights = [], []
     for fi in frame_indices:
         lms = get_landmarks(pose_frames, fi)
-        if lms:
-            for x, y, v in lms:
-                if v > 0.3:
-                    all_xs.append(x * img_w)
-                    all_ys.append(y * img_h)
+        if not lms:
+            continue
+        fxs = [x * img_w for x, y, v in lms if v > 0.3]
+        fys = [y * img_h for x, y, v in lms if v > 0.3]
+        if len(fxs) < 5:
+            continue
+        cx = (min(fxs) + max(fxs)) / 2
+        cy = (min(fys) + max(fys)) / 2
+        w = max(fxs) - min(fxs)
+        h = max(fys) - min(fys)
+        per_frame_center[fi] = (cx, cy)
+        all_widths.append(w)
+        all_heights.append(h)
 
-    if len(all_xs) < 30:  # need good coverage across frames — skip bad poses
+    if not all_widths:
         cap.release()
         return None, None
 
-    # Unified bbox with padding
-    pad = 0.2
-    x_min = min(all_xs) - (max(all_xs) - min(all_xs)) * pad
-    y_min = min(all_ys) - (max(all_ys) - min(all_ys)) * pad
-    x_max = max(all_xs) + (max(all_xs) - min(all_xs)) * pad
-    y_max = max(all_ys) + (max(all_ys) - min(all_ys)) * pad
+    # Unified crop size: largest player extent across all frames + padding
+    pad = 0.35
+    crop_w = int(max(all_widths) * (1 + 2 * pad))
+    crop_h = int(max(all_heights) * (1 + 2 * pad))
 
     # Enforce 3:4 aspect
-    bw = x_max - x_min
-    bh = y_max - y_min
     ratio = 3.0 / 4.0
-    if bw / max(1, bh) > ratio:
-        new_h = bw / ratio
-        cy = (y_min + y_max) / 2
-        y_min, y_max = cy - new_h / 2, cy + new_h / 2
+    if crop_w / max(1, crop_h) > ratio:
+        crop_h = int(crop_w / ratio)
     else:
-        new_w = bh * ratio
-        cx = (x_min + x_max) / 2
-        x_min, x_max = cx - new_w / 2, cx + new_w / 2
+        crop_w = int(crop_h * ratio)
 
-    bbox = (max(0, int(x_min)), max(0, int(y_min)),
-            min(img_w, int(x_max)), min(img_h, int(y_max)))
-    bx, by, bx2, by2 = bbox
-    crop_w, crop_h = bx2 - bx, by2 - by
-    if crop_w < 10 or crop_h < 10:
-        cap.release()
-        return None, None
+    crop_w = max(crop_w, 100)
+    crop_h = max(crop_h, 100)
+
+    # Fallback center for frames without pose
+    valid_centers = list(per_frame_center.values())
+    fallback_cx = sum(c[0] for c in valid_centers) / len(valid_centers)
+    fallback_cy = sum(c[1] for c in valid_centers) / len(valid_centers)
 
     # Panel dimensions
     panel_h = PANEL_HEIGHT
     panel_w = int(panel_h * crop_w / max(1, crop_h))
 
     panels = []
-    wrist_trail = []  # for motion trail
+    wrist_trail = []
 
     for panel_idx, fi in enumerate(frame_indices):
         cap.set(cv2.CAP_PROP_POS_FRAMES, fi)
@@ -311,7 +314,15 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
             panels.append(np.zeros((panel_h, panel_w, 3), dtype=np.uint8))
             continue
 
-        # Crop to unified bbox
+        # Per-frame centering on player
+        cx, cy = per_frame_center.get(fi, (fallback_cx, fallback_cy))
+        bx = int(cx - crop_w / 2)
+        by = int(cy - crop_h / 2)
+        bx = max(0, min(bx, img_w - crop_w))
+        by = max(0, min(by, img_h - crop_h))
+        bx2 = min(bx + crop_w, img_w)
+        by2 = min(by + crop_h, img_h)
+
         crop = frame[by:by2, bx:bx2].copy()
         if crop.size == 0:
             panels.append(np.zeros((panel_h, panel_w, 3), dtype=np.uint8))
