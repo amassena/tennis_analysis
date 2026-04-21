@@ -18,6 +18,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "SwingLab"
         INFOPLIST_KEY_NSCameraUsageDescription: "SwingLab uses the camera to analyze your tennis form in real time."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "SwingLab uses the microphone to detect ball-strike sounds for shot timing."
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "SwingLab saves recordings to your Photos library for cloud processing."
         INFOPLIST_KEY_UILaunchStoryboardName: ""
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"

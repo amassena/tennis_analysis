@@ -4,6 +4,7 @@ import AVKit
 struct SessionReviewView: View {
     @ObservedObject var recording: SessionRecording
     @Binding var isPresented: Bool
+    @StateObject private var uploader = R2Uploader()
     @State private var selectedShot: RecordedShot?
     @State private var showingPlayer = false
 
@@ -50,15 +51,20 @@ struct SessionReviewView: View {
                     Button("Done") { isPresented = false }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: uploadSession) {
-                        if recording.isUploading {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Label("Upload", systemImage: "icloud.and.arrow.up")
+                    if uploader.completed {
+                        Label("Uploaded", systemImage: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    } else {
+                        Button(action: uploadSession) {
+                            if uploader.isUploading {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Label("Upload", systemImage: "icloud.and.arrow.up")
+                            }
                         }
+                        .disabled(uploader.isUploading || recording.videoURL == nil)
                     }
-                    .disabled(recording.isUploading)
                 }
             }
             .sheet(isPresented: $showingPlayer) {
@@ -71,10 +77,11 @@ struct SessionReviewView: View {
     }
 
     func uploadSession() {
-        // TODO: Direct R2 upload
-        recording.isUploading = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            recording.isUploading = false
+        guard let url = recording.videoURL else { return }
+        uploader.uploadSession(videoURL: url) { success in
+            if success {
+                recording.isUploading = false
+            }
         }
     }
 }
