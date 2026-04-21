@@ -271,11 +271,11 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     img_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Center crop on the CONTACT POINT (wrist at contact frame).
-    # Same crop position for all 7 frames — shows body moving toward/away from contact.
-    # This keeps the ball visible at contact and provides a fixed reference point.
+    # Crop: bbox of ALL landmarks at the CONTACT frame, padded to show
+    # full body + racket. Same crop for all 7 panels.
+    # Fall back to union of all frames if contact frame has poor pose.
+    contact_xs, contact_ys = [], []
     all_xs, all_ys = [], []
-    contact_cx, contact_cy = None, None
 
     for fi in frame_indices:
         lms = get_landmarks(pose_frames, fi)
@@ -283,32 +283,28 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
             continue
         for x, y, v in lms:
             if v > 0.3:
-                all_xs.append(x * img_w)
-                all_ys.append(y * img_h)
-        # Get wrist position at contact frame for centering
-        if fi == contact_frame and len(lms) > 16:
-            wx, wy, wv = lms[16]  # right wrist
-            if wv > 0.3:
-                contact_cx = wx * img_w
-                contact_cy = wy * img_h
+                px, py = x * img_w, y * img_h
+                all_xs.append(px)
+                all_ys.append(py)
+                if fi == contact_frame:
+                    contact_xs.append(px)
+                    contact_ys.append(py)
 
     if len(all_xs) < 30:
         cap.release()
         return None, None
 
-    # Crop size from player extent across all frames
+    # Union of all frames — guarantees full body visible in every panel
     all_xs.sort()
     all_ys.sort()
-    lo = max(0, int(len(all_xs) * 0.05))
-    hi = min(len(all_xs) - 1, int(len(all_xs) * 0.95))
-    player_w = all_xs[hi] - all_xs[lo]
-    lo_y = max(0, int(len(all_ys) * 0.05))
-    hi_y = min(len(all_ys) - 1, int(len(all_ys) * 0.95))
-    player_h = all_ys[hi_y] - all_ys[lo_y]
+    x_min, x_max = min(all_xs), max(all_xs)
+    y_min, y_max = min(all_ys), max(all_ys)
+    player_w = x_max - x_min
+    player_h = y_max - y_min
 
-    pad = 0.15
-    crop_w = int(player_w * (1 + 2 * pad))
-    crop_h = int(player_h * (1 + 2 * pad))
+    pad = 0.25
+    crop_w = int(player_w + 2 * pad * player_w)
+    crop_h = int(player_h + 2 * pad * player_h)
 
     # Enforce 3:4 aspect
     ratio = 3.0 / 4.0
@@ -317,17 +313,31 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     else:
         crop_w = int(crop_h * ratio)
 
-    crop_w = max(crop_w, 100)
-    crop_h = max(crop_h, 100)
+    crop_w = max(crop_w, 200)
+    crop_h = max(crop_h, 200)
 
-    # Center on contact wrist; fall back to player center
-    if contact_cx is None:
-        contact_cx = (all_xs[lo] + all_xs[hi]) / 2
-        contact_cy = (all_ys[lo_y] + all_ys[hi_y]) / 2
+    # Center on TORSO (shoulders+hips), not overall landmark midpoint.
+    # This keeps the person centered, not the racket.
+    torso_xs, torso_ys = [], []
+    for fi in frame_indices:
+        lms = get_landmarks(pose_frames, fi)
+        if not lms or len(lms) < 25:
+            continue
+        for idx in [11, 12, 23, 24]:  # shoulders + hips
+            x, y, v = lms[idx]
+            if v > 0.3:
+                torso_xs.append(x * img_w)
+                torso_ys.append(y * img_h)
 
-    # Fixed crop position for all frames, centered on contact point
-    bx = int(contact_cx - crop_w / 2)
-    by = int(contact_cy - crop_h * 0.4)  # bias upward so wrist isn't dead center
+    if torso_xs:
+        cx = (min(torso_xs) + max(torso_xs)) / 2
+        cy = (min(torso_ys) + max(torso_ys)) / 2
+    else:
+        cx = (x_min + x_max) / 2
+        cy = (y_min + y_max) / 2
+
+    bx = int(cx - crop_w / 2)
+    by = int(cy - crop_h / 2)
     bx = max(0, min(bx, img_w - crop_w))
     by = max(0, min(by, img_h - crop_h))
     bx2 = min(bx + crop_w, img_w)
