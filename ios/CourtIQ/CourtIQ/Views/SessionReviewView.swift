@@ -72,6 +72,11 @@ struct SessionReviewView: View {
                     ShotReplayView(shot: shot, videoURL: url)
                 }
             }
+            .onAppear {
+                if !uploader.completed && !uploader.isUploading && recording.videoURL != nil {
+                    uploadSession()
+                }
+            }
         }
         .preferredColorScheme(.dark)
     }
