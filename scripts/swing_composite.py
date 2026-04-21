@@ -255,35 +255,44 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     img_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Compute per-frame player center + unified crop SIZE
-    # Each panel is centered on the player independently, but all panels
-    # share the same crop dimensions for visual consistency.
-    per_frame_center = {}
-    all_widths, all_heights = [], []
+    # Center crop on the CONTACT POINT (wrist at contact frame).
+    # Same crop position for all 7 frames — shows body moving toward/away from contact.
+    # This keeps the ball visible at contact and provides a fixed reference point.
+    all_xs, all_ys = [], []
+    contact_cx, contact_cy = None, None
+
     for fi in frame_indices:
         lms = get_landmarks(pose_frames, fi)
         if not lms:
             continue
-        fxs = [x * img_w for x, y, v in lms if v > 0.3]
-        fys = [y * img_h for x, y, v in lms if v > 0.3]
-        if len(fxs) < 5:
-            continue
-        cx = (min(fxs) + max(fxs)) / 2
-        cy = (min(fys) + max(fys)) / 2
-        w = max(fxs) - min(fxs)
-        h = max(fys) - min(fys)
-        per_frame_center[fi] = (cx, cy)
-        all_widths.append(w)
-        all_heights.append(h)
+        for x, y, v in lms:
+            if v > 0.3:
+                all_xs.append(x * img_w)
+                all_ys.append(y * img_h)
+        # Get wrist position at contact frame for centering
+        if fi == contact_frame and len(lms) > 16:
+            wx, wy, wv = lms[16]  # right wrist
+            if wv > 0.3:
+                contact_cx = wx * img_w
+                contact_cy = wy * img_h
 
-    if not all_widths:
+    if len(all_xs) < 30:
         cap.release()
         return None, None
 
-    # Unified crop size: largest player extent across all frames + padding
-    pad = 0.35
-    crop_w = int(max(all_widths) * (1 + 2 * pad))
-    crop_h = int(max(all_heights) * (1 + 2 * pad))
+    # Crop size from player extent across all frames
+    all_xs.sort()
+    all_ys.sort()
+    lo = max(0, int(len(all_xs) * 0.05))
+    hi = min(len(all_xs) - 1, int(len(all_xs) * 0.95))
+    player_w = all_xs[hi] - all_xs[lo]
+    lo_y = max(0, int(len(all_ys) * 0.05))
+    hi_y = min(len(all_ys) - 1, int(len(all_ys) * 0.95))
+    player_h = all_ys[hi_y] - all_ys[lo_y]
+
+    pad = 0.15
+    crop_w = int(player_w * (1 + 2 * pad))
+    crop_h = int(player_h * (1 + 2 * pad))
 
     # Enforce 3:4 aspect
     ratio = 3.0 / 4.0
@@ -295,10 +304,24 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     crop_w = max(crop_w, 100)
     crop_h = max(crop_h, 100)
 
-    # Fallback center for frames without pose
-    valid_centers = list(per_frame_center.values())
-    fallback_cx = sum(c[0] for c in valid_centers) / len(valid_centers)
-    fallback_cy = sum(c[1] for c in valid_centers) / len(valid_centers)
+    # Center on contact wrist; fall back to player center
+    if contact_cx is None:
+        contact_cx = (all_xs[lo] + all_xs[hi]) / 2
+        contact_cy = (all_ys[lo_y] + all_ys[hi_y]) / 2
+
+    # Fixed crop position for all frames, centered on contact point
+    bx = int(contact_cx - crop_w / 2)
+    by = int(contact_cy - crop_h * 0.4)  # bias upward so wrist isn't dead center
+    bx = max(0, min(bx, img_w - crop_w))
+    by = max(0, min(by, img_h - crop_h))
+    bx2 = min(bx + crop_w, img_w)
+    by2 = min(by + crop_h, img_h)
+    crop_w = bx2 - bx
+    crop_h = by2 - by
+
+    if crop_w < 10 or crop_h < 10:
+        cap.release()
+        return None, None
 
     # Panel dimensions
     panel_h = PANEL_HEIGHT
@@ -313,15 +336,6 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         if not ret:
             panels.append(np.zeros((panel_h, panel_w, 3), dtype=np.uint8))
             continue
-
-        # Per-frame centering on player
-        cx, cy = per_frame_center.get(fi, (fallback_cx, fallback_cy))
-        bx = int(cx - crop_w / 2)
-        by = int(cy - crop_h / 2)
-        bx = max(0, min(bx, img_w - crop_w))
-        by = max(0, min(by, img_h - crop_h))
-        bx2 = min(bx + crop_w, img_w)
-        by2 = min(by + crop_h, img_h)
 
         crop = frame[by:by2, bx:bx2].copy()
         if crop.size == 0:
@@ -405,13 +419,7 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
             pt = (x + pi * (panel_w + gap), y)
             cv2.circle(composite, pt, 4, WRIST_TRAIL_COLOR, -1, cv2.LINE_AA)
 
-    # Add label bar at bottom
-    label_h = 36
-    label_bar = np.zeros((label_h, total_w, 3), dtype=np.uint8)
-    label = f"{shot_type.upper()} #{shot_idx + 1}  |  t={contact_frame / fps:.1f}s"
-    cv2.putText(label_bar, label, (10, 26), cv2.FONT_HERSHEY_SIMPLEX,
-                0.7, (220, 220, 220), 2, cv2.LINE_AA)
-    composite = np.vstack([composite, label_bar])
+    # No baked-in label bar — the gallery HTML shows labels separately
 
     info = {
         "shot_idx": shot_idx,

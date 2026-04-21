@@ -917,6 +917,7 @@ function closeCoachModal() {{
 }}
 
 // ── Sequences Modal ──
+var seqCacheBust = Date.now();
 function openSeqModal(vid) {{
   var modal = document.getElementById('seqModal');
   var grid = document.getElementById('seqGrid');
@@ -953,9 +954,10 @@ function openSeqModal(vid) {{
           if(s.type === 'practice' || s.type === 'offscreen' || s.type === 'not_shot') return;
           var idx = ('00' + s.idx).slice(-3);
           var base = 'shot_' + idx + '_' + s.type;
-          var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + noracket + suffix + '.jpg';
-          var fallback1 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + suffix + '.jpg';
-          var fallback2 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + '.jpg';
+          var cb = '?v=' + seqCacheBust;
+          var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + noracket + suffix + '.jpg' + cb;
+          var fallback1 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + suffix + '.jpg' + cb;
+          var fallback2 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + '.jpg' + cb;
           html += '<div class="seq-item">'
             + '<div class="seq-img-wrap" onclick="openSeqFullscreen(this.querySelector(\\'img\\').src)">'
             + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.indexOf(\\'noracket\\')>=0)this.src=\\''+fallback1+'\\';else if(this.src.indexOf(\\'_skel\\')>=0)this.src=\\''+fallback2+'\\';else this.parentNode.parentNode.style.display=\\'none\\'">'
