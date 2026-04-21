@@ -1,13 +1,22 @@
 """Batch run YOLO racket detection on all videos."""
+import glob
 import os, sys, subprocess
 os.chdir(r"C:\Users\amass\tennis_analysis")
 sys.path.insert(0, r"C:\Users\amass\tennis_analysis")
 
 PY = r"C:\Users\amass\tennis_analysis\venv\Scripts\python.exe"
 
-vids = sys.argv[1].split(",") if len(sys.argv) > 1 else []
+if len(sys.argv) > 1 and sys.argv[1] == "--all":
+    vids = sorted(
+        os.path.splitext(os.path.basename(f))[0]
+        for f in glob.glob(r"preprocessed\*.mp4")
+    )
+elif len(sys.argv) > 1:
+    vids = sys.argv[1].split(",")
+else:
+    print("Usage: batch_racket.py --all  OR  batch_racket.py VID1,VID2"); sys.exit(1)
 if not vids:
-    print("No videos specified"); sys.exit(1)
+    print("No videos found"); sys.exit(1)
 
 print(f"Racket detection batch: {len(vids)} videos", flush=True)
 for i, vid in enumerate(vids, 1):

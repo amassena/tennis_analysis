@@ -1127,7 +1127,7 @@ def main():
     parser.add_argument('--after', type=float, default=2.0,
                         help='Seconds after each shot for highlights (default: 2.0)')
     parser.add_argument('--types', nargs='+', default=['all'],
-                        choices=['all', 'timeline', 'highlights', 'grouped', 'bytype', 'rally', 'comparison'],
+                        choices=['all', 'timeline', 'highlights', 'grouped', 'bytype', 'rally', 'comparison', 'tracked'],
                         help='Which export types to generate')
     parser.add_argument('--point-gap', type=float, default=8.0,
                         help='Max inter-shot gap within a point for rally mode (default: 8.0)')
@@ -1232,6 +1232,29 @@ def main():
                 )
                 if os.path.exists(out):
                     exported_files.append(out)
+
+        # Dynamic player tracking (smooth pan/zoom)
+        if 'tracked' in export_types:
+            try:
+                from scripts.dynamic_track import render_dynamic_track
+                poses_path = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "poses_full_videos" if not sys.platform == "win32" else "poses",
+                    f"{video_name}.json"
+                )
+                if os.path.exists(poses_path):
+                    import json as _json
+                    with open(poses_path) as _f:
+                        _poses = _json.load(_f)
+                    out = f"{export_dir}/{video_name}_tracked.mp4"
+                    render_dynamic_track(video_path, _poses, out,
+                                         output_w=width, output_h=height)
+                    if os.path.exists(out):
+                        exported_files.append(out)
+                else:
+                    print(f"  [WARN] No poses for tracked export: {poses_path}")
+            except Exception as e:
+                print(f"  [WARN] Dynamic tracking failed: {e}")
 
         # Pro comparison (if requested)
         if 'comparison' in export_types:
