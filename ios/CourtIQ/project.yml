@@ -14,6 +14,8 @@ targets:
     settings:
       base:
         PRODUCT_NAME: "SwingLab"
+        DEVELOPMENT_TEAM: "UT7M4V9U57"
+        CODE_SIGN_STYLE: "Automatic"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: "SwingLab"
         INFOPLIST_KEY_NSCameraUsageDescription: "SwingLab uses the camera to analyze your tennis form in real time."

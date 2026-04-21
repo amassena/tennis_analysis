@@ -31,11 +31,16 @@ for i, vid in enumerate(vids, 1):
         print(f"  [{i}/{len(vids)}] {vid}: no preprocessed video, skip", flush=True)
         continue
     print(f"  [{i}/{len(vids)}] {vid}: detecting...", flush=True)
-    r = subprocess.run([PY, r"scripts\racket_detect.py", pp],
-                       capture_output=True, text=True, timeout=600)
-    if r.returncode != 0:
-        print(f"    FAILED: {r.stderr.strip()[-200:]}", flush=True)
-    else:
-        print(f"    done", flush=True)
+    try:
+        r = subprocess.run([PY, r"scripts\racket_detect.py", pp],
+                           capture_output=True, text=True, timeout=3600)
+        if r.returncode != 0:
+            print(f"    FAILED: {r.stderr.strip()[-200:]}", flush=True)
+        else:
+            print(f"    done", flush=True)
+    except subprocess.TimeoutExpired:
+        print(f"    TIMEOUT (>60min), skipping", flush=True)
+    except Exception as e:
+        print(f"    ERROR: {e}", flush=True)
 
 print("\n=== RACKET BATCH COMPLETE ===", flush=True)

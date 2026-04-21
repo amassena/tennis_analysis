@@ -183,6 +183,7 @@ def build_index_html(videos_meta):
         'highlights': ('Highlights', '#2ECC71'),
         'highlights_slowmo': ('Highlights Slow-Mo', '#8E44AD'),
         'comparisons': ('Pro Compare', '#E74C3C'),
+        'tracked': ('Player Tracking', '#00BCD4'),
     }
     link_order = [
         'timeline', 'rally', 'rally_slowmo',
@@ -192,6 +193,7 @@ def build_index_html(videos_meta):
         'volleys', 'volleys_slowmo',
         'highlights', 'highlights_slowmo',
         'grouped', 'grouped_slowmo',  # legacy: shown only if no per-type files exist
+        'tracked',
         'comparisons',
     ]
 
@@ -239,6 +241,7 @@ def build_index_html(videos_meta):
             'max_speed_mph': m.get('max_speed_mph'),
             'in_count': m.get('in_count'),
             'out_count': m.get('out_count'),
+            'features': m.get('features', []),
         })
 
     video_json = json.dumps(video_data, separators=(',', ':'))
@@ -918,6 +921,10 @@ function openSeqModal(vid) {{
   document.body.style.overflow = 'hidden';
 
   var showSkel = false;
+  var showNoRacket = false;
+  var vdata = VIDEOS.find(function(x){{ return x.id === vid; }});
+  var hasRacketRemoved = vdata && vdata.features && vdata.features.indexOf('racket_removed') >= 0;
+  var hasComparisons = vdata && vdata.features && vdata.features.indexOf('comparisons') >= 0;
 
   fetch('/' + vid + '/shots.json', {{cache:'no-store'}})
     .then(function(r){{ if(!r.ok) throw new Error('no shots.json'); return r.json(); }})
@@ -927,23 +934,49 @@ function openSeqModal(vid) {{
 
       function renderSeqs() {{
         var suffix = showSkel ? '_skel' : '';
-        var html = '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">'
+        var noracket = showNoRacket ? '_noracket' : '';
+        var html = '<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'
           + '<button onclick="toggleSeqSkel()" style="padding:6px 14px;background:'+(showSkel?'#5555aa':'#333')+';color:#eee;border:none;border-radius:6px;cursor:pointer;font-size:.8em">'
-          + (showSkel ? 'Skeleton: ON' : 'Skeleton: OFF') + '</button>'
-          + '<span style="color:#666;font-size:.75em">Toggle pose skeleton overlay</span></div>';
+          + (showSkel ? 'Skeleton: ON' : 'Skeleton: OFF') + '</button>';
+        if(hasRacketRemoved) {{
+          html += '<button onclick="toggleSeqRacket()" style="padding:6px 14px;background:'+(showNoRacket?'#7B1FA2':'#333')+';color:#eee;border:none;border-radius:6px;cursor:pointer;font-size:.8em">'
+            + (showNoRacket ? 'Racket: REMOVED' : 'Racket: NORMAL') + '</button>';
+        }}
+        html += '</div>';
+
         shots.forEach(function(s) {{
           if(s.type === 'practice' || s.type === 'offscreen' || s.type === 'not_shot') return;
           var idx = ('00' + s.idx).slice(-3);
-          var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/shot_' + idx + '_' + s.type + suffix + '.jpg';
-          var cleanUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/shot_' + idx + '_' + s.type + '.jpg';
+          var base = 'shot_' + idx + '_' + s.type;
+          var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + noracket + suffix + '.jpg';
+          var fallback1 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + suffix + '.jpg';
+          var fallback2 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + '.jpg';
           html += '<div class="seq-item">'
-            + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.includes(\\'_skel\\'))this.src=\\''+cleanUrl+'\\';else this.parentNode.style.display=\\'none\\'">'
+            + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.indexOf(\\'noracket\\')>=0)this.src=\\''+fallback1+'\\';else if(this.src.indexOf(\\'_skel\\')>=0)this.src=\\''+fallback2+'\\';else this.parentNode.style.display=\\'none\\'">'
             + '<div class="seq-label"><span>' + s.type.toUpperCase() + ' #' + (s.idx+1) + '</span>'
             + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
         }});
+
+        // Pro Comparisons section
+        if(hasComparisons) {{
+          html += '<div style="margin-top:24px;border-top:1px solid #333;padding-top:16px">'
+            + '<h3 style="color:#E74C3C;font-size:.8em;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">Pro Comparisons</h3>';
+          shots.forEach(function(s) {{
+            if(s.type === 'practice' || s.type === 'offscreen' || s.type === 'not_shot') return;
+            var idx = ('00' + s.idx).slice(-3);
+            var cmpUrl = 'https://tennis.playfullife.com/' + vid + '/comparisons/compare_' + idx + '_' + s.type + '.jpg';
+            html += '<div class="seq-item">'
+              + '<img src="' + cmpUrl + '" loading="lazy" onerror="this.parentNode.style.display=\\'none\\'">'
+              + '<div class="seq-label"><span style="color:#E74C3C">' + s.type.toUpperCase() + ' #' + (s.idx+1) + ' vs PRO</span>'
+              + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
+          }});
+          html += '</div>';
+        }}
+
         grid.innerHTML = html || '<div style="color:#888;padding:20px">No sequence images found.</div>';
       }}
       window.toggleSeqSkel = function() {{ showSkel = !showSkel; renderSeqs(); }};
+      window.toggleSeqRacket = function() {{ showNoRacket = !showNoRacket; renderSeqs(); }};
       window._seqRender = renderSeqs;
       renderSeqs();
     }})
@@ -1383,6 +1416,10 @@ function renderGallery() {{
       else if(v.ball_avg_speed) html += '<span style="color:#FFD700">\u26be '+v.ball_avg_speed.toFixed(0)+'</span>';
       if(v.in_count || v.out_count) html += '<span style="color:#8f8"><small>IN:'+
         (v.in_count||0)+'</small></span><span style="color:#f88"><small>OUT:'+(v.out_count||0)+'</small></span>';
+      var ft = v.features || [];
+      if(ft.indexOf('tracked')>=0) html += '<span style="color:#00BCD4;font-size:.7em" title="Dynamic player tracking">&#127909; Tracked</span>';
+      if(ft.indexOf('comparisons')>=0) html += '<span style="color:#E74C3C;font-size:.7em" title="Pro comparison available">&#127941; vs Pro</span>';
+      if(ft.indexOf('racket_removed')>=0) html += '<span style="color:#AB47BC;font-size:.7em" title="Racket-removed composites">&#9997; No Racket</span>';
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
       html += '<div class="card-coach-summary" id="coachSum-'+v.id+'" data-action="coach" data-vid="'+v.id+'">'
@@ -1613,22 +1650,35 @@ def update_index():
 
     # Group files by video
     videos = {}
+    video_features = {}  # vid -> set of features detected from R2 keys
     for k in keys:
         if 'index.html' in k or 'thumbs/' in k:
             continue
         parts = k.split('/')
-        if len(parts) == 3:
-            fname = parts[2]
-            # Skip non-video files (meta.json, etc.)
-            if not fname.endswith('.mp4'):
-                continue
-            videos.setdefault(parts[1], []).append(fname)
+        if len(parts) >= 3:
+            vid = parts[1]
+            fname = parts[-1]
+            # Track feature presence from subfolder names
+            if len(parts) == 4:
+                subfolder = parts[2]
+                feats = video_features.setdefault(vid, set())
+                if subfolder == 'sequences':
+                    feats.add('sequences')
+                    if '_noracket' in fname:
+                        feats.add('racket_removed')
+                elif subfolder == 'comparisons':
+                    feats.add('comparisons')
+            if len(parts) == 3 and fname.endswith('.mp4'):
+                videos.setdefault(vid, []).append(fname)
+                if '_tracked' in fname:
+                    video_features.setdefault(vid, set()).add('tracked')
 
     # Gather metadata + ensure thumbnails
     all_meta = {}
     for vid in videos:
         meta = get_video_metadata(vid, r2_client=c)
         meta['files'] = sorted(videos[vid])
+        meta['features'] = sorted(video_features.get(vid, set()))
         has_thumb = generate_thumbnail(vid)
         if has_thumb:
             upload_thumbnail(c, vid)
