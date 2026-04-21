@@ -382,15 +382,14 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         x_off = i * (panel_w + gap)
         composite[:, x_off:x_off + panel_w] = panel
 
-    # Draw wrist trail on composite
-    if len(wrist_trail) >= 2:
+    # Draw wrist trail on composite (skeleton version only)
+    if draw_skel and len(wrist_trail) >= 2:
         for k in range(1, len(wrist_trail)):
             pi1, x1, y1 = wrist_trail[k - 1]
             pi2, x2, y2 = wrist_trail[k]
             pt1 = (x1 + pi1 * (panel_w + gap), y1)
             pt2 = (x2 + pi2 * (panel_w + gap), y2)
             cv2.line(composite, pt1, pt2, WRIST_TRAIL_COLOR, 2, cv2.LINE_AA)
-        # Dots at each trail point
         for pi, x, y in wrist_trail:
             pt = (x + pi * (panel_w + gap), y)
             cv2.circle(composite, pt, 4, WRIST_TRAIL_COLOR, -1, cv2.LINE_AA)

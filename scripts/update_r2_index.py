@@ -394,8 +394,8 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .seq-fullscreen{{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.95);
   display:flex;align-items:center;justify-content:center;cursor:zoom-out}}
 .seq-fullscreen img{{max-width:100vw;max-height:100vh;object-fit:contain}}
-@media(max-width:600px){{.seq-item{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
-  .seq-item img{{width:auto;height:180px;min-width:100%}}}}
+@media(max-width:600px){{.seq-item .seq-img-wrap{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
+  .seq-item .seq-img-wrap img{{width:auto;height:180px;min-width:100%}}}}
 
 /* Coach modal filmstrip inline */
 .coach-filmstrip{{margin-top:8px;border-radius:4px;overflow:hidden;display:none}}
@@ -956,10 +956,12 @@ function openSeqModal(vid) {{
           var imgUrl = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + noracket + suffix + '.jpg';
           var fallback1 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + suffix + '.jpg';
           var fallback2 = 'https://tennis.playfullife.com/' + vid + '/sequences/' + base + '.jpg';
-          html += '<div class="seq-item" onclick="openSeqFullscreen(this.querySelector(\\'img\\').src)">'
-            + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.indexOf(\\'noracket\\')>=0)this.src=\\''+fallback1+'\\';else if(this.src.indexOf(\\'_skel\\')>=0)this.src=\\''+fallback2+'\\';else this.parentNode.style.display=\\'none\\'">'
+          html += '<div class="seq-item">'
+            + '<div class="seq-img-wrap" onclick="openSeqFullscreen(this.querySelector(\\'img\\').src)">'
+            + '<img src="' + imgUrl + '" loading="lazy" onerror="if(this.src.indexOf(\\'noracket\\')>=0)this.src=\\''+fallback1+'\\';else if(this.src.indexOf(\\'_skel\\')>=0)this.src=\\''+fallback2+'\\';else this.parentNode.parentNode.style.display=\\'none\\'">'
+            + '</div>'
             + '<div class="seq-label"><span>' + s.type.toUpperCase() + ' #' + (s.idx+1) + '</span>'
-            + '<span>t=' + fmtTs(s.t) + '  tap to zoom</span></div></div>';
+            + '<span>t=' + fmtTs(s.t) + '</span></div></div>';
         }});
 
         // Pro Comparisons section
