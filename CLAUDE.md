@@ -134,6 +134,27 @@ Files at `detections/{vid}_fused.json` (user-edited ground truth) — distinct f
 - **Processed file mtime ≠ recording date**: For gallery dates, always prefer iCloud asset `created`, then raw MOV ffprobe, then detection JSON `created`. Preprocessed mtime is the day of processing, not recording.
 - **Running process doesn't pick up synced files.** Kill + restart after `scp`.
 
+## Workflow rules — multi-stream development
+
+This repo runs multiple parallel work streams via `git worktree`. Three coordination files live at the repo root:
+
+- **`BACKLOG.md`** — captured bugs, deferred ideas, UX papercuts (one-liners)
+- **`FEATURES.md`** — what's actively in flight: branch, worktree, files touched
+- **`DESIGN.md`** — vision, product principles, cross-platform parity rules, anti-patterns
+
+**Always-on rules:**
+
+1. **Append-on-capture.** When the user mentions a bug, deferred idea, or "we should also..." — APPEND it to `BACKLOG.md` immediately, in the right section. Acknowledge in one sentence and continue current work.
+2. **Read on context switch.** When the user shifts topics ("let's work on X", "now do Y"), READ `FEATURES.md` and the relevant section of `BACKLOG.md` before diving in.
+3. **Scan before suggesting.** Before proposing new work, check `BACKLOG.md` to avoid duplicating an existing entry.
+4. **Respect file ownership.** `FEATURES.md` lists which files belong to which active branch. If a file is owned by another worktree's branch, do not edit it on `main` without coordinating first.
+5. **Honor DESIGN.md.** When making cross-cutting decisions, check `DESIGN.md` principles. If something violates them, flag it before doing it.
+
+**`/sync` command.** When the user types `/sync`, re-read `CLAUDE.md`, `FEATURES.md`, `BACKLOG.md`, `DESIGN.md` and report:
+- What's currently in flight (from FEATURES.md)
+- Top 5 backlog items by section
+- Any apparent drift from DESIGN.md principles
+
 ## Related memory files (`~/.claude/projects/-Users-andrewhome/memory/`)
 
 The `MEMORY.md` index there is my personal auto-memory (user preferences, past incidents). Project-technical content belongs in THIS file (repo-committed). If adding new learnings, prefer this file unless it's a user-preference pattern.

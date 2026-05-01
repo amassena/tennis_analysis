@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1655,8 +1656,27 @@ loadTags();
 </body></html>'''
 
 
-def update_index():
-    """Main: gather metadata, build HTML, upload to R2."""
+def get_branch_slug():
+    """Best-effort current git branch slug for staging/preview names."""
+    try:
+        r = subprocess.run(['git', '-C', str(PROJECT_ROOT), 'rev-parse', '--abbrev-ref', 'HEAD'],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            br = r.stdout.strip().replace('/', '-').replace('_', '-')
+            return br[:60] or 'unknown'
+    except Exception:
+        pass
+    return 'unknown'
+
+
+def update_index(mode='production'):
+    """Main: gather metadata, build HTML, deploy.
+
+    mode:
+      'production' — upload to highlights/index.html (live URL)
+      'staging'    — upload to staging/<branch>/highlights/index.html
+      'preview'    — write to ~/whiteboards/preview-<branch>/index.html (no upload)
+    """
     from dotenv import load_dotenv
     load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
     import importlib, config.settings
@@ -1732,6 +1752,33 @@ def update_index():
     except FileNotFoundError:
         pass  # node not installed, skip check
 
+    if mode == 'preview':
+        branch = get_branch_slug()
+        out_dir = Path.home() / 'whiteboards' / f'preview-{branch}'
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / 'index.html'
+        out_path.write_text(html, encoding='utf-8')
+        os.unlink(tmp.name)
+        url = f'http://localhost:8088/preview-{branch}/'
+        print(f'PREVIEW: {len(all_meta)} videos → {out_path}')
+        print(f'         {url}')
+        try:
+            subprocess.run(['open', url], check=False, timeout=2)
+        except Exception:
+            pass
+        return out_path
+
+    if mode == 'staging':
+        branch = get_branch_slug()
+        key = f'staging/{branch}/highlights/index.html'
+        c.upload(tmp.name, key, content_type='text/html')
+        os.unlink(tmp.name)
+        print(f'STAGING: {len(all_meta)} videos → r2://{key}')
+        print(f'         https://tennis.playfullife.com/staging/{branch}/highlights/index.html')
+        print(f'         (note: requires worker route /staging/<branch>/* → R2 staging/<branch>/*)')
+        return None
+
+    # production
     c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
     c.upload(tmp.name, 'highlights/', content_type='text/html')
     os.unlink(tmp.name)
@@ -1740,4 +1787,13 @@ def update_index():
 
 
 if __name__ == '__main__':
-    update_index()
+    import argparse
+    p = argparse.ArgumentParser()
+    g = p.add_mutually_exclusive_group()
+    g.add_argument('--preview', action='store_true',
+                   help='Write HTML locally to ~/whiteboards/preview-<branch>/, no upload. Fast iteration.')
+    g.add_argument('--staging', action='store_true',
+                   help='Upload to r2://staging/<branch>/ — shareable URL, does not affect production.')
+    args = p.parse_args()
+    mode = 'preview' if args.preview else ('staging' if args.staging else 'production')
+    update_index(mode)
