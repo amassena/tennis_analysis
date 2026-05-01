@@ -438,8 +438,7 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .coach-modal .close{{position:absolute;top:20px;right:24px;background:none;
   border:none;color:#999;font-size:1.8em;cursor:pointer;line-height:1}}
 .coach-modal .close:hover{{color:#fff}}
-.card-links{{display:none;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
-.card.expanded .card-links{{display:flex}}
+.card-links{{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
 .link-row{{display:flex;align-items:center;gap:6px}}
 .link-row a.play-btn{{flex:1;color:#fff;text-decoration:none;font-size:0.74em;font-weight:600;
   padding:5px 10px;border-radius:5px;opacity:.9;transition:opacity .15s;
@@ -1424,7 +1423,7 @@ function renderGallery() {{
         linksHtml += '</div>';
       }});
 
-      html += '<div class="card" onclick="toggleCard(this)">';
+      html += '<div class="card">';
       html += thumbHtml;
       html += '<div class="card-body">';
       html += '<div class="card-time">'+(time||v.id)+'</div>';
