@@ -59,25 +59,38 @@ def load_user_shot(video_id: str, shot_idx: int):
     return str(video_path), float(contact_t), fps, d.get("shot_type", "unknown")
 
 
-def pick_pro_clip(shot_type: str, player: str | None):
-    """Find a pro clip for the requested shot_type. Returns (path, contact_t, fps, player_name)."""
+def pick_pro_clip(shot_type: str, player: str | None, angle: str | None = None):
+    """Find a pro clip matching shot_type (and optionally angle).
+    Returns (path, contact_t, fps, player_name, clip_meta)."""
     idx = json.loads((PROS / "index.json").read_text())
     players = idx.get("players", {})
 
-    # Filter to requested player or try all
+    if player and player not in players:
+        sys.exit(f"[ERR] no pro {player}. Have: {list(players)}")
+
     candidates = [(p, pdata) for p, pdata in players.items()
                   if player is None or p == player]
-    if player and player not in players:
-        sys.exit(f"[ERR] no pro {player} in index.json. Have: {list(players)}")
 
-    for pname, pdata in candidates:
-        for clip in pdata.get("clips", []):
-            if clip.get("type") == shot_type:
+    # First pass: exact angle match
+    # Second pass: any angle (fallback)
+    for require_angle in ([angle] if angle else [None]):
+        for pname, pdata in candidates:
+            for clip in pdata.get("clips", []):
+                if clip.get("type") != shot_type:
+                    continue
+                if require_angle and clip.get("angle") != require_angle:
+                    continue
                 clip_path = PROS / pname / clip["file"]
                 if clip_path.exists():
                     contact_frame = clip.get("contact_frame", 0)
                     fps = clip.get("fps", 60.0)
-                    return str(clip_path), contact_frame / fps, fps, pdata.get("name", pname)
+                    return (str(clip_path), contact_frame / fps, fps,
+                            pdata.get("name", pname), clip)
+
+    # Fallback if angle requested but not found
+    if angle:
+        print(f"  [warn] no {angle} angle for {shot_type}, falling back to any angle")
+        return pick_pro_clip(shot_type, player, angle=None)
 
     sys.exit(f"[ERR] no pro clip for shot_type={shot_type}")
 
@@ -147,15 +160,18 @@ def main():
     p.add_argument("--video", required=True, help="User video ID e.g. IMG_1195")
     p.add_argument("--shot", type=int, required=True, help="User shot index")
     p.add_argument("--pro", help="Pro player name (default: auto-pick by shot type)")
+    p.add_argument("--angle", choices=["side", "behind"],
+                   help="Camera angle to match (side or behind). Default: behind (most amateur footage).")
     p.add_argument("--output", help="Output path (default: exports/<vid>/comparisons/align_<shot>_vs_<pro>.mp4)")
     p.add_argument("--upload", action="store_true", help="Upload to R2 after rendering")
     args = p.parse_args()
 
     user_path, user_t, user_fps, shot_type = load_user_shot(args.video, args.shot)
-    pro_path, pro_t, pro_fps, pro_name = pick_pro_clip(shot_type, args.pro)
+    angle = args.angle or "behind"   # most amateur footage is from behind the player
+    pro_path, pro_t, pro_fps, pro_name, clip_meta = pick_pro_clip(shot_type, args.pro, angle)
 
     print(f"  user: {Path(user_path).name} contact={user_t:.2f}s shot_type={shot_type}")
-    print(f"  pro:  {Path(pro_path).name} contact={pro_t:.2f}s ({pro_name})")
+    print(f"  pro:  {Path(pro_path).name} contact={pro_t:.2f}s ({pro_name}, angle={clip_meta.get('angle','?')})")
 
     pro_slug = Path(pro_path).parent.name
     out = Path(args.output) if args.output else (
