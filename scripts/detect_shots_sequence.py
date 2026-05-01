@@ -160,58 +160,111 @@ def sliding_window_inference(model, device, frames, fps, step_sec=0.1, batch_siz
     return timestamps, probs
 
 
-def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1):
+SHOT_CLASS_NAMES = ("backhand", "forehand", "serve")
+
+
+def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
+               per_class_thresholds=None, min_class_conf=0.0,
+               demote_below_class_conf=None):
     """Find shot detections from probability curves.
 
-    Returns list of dicts with timestamp, frame, shot_type, confidence.
+    Default mode: peak-find on P(shot) = 1 - P(not_shot), then assign type
+    via argmax over shot classes. Tuned by `threshold` (height of P(shot) peak).
+
+    Per-class mode (when `per_class_thresholds` is set): peak-find separately
+    on each class probability curve. Allows a lower bar for serves than
+    forehand/backhand. NMS is global by class probability so overlapping
+    peaks pick the most confident class.
+
+    Args:
+        threshold: P(shot) peak height (used when per_class_thresholds is None).
+        nms_gap: minimum seconds between kept detections.
+        prominence: scipy.signal.find_peaks prominence.
+        per_class_thresholds: dict like {"serve": 0.55, "forehand": 0.70,
+            "backhand": 0.70}. When provided, switches to per-class peak finding.
+        min_class_conf: drop detections whose top-class probability is below this.
+        demote_below_class_conf: if set, candidates whose top-class probability
+            is below this floor have shot_type re-tagged as "unknown_shot"
+            instead of being dropped. Useful to keep shot count accurate while
+            letting downstream filters skip ambiguous types.
+
+    Returns list of dicts with timestamp, shot_type, confidence, p_shot, probabilities.
     """
     from scipy.signal import find_peaks
 
     not_shot_idx = CLASS_TO_IDX["not_shot"]
-
-    # P(shot) = 1 - P(not_shot)
     p_shot = 1.0 - probs[:, not_shot_idx]
 
-    # Find peaks
-    peaks, properties = find_peaks(p_shot, height=threshold, prominence=prominence)
+    raw_detections = []
 
-    if len(peaks) == 0:
+    if per_class_thresholds:
+        # Peak-find each class probability curve independently
+        for cname in SHOT_CLASS_NAMES:
+            t_c = per_class_thresholds.get(cname)
+            if t_c is None:
+                continue
+            cidx = CLASS_TO_IDX[cname]
+            peaks, _ = find_peaks(probs[:, cidx], height=t_c, prominence=prominence)
+            for peak_idx in peaks:
+                shot_probs = probs[peak_idx]
+                raw_detections.append({
+                    "timestamp": round(float(timestamps[peak_idx]), 3),
+                    "p_shot": float(p_shot[peak_idx]),
+                    "shot_type": cname,
+                    "confidence": float(shot_probs[cidx]),
+                    "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4)
+                                      for c in range(len(CLASSES))},
+                })
+    else:
+        # Original mode: peak on P(shot), classify via argmax
+        peaks, _ = find_peaks(p_shot, height=threshold, prominence=prominence)
+        if len(peaks) == 0:
+            return []
+        shot_class_idxs = [CLASS_TO_IDX[c] for c in SHOT_CLASS_NAMES]
+        for peak_idx in peaks:
+            shot_probs = probs[peak_idx]
+            best_class = max(shot_class_idxs, key=lambda c: shot_probs[c])
+            raw_detections.append({
+                "timestamp": round(float(timestamps[peak_idx]), 3),
+                "p_shot": float(p_shot[peak_idx]),
+                "shot_type": CLASSES[best_class],
+                "confidence": float(shot_probs[best_class]),
+                "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4)
+                                  for c in range(len(CLASSES))},
+            })
+
+    if not raw_detections:
         return []
 
-    # For each peak, get shot type (argmax excluding not_shot)
-    shot_classes = [0, 1, 3]  # backhand=0, forehand=1, serve=3
-    raw_detections = []
-    for peak_idx in peaks:
-        t = float(timestamps[peak_idx])
-        shot_probs = probs[peak_idx]
-        p = float(p_shot[peak_idx])
+    if min_class_conf > 0.0:
+        raw_detections = [d for d in raw_detections if d["confidence"] >= min_class_conf]
+        if not raw_detections:
+            return []
 
-        # Best shot type (excluding not_shot)
-        best_class = max(shot_classes, key=lambda c: shot_probs[c])
-        best_conf = float(shot_probs[best_class])
-
-        raw_detections.append({
-            "timestamp": round(t, 3),
-            "p_shot": p,
-            "shot_type": CLASSES[best_class],
-            "confidence": round(best_conf, 3),
-            "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4) for c in range(len(CLASSES))},
-        })
-
-    # Greedy NMS: keep highest p_shot, suppress within nms_gap
-    raw_detections.sort(key=lambda d: d["p_shot"], reverse=True)
+    # Greedy NMS: prefer higher confidence; per-class mode dedups overlapping classes
+    sort_key = "confidence" if per_class_thresholds else "p_shot"
+    raw_detections.sort(key=lambda d: d[sort_key], reverse=True)
     kept = []
     for det in raw_detections:
         if all(abs(det["timestamp"] - k["timestamp"]) >= nms_gap for k in kept):
             kept.append(det)
 
-    # Sort by timestamp
+    if demote_below_class_conf is not None:
+        for det in kept:
+            if det["confidence"] < demote_below_class_conf:
+                det["shot_type"] = "unknown_shot"
+
+    # Round confidence for output
+    for det in kept:
+        det["confidence"] = round(det["confidence"], 3)
+
     kept.sort(key=lambda d: d["timestamp"])
     return kept
 
 
 def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
-                 step_sec=0.1, batch_size=256):
+                 step_sec=0.1, batch_size=256, per_class_thresholds=None,
+                 min_class_conf=0.0, demote_below_class_conf=None):
     """Run full detection pipeline on a video.
 
     Returns result dict in fused_detect.py format.
@@ -239,8 +292,13 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
 
     print(f"  Inference: {inference_time:.1f}s ({len(timestamps)} windows)")
 
-    # Find peaks
-    detections = find_shots(timestamps, probs, threshold=threshold, nms_gap=nms_gap)
+    detections = find_shots(
+        timestamps, probs,
+        threshold=threshold, nms_gap=nms_gap,
+        per_class_thresholds=per_class_thresholds,
+        min_class_conf=min_class_conf,
+        demote_below_class_conf=demote_below_class_conf,
+    )
 
     # Build output detections in fused_detect format
     output_detections = []
@@ -265,6 +323,19 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
         type_counts[st] = type_counts.get(st, 0) + 1
         tier_counts[d["tier"]] += 1
 
+    params = {
+        "threshold": threshold,
+        "nms_gap": nms_gap,
+        "step_sec": step_sec,
+        "model": "sequence_detector.pt",
+    }
+    if per_class_thresholds:
+        params["per_class_thresholds"] = per_class_thresholds
+    if min_class_conf > 0.0:
+        params["min_class_conf"] = min_class_conf
+    if demote_below_class_conf is not None:
+        params["demote_below_class_conf"] = demote_below_class_conf
+
     result = {
         "version": 6,
         "detector": "sequence_cnn",
@@ -274,12 +345,7 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
         "fps": fps,
         "total_frames": total_frames,
         "duration": round(total_frames / fps, 2),
-        "parameters": {
-            "threshold": threshold,
-            "nms_gap": nms_gap,
-            "step_sec": step_sec,
-            "model": "sequence_detector.pt",
-        },
+        "parameters": params,
         "summary": {
             "total_detections": len(output_detections),
             "by_tier": tier_counts,
@@ -431,10 +497,29 @@ def main():
     parser.add_argument("--model", default=os.path.join(MODELS_DIR, "sequence_detector.pt"))
     parser.add_argument("--sweep", action="store_true", help="Run threshold sweep")
     parser.add_argument("--output", help="Override output path")
+    parser.add_argument("--per-class-thresh",
+                        help='Per-class peak thresholds, e.g. "serve=0.55,forehand=0.70,backhand=0.70". '
+                             "When set, peak-find independently on each class probability curve "
+                             "(overrides --threshold).")
+    parser.add_argument("--min-class-conf", type=float, default=0.0,
+                        help="Drop detections whose top-class probability is below this floor.")
+    parser.add_argument("--demote-below", type=float, default=None,
+                        help='Detections with class prob below this floor are re-tagged as '
+                             '"unknown_shot" rather than dropped.')
     args = parser.parse_args()
 
     if not args.video and not args.all:
         parser.error("Specify a video path or --all")
+
+    # Parse per-class thresholds string
+    per_class_thresholds = None
+    if args.per_class_thresh:
+        per_class_thresholds = {}
+        for kv in args.per_class_thresh.split(","):
+            if not kv.strip():
+                continue
+            k, _, v = kv.partition("=")
+            per_class_thresholds[k.strip()] = float(v.strip())
 
     # Load model
     import torch
@@ -463,6 +548,9 @@ def main():
                 video_path, model, device,
                 threshold=args.threshold, nms_gap=args.nms_gap,
                 step_sec=args.step, batch_size=args.batch_size,
+                per_class_thresholds=per_class_thresholds,
+                min_class_conf=args.min_class_conf,
+                demote_below_class_conf=args.demote_below,
             )
             if result is None:
                 continue
@@ -486,6 +574,9 @@ def main():
             video_path, model, device,
             threshold=args.threshold, nms_gap=args.nms_gap,
             step_sec=args.step, batch_size=args.batch_size,
+            per_class_thresholds=per_class_thresholds,
+            min_class_conf=args.min_class_conf,
+            demote_below_class_conf=args.demote_below,
         )
         if result is None:
             sys.exit(1)
