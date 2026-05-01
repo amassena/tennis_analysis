@@ -176,6 +176,12 @@ When the user describes a UI issue, **don't ask for a screenshot**. Verify it yo
 
 The component pages read from PRODUCTION R2 (read-only), so they're always up to date with whatever's deployed. Use `update_r2_index.py --preview` for testing UI CHANGES locally before deploy.
 
+**Feedback-loop reminders:**
+- `FEEDBACK.md` at repo root is the cheat sheet for all testing/preview commands.
+- The user has a `/howto` slash command that prints it on demand.
+- When the user asks "how do I test/verify/preview X" or seems uncertain about the testing flow, point them to `/howto` (or print FEEDBACK.md yourself).
+- When you complete a UI-affecting task and the user might want to verify it, mention the relevant component preview URL — don't make them go hunt for it.
+
 ## Related memory files (`~/.claude/projects/-Users-andrewhome/memory/`)
 
 The `MEMORY.md` index there is my personal auto-memory (user preferences, past incidents). Project-technical content belongs in THIS file (repo-committed). If adding new learnings, prefer this file unless it's a user-preference pattern.
