@@ -155,6 +155,27 @@ This repo runs multiple parallel work streams via `git worktree`. Three coordina
 - Top 5 backlog items by section
 - Any apparent drift from DESIGN.md principles
 
+## Component preview endpoints (self-verification)
+
+When the user describes a UI issue, **don't ask for a screenshot**. Verify it yourself:
+
+1. **Component preview pages** at http://localhost:8088/components/ — single-purpose HTML pages that render ONE component reading live R2 data:
+   - `filmstrip.html?vid=ID&shot=N` — one shot's filmstrip
+   - `sequences.html?vid=ID` — all filmstrips for a video
+   - `coach.html?vid=ID` — coaching card content
+   - `card.html?vid=ID` — single video card (mobile + desktop iframes)
+   - `align.html?vid=ID&shot=N&pro=NAME` — alignment video player
+
+2. **Screenshot helper**: `~/bin/screenshot <url> -o /tmp/x.png --wait 2` runs headless Chrome and produces a PNG you can `Read`. Use this for visual verification.
+
+3. **Workflow when user reports a UI issue**:
+   - WebFetch the component preview page to inspect HTML/data
+   - Run `~/bin/screenshot` to capture the visual state
+   - `Read` the resulting PNG to see what's rendered
+   - Then propose the fix — don't ask the user to screenshot it for you
+
+The component pages read from PRODUCTION R2 (read-only), so they're always up to date with whatever's deployed. Use `update_r2_index.py --preview` for testing UI CHANGES locally before deploy.
+
 ## Related memory files (`~/.claude/projects/-Users-andrewhome/memory/`)
 
 The `MEMORY.md` index there is my personal auto-memory (user preferences, past incidents). Project-technical content belongs in THIS file (repo-committed). If adding new learnings, prefer this file unless it's a user-preference pattern.
