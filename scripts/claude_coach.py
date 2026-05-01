@@ -89,11 +89,16 @@ def load_metrics(vid: str) -> dict | None:
     metrics["duration_seconds"] = round(det.get("duration", 0), 1)
     metrics["total_shots"] = len(dets)
 
-    # Per-shot timeline (up to 50 shots evenly distributed — keeps prompt small)
+    # Per-shot timeline: only include high-confidence, non-trivial shots so
+    # Claude doesn't cite misclassified examples.
+    eligible = [d for d in dets
+                if d.get("shot_type") in ("forehand", "backhand", "serve",
+                                          "forehand_volley", "backhand_volley")
+                and (d.get("confidence", 1.0) is None or d.get("confidence", 1.0) >= 0.85)]
     timeline = []
-    step = max(1, len(dets) // 50)
-    for i in range(0, len(dets), step):
-        d = dets[i]
+    step = max(1, len(eligible) // 50)
+    for i in range(0, len(eligible), step):
+        d = eligible[i]
         t = d.get("timestamp") or d.get("contact_time") or d.get("peak_time") or d.get("time") or d.get("t")
         if t is None and d.get("frame") is not None:
             t = d["frame"] / 60.0
@@ -104,6 +109,7 @@ def load_metrics(vid: str) -> dict | None:
         timeline.append({
             "t": round(float(t), 1),
             "type": d.get("shot_type", "unknown"),
+            "conf": round(d.get("confidence", 1.0), 2),
         })
     metrics["per_shot_timeline"] = timeline
 
@@ -225,14 +231,16 @@ def format_user_message(metrics: dict) -> str:
     timeline = metrics.get("per_shot_timeline") or []
     if timeline:
         lines.append("")
-        lines.append("## Per-shot timeline (timestamp in seconds, shot type)")
+        lines.append("## Per-shot timeline (high-confidence shots only)")
         lines.append("```")
         for s in timeline:
-            lines.append(f"t={s['t']:7.1f}s  {s['type']}")
+            conf = s.get("conf", 1.0)
+            lines.append(f"t={s['t']:7.1f}s  {s['type']:12s}  conf={conf:.2f}")
         lines.append("```")
         lines.append("")
         lines.append("When you reference example shots in your feedback, pick timestamps "
-                     "from this list that best illustrate the point.")
+                     "ONLY from this list. These shots passed a confidence filter — "
+                     "do not invent timestamps not shown above.")
 
     return "\n".join(lines)
 
