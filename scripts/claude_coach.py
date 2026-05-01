@@ -143,6 +143,11 @@ def load_metrics(vid: str) -> dict | None:
             "avg_trajectory_change": round(_st.mean(ball_traj_changes), 1) if ball_traj_changes else None,
         }
 
+    # Calibrated shot speed + line calls (court homography)
+    metrics["calibrated_speeds"] = [d.get("ball_speed_mph") for d in dets if d.get("ball_speed_mph")]
+    metrics["line_calls"] = [d.get("line_call") for d in dets if d.get("line_call")]
+    metrics["shot_depths"] = [d.get("shot_depth") for d in dets if d.get("shot_depth")]
+
     return metrics
 
 
@@ -196,8 +201,9 @@ def format_user_message(metrics: dict) -> str:
         lines.append(f"- Ball detection rate: {bt['detection_rate']:.0%}")
 
     # Calibrated shot speed + line calls (from court homography)
-    cal_speeds = [d.get("ball_speed_mph") for d in dets if d.get("ball_speed_mph")]
-    line_calls = [d.get("line_call") for d in dets if d.get("line_call")]
+    cal_speeds = metrics.get("calibrated_speeds", [])
+    line_calls = metrics.get("line_calls", [])
+    depths = metrics.get("shot_depths", [])
     if cal_speeds:
         lines.append("")
         lines.append("## Calibrated shot speed (court-calibrated mph)")
@@ -209,8 +215,6 @@ def format_user_message(metrics: dict) -> str:
         out_ct = line_calls.count("OUT")
         pct = in_ct / len(line_calls) * 100
         lines.append(f"- Accuracy: {in_ct} IN / {out_ct} OUT ({pct:.0f}% in)")
-        # Shot depth
-        depths = [d.get("shot_depth") for d in dets if d.get("shot_depth")]
         if depths:
             lines.append(f"- Avg shot depth: {sum(depths)/len(depths):.1f}m from net")
         lines.append("")
