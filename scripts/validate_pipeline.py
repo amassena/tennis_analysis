@@ -36,8 +36,16 @@ DETECTIONS_DIR = os.path.join(PROJECT_ROOT, "detections")
 LABELS_DIR = os.path.join(PROJECT_ROOT, "labels")
 BASELINES_DIR = os.path.join(PROJECT_ROOT, "training", "regression_baselines")
 
-# Match tolerance: detection within this many seconds of GT counts as TP
+# Match tolerance: detection within this many seconds of GT counts as TP.
+# This is the legacy "window-level" tolerance — what the regression baseline was
+# trained on. Loose enough to absorb stride/peak-finding jitter (1.5s ≈ NMS gap).
 MATCH_TOLERANCE = 1.5
+
+# Event-level tolerance: ±6 frames @ 60fps ≈ 100ms (TenniSet convention).
+# This is the metric biomech actually cares about — the contact-time alignment
+# downstream depends on. Always reported alongside the legacy window F1.
+EVENT_TOLERANCE_FRAMES = 6
+EVENT_TOLERANCE_FALLBACK_SEC = 0.1  # used when fps unknown
 
 # Videos with known ground truth (reviewed in shot_review.py)
 # Map: video_name → GT source file (detection JSON or label file)
@@ -137,8 +145,11 @@ def load_ground_truth(video_name, gt_override=None):
         video_name: e.g. "IMG_6703"
         gt_override: Optional path to a specific GT file
 
-    Returns list of {timestamp, shot_type} dicts, filtered to trackable shots.
+    Returns (entries, gt_meta) where entries is a list of
+    {timestamp, shot_type} dicts (trackable only), and gt_meta carries
+    handedness/camera/session/fps fields from the GT JSON when present.
     """
+    path = None
     if gt_override:
         path = os.path.join(PROJECT_ROOT, gt_override) if not os.path.isabs(gt_override) else gt_override
         if path.endswith(".json"):
@@ -150,16 +161,31 @@ def load_ground_truth(video_name, gt_override=None):
         path = os.path.join(PROJECT_ROOT, info["gt_file"])
         if not os.path.exists(path):
             print(f"  WARNING: GT file not found: {path}")
-            return []
+            return [], {}
         if info["format"] == "label_file":
             entries = parse_label_file(path)
         else:
             entries = parse_detection_json(path)
     else:
-        return []
+        return [], {}
+
+    gt_meta = {}
+    if path and path.endswith(".json"):
+        try:
+            with open(path) as f:
+                raw = json.load(f)
+            gt_meta = {
+                "fps": raw.get("fps"),
+                "dominant_hand": raw.get("dominant_hand"),
+                "camera_angle": raw.get("camera_angle"),
+                "session_type": raw.get("session_type"),
+            }
+        except (json.JSONDecodeError, OSError):
+            pass
 
     # Filter out non-trackable types
-    return [e for e in entries if e["shot_type"] not in IGNORE_TYPES]
+    entries = [e for e in entries if e["shot_type"] not in IGNORE_TYPES]
+    return entries, gt_meta
 
 
 def load_detections(video_name, det_path=None, gt_path=None):
@@ -194,13 +220,13 @@ def load_detections(video_name, det_path=None, gt_path=None):
                 break
 
     if not path or not os.path.exists(path):
-        return [], None
+        return [], None, {}
 
     # Warn if detection and GT are the same file
     if gt_abs and os.path.abspath(path) == gt_abs:
         print(f"  WARNING: Detection file is same as GT file: {path}")
         print(f"  Run fused_detect.py first to generate fresh pipeline output.")
-        return [], path
+        return [], path, {}
 
     with open(path) as f:
         data = json.load(f)
@@ -217,11 +243,27 @@ def load_detections(video_name, det_path=None, gt_path=None):
             "confidence": det.get("confidence", 0.0),
             "not_shot_prob": det.get("not_shot_prob", 0.0),
         })
-    return entries, path
+
+    # Stratification metadata: fps for event tolerance; handedness/camera/session
+    # are saved by shot_review.py at the top level of the detection JSON.
+    meta = {
+        "fps": data.get("fps"),
+        "dominant_hand": data.get("dominant_hand"),
+        "camera_angle": data.get("camera_angle"),
+        "session_type": data.get("session_type"),
+    }
+    return entries, path, meta
 
 
-def match_detections(gt_list, det_list, tolerance=MATCH_TOLERANCE):
+def match_detections(gt_list, det_list, tolerance=MATCH_TOLERANCE,
+                     require_class_match=False):
     """Match ground truth to detections using greedy nearest-neighbor.
+
+    Args:
+        tolerance: max seconds between GT and detection to count as TP.
+        require_class_match: if True, only matches with same shot_type count
+            as TP. A detection at the right time but wrong type becomes both
+            an FN (missed type) and an FP (wrong-type detection).
 
     Returns (tp_pairs, fp_dets, fn_gts) where:
         tp_pairs: list of (gt_entry, det_entry, time_error) tuples
@@ -237,11 +279,14 @@ def match_detections(gt_list, det_list, tolerance=MATCH_TOLERANCE):
     det_sorted = sorted(enumerate(det_list), key=lambda x: x[1]["timestamp"])
 
     # Greedy matching: for each GT, find closest unmatched detection
+    # (optionally restricted to same shot_type)
     for gi, gt in gt_sorted:
         best_di = None
         best_err = tolerance + 1
         for di, det in det_sorted:
             if di in det_matched:
+                continue
+            if require_class_match and det.get("shot_type") != gt.get("shot_type"):
                 continue
             err = abs(gt["timestamp"] - det["timestamp"])
             if err < best_err:
@@ -256,6 +301,20 @@ def match_detections(gt_list, det_list, tolerance=MATCH_TOLERANCE):
     fn_gts = [gt_list[i] for i in range(len(gt_list)) if i not in gt_matched]
 
     return tp_pairs, fp_dets, fn_gts
+
+
+def event_tolerance_seconds(det_data):
+    """Resolve the event-level tolerance in seconds for a video.
+
+    Reads fps from the detection JSON if available, else falls back to a
+    fixed seconds value. Returns (tolerance_sec, fps_used).
+    """
+    fps = None
+    if isinstance(det_data, dict):
+        fps = det_data.get("fps")
+    if fps and fps > 0:
+        return EVENT_TOLERANCE_FRAMES / float(fps), float(fps)
+    return EVENT_TOLERANCE_FALLBACK_SEC, None
 
 
 def compute_metrics(tp, fp, fn):
@@ -275,8 +334,10 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
     """Run full validation for a single video.
 
     Returns dict with metrics, per-type breakdown, per-source breakdown.
+    Reports both window-level (legacy 1.5s tolerance) and event-level
+    (±6 frames, TenniSet convention) F1 — the second is what biomech sees.
     """
-    gt_list = load_ground_truth(video_name, gt_override)
+    gt_list, gt_meta = load_ground_truth(video_name, gt_override)
 
     # Resolve GT file path so we can exclude it from detection search
     gt_file_path = None
@@ -285,7 +346,7 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
     elif video_name in GT_VIDEOS:
         gt_file_path = os.path.join(PROJECT_ROOT, GT_VIDEOS[video_name]["gt_file"])
 
-    det_list, det_file = load_detections(video_name, det_path, gt_path=gt_file_path)
+    det_list, det_file, det_meta = load_detections(video_name, det_path, gt_path=gt_file_path)
 
     if not gt_list:
         if verbose:
@@ -297,12 +358,42 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
             print(f"  {video_name}: No pipeline output found (run fused_detect.py first)")
         return None
 
+    # Window-level (legacy): ±1.5s, class-agnostic. Backwards compatible — what
+    # the regression baseline was trained on.
     tp_pairs, fp_dets, fn_gts = match_detections(gt_list, det_list)
+
+    # Event-level: ±6 frames at video fps (≈100ms @ 60fps). Biomech-aligned.
+    # Compute both class-agnostic ("did we find the shot?") and class-strict
+    # ("did we find AND classify it correctly?"). Gap between them = pure
+    # classification error within the temporal tolerance.
+    event_tol_sec, event_fps = event_tolerance_seconds(det_meta or gt_meta)
+    e_det_pairs, e_det_fp, e_det_fn = match_detections(
+        gt_list, det_list, tolerance=event_tol_sec)
+    e_cls_pairs, e_cls_fp, e_cls_fn = match_detections(
+        gt_list, det_list, tolerance=event_tol_sec, require_class_match=True)
 
     # Overall metrics
     overall = compute_metrics(len(tp_pairs), len(fp_dets), len(fn_gts))
     overall["gt_total"] = len(gt_list)
     overall["det_total"] = len(det_list)
+
+    event_detection = compute_metrics(len(e_det_pairs), len(e_det_fp), len(e_det_fn))
+    event_detection["tolerance_sec"] = round(event_tol_sec, 4)
+    event_detection["tolerance_frames"] = EVENT_TOLERANCE_FRAMES if event_fps else None
+    event_detection["fps"] = event_fps
+
+    event_classification = compute_metrics(len(e_cls_pairs), len(e_cls_fp), len(e_cls_fn))
+    event_classification["tolerance_sec"] = round(event_tol_sec, 4)
+
+    # Contact-time MAE in milliseconds (event-level matches only) — what biomech
+    # actually feels.
+    if e_det_pairs:
+        ms_errors = [err * 1000.0 for _, _, err in e_det_pairs]
+        event_detection["contact_mae_ms"] = round(sum(ms_errors) / len(ms_errors), 1)
+        event_detection["contact_max_ms"] = round(max(ms_errors), 1)
+    else:
+        event_detection["contact_mae_ms"] = None
+        event_detection["contact_max_ms"] = None
 
     # Time error stats
     time_errors = [err for _, _, err in tp_pairs]
@@ -335,6 +426,22 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
     per_type = {}
     for shot_type, stats in sorted(type_stats.items()):
         per_type[shot_type] = compute_metrics(stats["tp"], stats["fp"], stats["fn"])
+
+    # ── Event-level per-type (class-strict, ±6 frame tolerance) ───
+    event_type_stats = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
+    for gt, det, _ in e_cls_pairs:
+        # Class-strict: gt_type == det_type by construction
+        event_type_stats[gt["shot_type"]]["tp"] += 1
+    for det in e_cls_fp:
+        # FPs include "wrong-type-at-right-time" detections — those land in the
+        # predicted-type bucket. Distinct from window-level FPs.
+        event_type_stats[det["shot_type"]]["fp"] += 1
+    for gt in e_cls_fn:
+        event_type_stats[gt["shot_type"]]["fn"] += 1
+    event_per_type = {
+        st: compute_metrics(s["tp"], s["fp"], s["fn"])
+        for st, s in sorted(event_type_stats.items())
+    }
 
     # ── Per-source breakdown ─────────────────────────────────────
     source_stats = defaultdict(lambda: {"tp": 0, "fp": 0, "total": 0})
@@ -389,16 +496,32 @@ def validate_video(video_name, gt_override=None, det_path=None, verbose=True):
                     **metrics_b,
                 })
 
+    # Stratification metadata: prefer GT JSON's labels (set by shot_review.py),
+    # fall back to det JSON. Fps for tolerance came from det_meta first.
+    stratify = {
+        "dominant_hand": (gt_meta or {}).get("dominant_hand")
+                          or (det_meta or {}).get("dominant_hand"),
+        "camera_angle": (gt_meta or {}).get("camera_angle")
+                          or (det_meta or {}).get("camera_angle"),
+        "session_type": (gt_meta or {}).get("session_type")
+                          or (det_meta or {}).get("session_type"),
+        "fps": (det_meta or {}).get("fps") or (gt_meta or {}).get("fps"),
+    }
+
     result = {
         "video": video_name,
         "gt_file": os.path.basename(gt_file_path) if gt_file_path else None,
         "det_file": os.path.basename(det_file) if det_file else None,
         "overall": overall,
+        "event_detection": event_detection,
+        "event_classification": event_classification,
         "per_type": per_type,
+        "event_per_type": event_per_type,
         "per_source": per_source,
         "classification_accuracy": classification_acc,
         "confusion_matrix": confusion,
         "temporal_bins": temporal_bins,
+        "stratify": stratify,
         "false_positives": [
             {"timestamp": d["timestamp"], "shot_type": d["shot_type"],
              "source": d.get("source", ""), "confidence": d.get("confidence", 0)}
@@ -420,6 +543,9 @@ def _print_video_report(result):
     """Print a formatted report for a single video."""
     v = result["video"]
     o = result["overall"]
+    ed = result.get("event_detection", {})
+    ec = result.get("event_classification", {})
+    strat = result.get("stratify", {})
 
     print(f"\n{'='*60}")
     print(f"  {v}")
@@ -428,18 +554,50 @@ def _print_video_report(result):
     det_f = result.get("det_file", "?")
     print(f"  GT file: {gt_f}")
     print(f"  Det file: {det_f}")
-    print(f"  GT: {o['gt_total']}  Det: {o['det_total']}  "
-          f"TP: {o['tp']}  FP: {o['fp']}  FN: {o['fn']}")
-    print(f"  P={o['precision']:.1%}  R={o['recall']:.1%}  F1={o['f1']:.1%}")
-    print(f"  Mean time error: {o['mean_time_error']:.3f}s  Max: {o['max_time_error']:.3f}s")
-    print(f"  Classification accuracy: {result['classification_accuracy']:.1%}")
+    if any(strat.get(k) for k in ("dominant_hand", "camera_angle", "session_type")):
+        print(f"  Stratify: hand={strat.get('dominant_hand') or '-'}  "
+              f"angle={strat.get('camera_angle') or '-'}  "
+              f"session={strat.get('session_type') or '-'}")
+    print(f"  GT: {o['gt_total']}  Det: {o['det_total']}")
 
-    # Per-type
-    if result["per_type"]:
+    # Window-level (legacy 1.5s tolerance)
+    print(f"  Window F1 (±1.5s): "
+          f"TP={o['tp']} FP={o['fp']} FN={o['fn']}  "
+          f"P={o['precision']:.1%}  R={o['recall']:.1%}  F1={o['f1']:.1%}")
+
+    # Event-level (±6 frames). Two flavors: detection vs class-strict.
+    tol_label = "?"
+    if ed:
+        tol_label = (f"±{ed['tolerance_frames']}f@{ed['fps']:.0f}fps"
+                     if ed.get("tolerance_frames") and ed.get("fps")
+                     else f"±{ed['tolerance_sec']:.2f}s")
+        mae = ed.get("contact_mae_ms")
+        mae_str = f"  contact MAE={mae:.0f}ms" if mae is not None else ""
+        print(f"  Event detection ({tol_label}): "
+              f"TP={ed['tp']} FP={ed['fp']} FN={ed['fn']}  "
+              f"P={ed['precision']:.1%}  R={ed['recall']:.1%}  F1={ed['f1']:.1%}{mae_str}")
+    if ec:
+        print(f"  Event classification (class-strict, {tol_label}): "
+              f"TP={ec['tp']} FP={ec['fp']} FN={ec['fn']}  "
+              f"P={ec['precision']:.1%}  R={ec['recall']:.1%}  F1={ec['f1']:.1%}")
+
+    print(f"  Mean time error (window): {o['mean_time_error']:.3f}s  Max: {o['max_time_error']:.3f}s")
+    print(f"  Classification accuracy (window): {result['classification_accuracy']:.1%}")
+
+    # Per-type, side by side: window (±1.5s, class-agnostic) vs event (class-strict)
+    if result["per_type"] or result.get("event_per_type"):
         print(f"\n  Per shot type:")
-        for st, m in sorted(result["per_type"].items()):
-            print(f"    {st:<12s}  TP={m['tp']:3d}  FP={m['fp']:2d}  FN={m['fn']:2d}  "
-                  f"P={m['precision']:.1%}  R={m['recall']:.1%}  F1={m['f1']:.1%}")
+        print(f"    {'type':<12s}  {'window F1 (±1.5s)':<28s}  {'event F1 (class-strict)':<28s}")
+        all_types = sorted(set(list(result["per_type"].keys()) +
+                                list((result.get("event_per_type") or {}).keys())))
+        for st in all_types:
+            wm = result["per_type"].get(st)
+            em = (result.get("event_per_type") or {}).get(st)
+            wstr = (f"TP={wm['tp']:3d} FP={wm['fp']:2d} FN={wm['fn']:2d} F1={wm['f1']:.1%}"
+                    if wm else "-")
+            estr = (f"TP={em['tp']:3d} FP={em['fp']:2d} FN={em['fn']:2d} F1={em['f1']:.1%}"
+                    if em else "-")
+            print(f"    {st:<12s}  {wstr:<28s}  {estr:<28s}")
 
     # Per-source
     if result["per_source"]:
@@ -617,6 +775,135 @@ def generate_temporal_plot(results, output_path=None):
     print(f"\nTemporal plot saved to {output_path}")
 
 
+def _aggregate_metric_block(results, key):
+    """Sum TP/FP/FN across results for the given metric block ('overall',
+    'event_detection', 'event_classification') and compute aggregate."""
+    tp = sum(r.get(key, {}).get("tp", 0) for r in results)
+    fp = sum(r.get(key, {}).get("fp", 0) for r in results)
+    fn = sum(r.get(key, {}).get("fn", 0) for r in results)
+    m = compute_metrics(tp, fp, fn)
+    return m, tp, fp, fn
+
+
+def _print_aggregate(results):
+    """Print overall aggregate (window + event-level)."""
+    total_gt = sum(r["overall"]["gt_total"] for r in results)
+    print(f"\n{'='*60}")
+    print(f"  AGGREGATE ({len(results)} videos, {total_gt} GT shots)")
+    print(f"{'='*60}")
+
+    w, wtp, wfp, wfn = _aggregate_metric_block(results, "overall")
+    ed, etp, efp, efn = _aggregate_metric_block(results, "event_detection")
+    ec, ctp, cfp, cfn = _aggregate_metric_block(results, "event_classification")
+
+    print(f"  Window  (±1.5s, class-agnostic):  TP={wtp:>4d} FP={wfp:>3d} FN={wfn:>3d}  "
+          f"P={w['precision']:.1%}  R={w['recall']:.1%}  F1={w['f1']:.1%}")
+    print(f"  Event   (±6f, class-agnostic):    TP={etp:>4d} FP={efp:>3d} FN={efn:>3d}  "
+          f"P={ed['precision']:.1%}  R={ed['recall']:.1%}  F1={ed['f1']:.1%}")
+    print(f"  Event   (±6f, class-strict):      TP={ctp:>4d} FP={cfp:>3d} FN={cfn:>3d}  "
+          f"P={ec['precision']:.1%}  R={ec['recall']:.1%}  F1={ec['f1']:.1%}")
+
+    # Aggregate contact-time MAE across all event-level matches.
+    all_mae_ms = []
+    for r in results:
+        m = r.get("event_detection", {}).get("contact_mae_ms")
+        n = r.get("event_detection", {}).get("tp", 0)
+        if m is not None and n:
+            all_mae_ms.append((m, n))
+    if all_mae_ms:
+        weighted = sum(m * n for m, n in all_mae_ms) / sum(n for _, n in all_mae_ms)
+        print(f"  Contact-time MAE (event TPs): {weighted:.1f}ms")
+
+    # Per-type aggregate, side by side
+    window_type = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
+    event_type = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
+    for r in results:
+        for st, m in r.get("per_type", {}).items():
+            window_type[st]["tp"] += m["tp"]; window_type[st]["fp"] += m["fp"]; window_type[st]["fn"] += m["fn"]
+        for st, m in r.get("event_per_type", {}).items():
+            event_type[st]["tp"] += m["tp"]; event_type[st]["fp"] += m["fp"]; event_type[st]["fn"] += m["fn"]
+
+    print(f"\n  Per shot type (aggregate):")
+    print(f"    {'type':<12s}  {'window F1 (±1.5s)':<32s}  {'event F1 (class-strict, ±6f)':<32s}")
+    all_st = sorted(set(window_type.keys()) | set(event_type.keys()))
+    for st in all_st:
+        wm = compute_metrics(**window_type[st]) if st in window_type else None
+        em = compute_metrics(**event_type[st]) if st in event_type else None
+        ws = (f"TP={wm['tp']:3d} FP={wm['fp']:3d} FN={wm['fn']:3d} F1={wm['f1']:.1%}"
+              if wm else "-")
+        es = (f"TP={em['tp']:3d} FP={em['fp']:3d} FN={em['fn']:3d} F1={em['f1']:.1%}"
+              if em else "-")
+        print(f"    {st:<12s}  {ws:<32s}  {es:<32s}")
+
+
+def _print_per_video_breakdown(results):
+    """Per-video breakdown — verifies no video is dragging the aggregate
+    down silently. Stratification by video is the FIRST split (no shot-level
+    leakage by construction since each video is its own row)."""
+    print(f"\n  Per-video breakdown (sorted by event-strict F1, lowest first):")
+    print(f"    {'video':<12s}  {'GT':>4s}  {'win F1':>7s}  {'evt F1':>7s}  "
+          f"{'cls F1':>7s}  {'MAE ms':>7s}  {'hand':<6s}  {'angle':<10s}")
+    rows = []
+    for r in results:
+        ed = r.get("event_detection", {})
+        ec = r.get("event_classification", {})
+        rows.append((
+            ec.get("f1", 0.0), r["video"],
+            r["overall"]["gt_total"], r["overall"]["f1"],
+            ed.get("f1", 0.0), ec.get("f1", 0.0),
+            ed.get("contact_mae_ms"),
+            (r.get("stratify") or {}).get("dominant_hand") or "-",
+            (r.get("stratify") or {}).get("camera_angle") or "-",
+        ))
+    rows.sort(key=lambda x: x[0])
+    for _, vid, n, w_f1, ed_f1, ec_f1, mae, hand, angle in rows:
+        mae_s = f"{mae:.0f}" if mae is not None else "-"
+        print(f"    {vid:<12s}  {n:>4d}  {w_f1:>7.1%}  {ed_f1:>7.1%}  "
+              f"{ec_f1:>7.1%}  {mae_s:>7s}  {hand:<6s}  {angle:<10s}")
+
+
+def _print_stratified_breakdown(results):
+    """Aggregate event-level F1 broken out by handedness and camera angle.
+    Tells you whether lefty / left-side-camera videos systematically
+    underperform — the failure mode the adversarial review flagged."""
+
+    def aggregate_for(predicate):
+        subset = [r for r in results if predicate(r)]
+        if not subset:
+            return None
+        wm, *_ = _aggregate_metric_block(subset, "overall")
+        em, *_ = _aggregate_metric_block(subset, "event_detection")
+        cm, *_ = _aggregate_metric_block(subset, "event_classification")
+        gt = sum(r["overall"]["gt_total"] for r in subset)
+        return {
+            "n_videos": len(subset), "gt": gt,
+            "window_f1": wm["f1"], "event_f1": em["f1"], "cls_f1": cm["f1"],
+        }
+
+    # By handedness
+    print(f"\n  Stratified by handedness:")
+    for hand in ("right", "left", None):
+        label = hand if hand else "(unknown)"
+        agg = aggregate_for(lambda r, h=hand: (r.get("stratify") or {}).get("dominant_hand") == h)
+        if agg:
+            print(f"    {label:<10s} videos={agg['n_videos']:>2d}  GT={agg['gt']:>5d}  "
+                  f"win F1={agg['window_f1']:.1%}  evt F1={agg['event_f1']:.1%}  "
+                  f"cls F1={agg['cls_f1']:.1%}")
+
+    # By camera angle
+    print(f"\n  Stratified by camera angle:")
+    angles = sorted({(r.get("stratify") or {}).get("camera_angle") or "(unknown)"
+                     for r in results})
+    for ang in angles:
+        target = ang if ang != "(unknown)" else None
+        agg = aggregate_for(lambda r, t=target:
+                            ((r.get("stratify") or {}).get("camera_angle") or None) == t)
+        if agg:
+            print(f"    {ang:<14s} videos={agg['n_videos']:>2d}  GT={agg['gt']:>5d}  "
+                  f"win F1={agg['window_f1']:.1%}  evt F1={agg['event_f1']:.1%}  "
+                  f"cls F1={agg['cls_f1']:.1%}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate tennis shot detection pipeline")
@@ -632,6 +919,10 @@ def main():
     parser.add_argument("--plot", action="store_true",
                         help="Generate temporal error analysis plot")
     parser.add_argument("--json-output", help="Save full results to JSON")
+    parser.add_argument("--include-all-gt", action="store_true",
+                        help="Validate against every detections/*_fused.json (not just "
+                             "the 26 enrolled in GT_VIDEOS dict). Useful after adding "
+                             "new labeled videos.")
     args = parser.parse_args()
 
     results = []
@@ -641,8 +932,26 @@ def main():
         r = validate_video(args.video, gt_override=args.gt, det_path=args.det)
         if r:
             results.append(r)
+    elif args.include_all_gt:
+        # Discover all GT files in detections/, treat each as ground truth
+        gt_videos = []
+        for f in sorted(os.listdir(DETECTIONS_DIR)):
+            if not f.endswith("_fused.json"):
+                continue
+            if any(s in f for s in ("_detections", "_v2", "_v5", "_ml", "_pre", "_baseline")):
+                continue
+            name = f.replace("_fused.json", "")
+            if name in {"IMG_0993", "IMG_0995", "IMG_6712"}:  # known-bad GT
+                continue
+            gt_videos.append((name, f"detections/{f}"))
+        print(f"Validating {len(gt_videos)} GT videos (--include-all-gt)...")
+        for name, gt_path in gt_videos:
+            # Skip if GT file matches the only candidate detection file (no fresh inference)
+            r = validate_video(name, gt_override=gt_path)
+            if r:
+                results.append(r)
     else:
-        # Validate all GT videos
+        # Validate all GT videos enrolled in the dict (regression-baseline scope)
         print(f"Validating {len(GT_VIDEOS)} ground truth videos...")
         for video_name in sorted(GT_VIDEOS.keys()):
             r = validate_video(video_name)
@@ -655,31 +964,9 @@ def main():
 
     # ── Aggregate summary ─────────────────────────────────────────
     if len(results) > 1:
-        total_tp = sum(r["overall"]["tp"] for r in results)
-        total_fp = sum(r["overall"]["fp"] for r in results)
-        total_fn = sum(r["overall"]["fn"] for r in results)
-        total_gt = sum(r["overall"]["gt_total"] for r in results)
-        agg = compute_metrics(total_tp, total_fp, total_fn)
-
-        print(f"\n{'='*60}")
-        print(f"  AGGREGATE ({len(results)} videos, {total_gt} GT shots)")
-        print(f"{'='*60}")
-        print(f"  TP={total_tp}  FP={total_fp}  FN={total_fn}")
-        print(f"  P={agg['precision']:.1%}  R={agg['recall']:.1%}  F1={agg['f1']:.1%}")
-
-        # Aggregate per-type
-        all_type_stats = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0})
-        for r in results:
-            for st, m in r["per_type"].items():
-                all_type_stats[st]["tp"] += m["tp"]
-                all_type_stats[st]["fp"] += m["fp"]
-                all_type_stats[st]["fn"] += m["fn"]
-
-        print(f"\n  Aggregate per shot type:")
-        for st, stats in sorted(all_type_stats.items()):
-            m = compute_metrics(stats["tp"], stats["fp"], stats["fn"])
-            print(f"    {st:<12s}  TP={m['tp']:3d}  FP={m['fp']:2d}  FN={m['fn']:2d}  "
-                  f"P={m['precision']:.1%}  R={m['recall']:.1%}  F1={m['f1']:.1%}")
+        _print_aggregate(results)
+        _print_per_video_breakdown(results)
+        _print_stratified_breakdown(results)
 
     # ── Regression check ──────────────────────────────────────────
     if args.check_regression:

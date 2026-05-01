@@ -463,6 +463,195 @@ def run_threshold_sweep(model, device, videos, args):
     return best_thresh
 
 
+def run_pr_curves(model, device, args):
+    """Sweep per-class thresholds and compute precision-recall curves at
+    event-level (±N frames) tolerance.
+
+    Strategy: run inference once per video (caching probability curves), then
+    for each class and each threshold, peak-find on that class's probability,
+    NMS, and score class-strict TPs against GT entries of that class within
+    the event tolerance. Other-class GTs and detections are not penalized for
+    a single class's curve — that would conflate detection and classification.
+
+    Output: training/pr_curves.json with thresholds + (P, R, F1) per class,
+    plus PR-AUC and precision @ recall=0.95 per class.
+    """
+    import json as _json
+    from scipy.signal import find_peaks
+
+    pr_videos = []
+    DETECTIONS_DIR_LOCAL = DETECTIONS_DIR
+    EXCLUDE = {"IMG_0993", "IMG_0995", "IMG_6712"}
+    for f in sorted(os.listdir(DETECTIONS_DIR_LOCAL)):
+        if not f.endswith("_fused.json"):
+            continue
+        if any(s in f for s in ("_detections", "_v2", "_v5", "_ml", "_pre", "_baseline")):
+            continue
+        name = f.replace("_fused.json", "")
+        if name in EXCLUDE:
+            continue
+        gt_path = os.path.join(DETECTIONS_DIR_LOCAL, f)
+        pose_path = os.path.join(POSES_DIR, f"{name}.json")
+        if not os.path.exists(pose_path):
+            continue
+        pr_videos.append((name, gt_path, pose_path))
+
+    print(f"\nPR sweep on {len(pr_videos)} videos...")
+
+    # Inference cache: video -> (timestamps, probs, fps, gt_per_class)
+    cache = {}
+    SHOT_CLASS_NAMES_LOCAL = ("backhand", "forehand", "serve")
+    for i, (name, gt_path, pose_path) in enumerate(pr_videos):
+        try:
+            with open(gt_path) as gf:
+                gt = _json.load(gf)
+        except (OSError, _json.JSONDecodeError):
+            continue
+        gt_fps = gt.get("fps", 60.0) or 60.0
+        gt_by_class = {c: [] for c in SHOT_CLASS_NAMES_LOCAL}
+        for d in gt.get("detections", []):
+            st = d.get("shot_type")
+            if st in gt_by_class:
+                gt_by_class[st].append(d["timestamp"])
+
+        from scripts.extract_training_features import load_pose_frames
+        frames, fps_v, _ = load_pose_frames(pose_path)
+        if fps_v <= 0:
+            fps_v = gt_fps
+        timestamps, probs = sliding_window_inference(
+            model, device, frames, fps_v, step_sec=args.step,
+            batch_size=args.batch_size,
+        )
+        if len(timestamps) == 0:
+            continue
+        cache[name] = (timestamps, probs, fps_v, gt_by_class)
+        if (i + 1) % 5 == 0:
+            print(f"  cached {i+1}/{len(pr_videos)}")
+
+    print(f"Cached {len(cache)} videos.")
+
+    # Threshold grid: dense low end (where missed shots live), coarse high end.
+    thresholds = sorted(set(
+        [round(0.05 * k, 4) for k in range(1, 20)]   # 0.05..0.95 step 0.05
+        + [0.92, 0.94, 0.96, 0.98]
+    ))
+
+    nms_gap = args.nms_gap
+    tol_frames = args.pr_tolerance_frames
+
+    curves = {}
+    for cname in SHOT_CLASS_NAMES_LOCAL:
+        cidx = CLASS_TO_IDX[cname]
+        points = []
+        for thr in thresholds:
+            total_tp = total_fp = total_fn = 0
+            for vid, (timestamps, probs, fps_v, gt_by_class) in cache.items():
+                tol_sec = tol_frames / fps_v
+                # Peak-find on this class's probability curve
+                peaks, _props = find_peaks(probs[:, cidx], height=thr, prominence=0.1)
+                cand = sorted(
+                    [(float(timestamps[p]), float(probs[p, cidx])) for p in peaks],
+                    key=lambda x: -x[1],
+                )
+                # Greedy NMS by class confidence
+                kept = []
+                for t, c in cand:
+                    if all(abs(t - kt) >= nms_gap for kt, _ in kept):
+                        kept.append((t, c))
+                kept.sort(key=lambda x: x[0])
+
+                # Score against GT of this class only (class-strict event match)
+                gt_ts = sorted(gt_by_class.get(cname, []))
+                used = set()
+                tp = 0
+                for gt_t in gt_ts:
+                    best_di = None; best_err = tol_sec + 1
+                    for di, (det_t, _) in enumerate(kept):
+                        if di in used:
+                            continue
+                        e = abs(gt_t - det_t)
+                        if e < best_err:
+                            best_err = e; best_di = di
+                    if best_di is not None and best_err <= tol_sec:
+                        used.add(best_di); tp += 1
+                fp = len(kept) - tp
+                fn = len(gt_ts) - tp
+                total_tp += tp; total_fp += fp; total_fn += fn
+
+            prec = total_tp / (total_tp + total_fp) if (total_tp + total_fp) else 0.0
+            rec = total_tp / (total_tp + total_fn) if (total_tp + total_fn) else 0.0
+            f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+            points.append({
+                "threshold": thr, "tp": total_tp, "fp": total_fp, "fn": total_fn,
+                "precision": round(prec, 4), "recall": round(rec, 4), "f1": round(f1, 4),
+            })
+
+        # PR-AUC (trapezoidal over recall-sorted points)
+        sorted_pts = sorted(points, key=lambda p: p["recall"])
+        pr_auc = 0.0
+        for i in range(1, len(sorted_pts)):
+            r0, r1 = sorted_pts[i-1]["recall"], sorted_pts[i]["recall"]
+            p0, p1 = sorted_pts[i-1]["precision"], sorted_pts[i]["precision"]
+            pr_auc += 0.5 * (p0 + p1) * (r1 - r0)
+
+        # Precision @ recall=0.95 (interpolate)
+        p_at_95 = None
+        for p in sorted_pts:
+            if p["recall"] >= 0.95:
+                p_at_95 = p["precision"]
+                break
+
+        # Best F1 + the threshold that achieves it
+        best = max(points, key=lambda p: p["f1"])
+
+        curves[cname] = {
+            "points": points,
+            "pr_auc": round(pr_auc, 4),
+            "precision_at_recall_95": p_at_95,
+            "best_f1": round(best["f1"], 4),
+            "best_threshold": best["threshold"],
+        }
+        print(f"  {cname}: PR-AUC={pr_auc:.3f}  best F1={best['f1']:.3f} @ thr={best['threshold']}")
+
+    out_path = args.pr_output or os.path.join(PROJECT_ROOT, "training", "pr_curves.json")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w") as fh:
+        _json.dump({
+            "tolerance_frames": tol_frames,
+            "nms_gap": nms_gap,
+            "step_sec": args.step,
+            "n_videos": len(cache),
+            "thresholds": thresholds,
+            "curves": curves,
+        }, fh, indent=2)
+    print(f"\nPR curves written to {out_path}")
+
+    # Save PNG plot (optional, only if matplotlib present)
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(7, 6))
+        for cname, data in curves.items():
+            sorted_pts = sorted(data["points"], key=lambda p: p["recall"])
+            ax.plot([p["recall"] for p in sorted_pts],
+                    [p["precision"] for p in sorted_pts],
+                    "-o", markersize=3, label=f"{cname} (AUC={data['pr_auc']:.2f})")
+        ax.set_xlabel("Recall (event-level, ±%d frames)" % tol_frames)
+        ax.set_ylabel("Precision")
+        ax.set_title("Per-class PR curves (event-level, class-strict)")
+        ax.set_xlim(-0.02, 1.02); ax.set_ylim(-0.02, 1.02)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="lower left")
+        png_path = out_path.replace(".json", ".png")
+        plt.tight_layout()
+        plt.savefig(png_path, dpi=140)
+        plt.close()
+        print(f"PR plot written to {png_path}")
+    except ImportError:
+        pass
+
+
 def get_all_gt_videos():
     """Get video paths for all videos that have GT files."""
     gt_videos = []
@@ -506,10 +695,18 @@ def main():
     parser.add_argument("--demote-below", type=float, default=None,
                         help='Detections with class prob below this floor are re-tagged as '
                              '"unknown_shot" rather than dropped.')
+    parser.add_argument("--pr-curves", action="store_true",
+                        help="Sweep per-class thresholds across all GT videos and emit "
+                             "precision-recall curves at event-level (±6 frame) tolerance. "
+                             "Implies --all. Produces a JSON of curve points plus a PNG.")
+    parser.add_argument("--pr-output", default=None,
+                        help="Path for PR-curve JSON (default: training/pr_curves.json).")
+    parser.add_argument("--pr-tolerance-frames", type=int, default=6,
+                        help="Event-level tolerance in frames for PR sweep (default: 6 = TenniSet).")
     args = parser.parse_args()
 
-    if not args.video and not args.all:
-        parser.error("Specify a video path or --all")
+    if not args.video and not args.all and not args.pr_curves:
+        parser.error("Specify a video path, --all, or --pr-curves")
 
     # Parse per-class thresholds string
     per_class_thresholds = None
@@ -530,6 +727,10 @@ def main():
     print(f"Model loaded from {args.model}")
     print(f"Device: {device}")
     print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    if args.pr_curves:
+        run_pr_curves(model, device, args)
+        return
 
     if args.all:
         videos = get_all_gt_videos()

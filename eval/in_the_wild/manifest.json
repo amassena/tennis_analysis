@@ -1,0 +1,14 @@
+{
+  "_comment": "Add one entry per clip. Schema is documented in README.md.",
+  "_target_composition": {
+    "doubles": 3,
+    "indoor": 3,
+    "lefty": 3,
+    "junior": 2,
+    "non_iphone": 3,
+    "rare_shots": 2,
+    "thirty_fps": 2,
+    "harsh_backlight": 2
+  },
+  "clips": []
+}
