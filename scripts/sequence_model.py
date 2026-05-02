@@ -62,10 +62,23 @@ _BaseClass = nn.Module if TORCH_AVAILABLE else object
 
 
 class ShotClassifierCNN(_BaseClass):
-    """1D-CNN for shot classification from pose sequences."""
+    """1D-CNN for shot classification from pose sequences.
 
-    def __init__(self, num_classes=4, input_features=99, seq_length=90, dropout=0.3):
+    Optional contact-time regression head (`with_regression=True`) outputs a
+    per-window scalar Δt — frames from the window center to the actual
+    contact frame. At inference, the corrected timestamp is
+    `model_t + delta_pred / fps`. Trained jointly with classification via a
+    weighted multi-task loss; see train_sequence_model.py --lambda-regr.
+
+    Backward compatibility: default `with_regression=False` matches the
+    original architecture exactly. Old checkpoints (no regression head)
+    load via load_model with strict=False fallback.
+    """
+
+    def __init__(self, num_classes=4, input_features=99, seq_length=90, dropout=0.3,
+                 with_regression=False):
         super().__init__()
+        self.with_regression = with_regression
 
         self.conv1 = nn.Conv1d(input_features, 64, kernel_size=5, padding=2)
         self.bn1 = nn.BatchNorm1d(64)
@@ -83,13 +96,20 @@ class ShotClassifierCNN(_BaseClass):
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(64, num_classes)
 
+        if with_regression:
+            # Predicts frames offset from window center to true contact.
+            # Linear is sufficient — the conv stack already extracted the
+            # spatiotemporal features; this is just a projection.
+            self.fc_delta = nn.Linear(64, 1)
+
     def forward(self, x):
         """Forward pass.
 
         Args:
             x: (batch, seq_length, features) — note: time-first input
         Returns:
-            logits: (batch, num_classes)
+            classification-only mode: logits (batch, num_classes)
+            regression mode: (logits, delta_pred) where delta_pred is (batch,)
         """
         # Conv1d expects (batch, channels, length)
         x = x.transpose(1, 2)
@@ -101,20 +121,35 @@ class ShotClassifierCNN(_BaseClass):
 
         x = self.pool(x).squeeze(-1)  # (batch, 64)
         x = self.dropout(x)
-        return self.fc(x)
+        logits = self.fc(x)
+
+        if self.with_regression:
+            delta_pred = self.fc_delta(x).squeeze(-1)  # (batch,)
+            return logits, delta_pred
+        return logits
 
     def predict_proba(self, x):
-        """Get class probabilities.
+        """Get class probabilities. Always returns just probabilities,
+        regardless of regression head presence."""
+        self.eval()
+        with torch.no_grad():
+            out = self.forward(x)
+            logits = out[0] if isinstance(out, tuple) else out
+            return F.softmax(logits, dim=1)
 
-        Args:
-            x: (batch, seq_length, features)
-        Returns:
-            probabilities: (batch, num_classes)
+    def predict(self, x):
+        """Get class probabilities AND delta prediction (if regression on).
+
+        Returns dict with 'probs' (B, num_classes) and optionally
+        'delta_frames' (B,) — frames offset to apply to window center.
         """
         self.eval()
         with torch.no_grad():
-            logits = self.forward(x)
-            return F.softmax(logits, dim=1)
+            out = self.forward(x)
+            if isinstance(out, tuple):
+                logits, delta = out
+                return {"probs": F.softmax(logits, dim=1), "delta_frames": delta}
+            return {"probs": F.softmax(out, dim=1)}
 
 
 def extract_pose_sequence(frames, center_frame, num_landmarks=33):
@@ -259,7 +294,7 @@ def augment_sequence(sequence, fps=60.0, mirror=False, jitter_frames=0,
 
 
 def load_model(model_path=None, device=None):
-    """Load a trained CNN model.
+    """Load a trained CNN model. Auto-detects regression head from checkpoint.
 
     Args:
         model_path: Path to .pt file. Default: models/sequence_classifier.pt
@@ -286,6 +321,7 @@ def load_model(model_path=None, device=None):
         return None, device
 
     state = torch.load(model_path, map_location=device, weights_only=True)
+    has_regression = any(k.startswith("fc_delta.") for k in state.keys())
 
     # Detect num_classes from the saved fc layer — supports legacy 6-class
     # models (e.g. broken_28814eeb with volleys) for evaluation, even though
@@ -294,11 +330,10 @@ def load_model(model_path=None, device=None):
     if "fc.weight" in state:
         num_classes = state["fc.weight"].shape[0]
 
-    model = ShotClassifierCNN(num_classes=num_classes)
+    model = ShotClassifierCNN(num_classes=num_classes, with_regression=has_regression)
     model.load_state_dict(state)
     model.to(device)
     model.eval()
-    # Stash classes used at training time for downstream code
     model.num_classes = num_classes
     return model, device
 

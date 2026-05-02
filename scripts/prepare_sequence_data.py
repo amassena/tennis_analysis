@@ -4,14 +4,34 @@
 Extracts 90-frame pose windows from GT files + pose JSONs, saves as NPZ.
 
 Positive samples: centered on labeled shots (forehand, backhand, serve).
+  When --jitter-positives N is set (default 0), additionally extracts N
+  jittered copies per shot at random offsets in ±jitter-range frames.
+  Each jittered sample carries a `delta` value: frames from window center
+  to the true contact frame (delta = contact_frame - window_center). This
+  trains the regression head in sequence_model.py to map any candidate
+  window onto its contact-time correction.
 Negative samples (3:1 ratio):
   - Random background (2x): windows >=3s from any shot
   - Hard negatives (0.5x): windows 1.5-3.0s from shots
   - Edge negatives (0.5x): windows offset 1.0-1.5s from shot center
+  Negatives carry delta=0 but are masked out of the regression loss in
+  train_sequence_model.py.
+
+NPZ schema:
+  X: (N, 90, 99) float32  — pose sequences
+  y: (N,) int64           — class labels (matches CLASSES)
+  videos: (N,) str        — source video name
+  timestamps: (N,) float32 — window center timestamp (seconds)
+  delta: (N,) float32     — frames from window center to true contact
+                            (positives jittered); 0 elsewhere.
+                            Only valid where y != not_shot.
 
 Usage:
     .venv/bin/python scripts/prepare_sequence_data.py
     .venv/bin/python scripts/prepare_sequence_data.py --neg-ratio 4.0
+    .venv/bin/python scripts/prepare_sequence_data.py \\
+        --jitter-positives 4 --jitter-range 15 \\
+        --output training/sequence_data_regr.npz
 """
 
 import argparse
@@ -162,6 +182,12 @@ def main():
                         help="Negative:positive ratio (default: 3.0)")
     parser.add_argument("--output", default=os.path.join(TRAINING_DIR, "sequence_data.npz"))
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--jitter-positives", type=int, default=0,
+                        help="Per shot, additionally extract N jittered windows "
+                             "for the regression head to learn from (default: 0).")
+    parser.add_argument("--jitter-range", type=int, default=15,
+                        help="Max frames from contact for jittered windows. "
+                             "±range is uniform-sampled (default: 15 = ±250ms @60fps).")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -180,8 +206,10 @@ def main():
     all_y = []
     all_videos = []
     all_timestamps = []
+    all_deltas = []  # frames from window center to true contact (positives only)
 
     total_positives = 0
+    total_jittered = 0
     total_negatives = 0
     skipped_no_pose = []
 
@@ -227,10 +255,35 @@ def main():
             all_y.append(label_idx)
             all_videos.append(video_name)
             all_timestamps.append(timestamp)
+            all_deltas.append(0.0)  # window centered on contact → no offset
 
             shot_frames.append(frame_idx)
             shot_timestamps.append(timestamp)
             positives_this_video += 1
+
+            # Jittered positives — windows offset by ±jitter_range frames so
+            # the regression head sees gradient. delta = contact - center, so
+            # if we shift center by +k frames, delta = -k.
+            if args.jitter_positives > 0 and args.jitter_range > 0:
+                # Sample without 0 (already covered by the centered sample above)
+                offsets = []
+                attempts = 0
+                while len(offsets) < args.jitter_positives and attempts < 50:
+                    o = int(np.random.randint(-args.jitter_range, args.jitter_range + 1))
+                    if o != 0 and o not in offsets:
+                        offsets.append(o)
+                    attempts += 1
+                for off in offsets:
+                    jittered_center = frame_idx + off
+                    seq_j = extract_normalized_window(frames, jittered_center)
+                    if seq_j is None:
+                        continue
+                    all_X.append(seq_j)
+                    all_y.append(label_idx)
+                    all_videos.append(video_name)
+                    all_timestamps.append(jittered_center / fps)
+                    all_deltas.append(float(-off))  # contact - jittered_center
+                    total_jittered += 1
 
         total_positives += positives_this_video
 
@@ -268,6 +321,7 @@ def main():
                     all_y.append(not_shot_idx)
                     all_videos.append(video_name)
                     all_timestamps.append(fi / fps)
+                    all_deltas.append(0.0)  # masked out of regression loss
                     total_negatives += 1
 
         # Hard negatives: 1.5-3.0s from any shot
@@ -291,6 +345,7 @@ def main():
                     all_y.append(not_shot_idx)
                     all_videos.append(video_name)
                     all_timestamps.append(fi / fps)
+                    all_deltas.append(0.0)  # masked out of regression loss
                     total_negatives += 1
 
         # Edge negatives: offset 1.0-1.5s from shot center
@@ -309,22 +364,24 @@ def main():
                 all_y.append(not_shot_idx)
                 all_videos.append(video_name)
                 all_timestamps.append(fi / fps)
+                all_deltas.append(0.0)  # masked out of regression loss
                 total_negatives += 1
                 edge_count += 1
 
-        neg_this = n_total_neg  # approximate
-        print(f"  {video_name}: {positives_this_video} positives, ~{total_negatives} negatives so far")
+        print(f"  {video_name}: {positives_this_video} positives "
+              f"(+{total_jittered} jittered cumulative), ~{total_negatives} negatives so far")
 
     # Convert to arrays
     X = np.array(all_X, dtype=np.float32)
     y = np.array(all_y, dtype=np.int64)
     videos = np.array(all_videos)
     timestamps = np.array(all_timestamps, dtype=np.float32)
+    deltas = np.array(all_deltas, dtype=np.float32)
 
     # Save
     np.savez_compressed(
         args.output,
-        X=X, y=y, videos=videos, timestamps=timestamps
+        X=X, y=y, videos=videos, timestamps=timestamps, delta=deltas
     )
 
     # Summary
@@ -334,10 +391,15 @@ def main():
 
     print(f"\n{'='*50}")
     print(f"Saved {len(X)} samples to {args.output}")
-    print(f"  Shape: X={X.shape}, y={y.shape}")
-    print(f"  Positives: {total_positives}")
+    print(f"  Shape: X={X.shape}, y={y.shape}, delta={deltas.shape}")
+    print(f"  Positives (centered): {total_positives}")
+    print(f"  Positives (jittered): {total_jittered}")
     print(f"  Negatives: {total_negatives}")
-    print(f"  Ratio: {total_negatives/max(1,total_positives):.1f}:1")
+    print(f"  Ratio: {total_negatives/max(1,total_positives + total_jittered):.1f}:1")
+    if total_jittered > 0:
+        nonzero_delta = np.sum(deltas != 0)
+        print(f"  Delta range (frames): [{deltas.min():.1f}, {deltas.max():.1f}], "
+              f"nonzero: {nonzero_delta}, mean|delta|: {np.mean(np.abs(deltas[deltas != 0])):.1f}")
     print(f"\nClass distribution:")
     for idx in sorted(label_counts.keys()):
         print(f"  {CLASSES[idx]}: {label_counts[idx]}")

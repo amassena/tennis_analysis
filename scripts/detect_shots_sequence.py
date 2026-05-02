@@ -115,12 +115,17 @@ def extract_raw_window(frames, center_frame):
     return sequence
 
 
-def sliding_window_inference(model, device, frames, fps, step_sec=0.1, batch_size=256):
+def sliding_window_inference(model, device, frames, fps, step_sec=0.1, batch_size=256,
+                              return_deltas=False):
     """Run sliding window inference over all frames.
 
     Returns:
         timestamps: (N,) array of window center times
         probs: (N, 4) array of class probabilities
+        deltas: (N,) array of regression-head delta predictions in frames
+                (only when return_deltas=True AND model has regression head;
+                otherwise array of zeros). Add `delta/fps` seconds to a peak's
+                timestamp to recover the contact-time-corrected event time.
     """
     import torch
 
@@ -141,22 +146,38 @@ def sliding_window_inference(model, device, frames, fps, step_sec=0.1, batch_siz
             valid_centers.append(center)
 
     if not windows:
-        return np.array([]), np.array([])
+        empty = np.array([])
+        if return_deltas:
+            return empty, empty, empty
+        return empty, empty
 
     windows = np.array(windows, dtype=np.float32)
     timestamps = np.array(valid_centers, dtype=np.float32) / fps
 
-    # Batch inference
+    has_regr = getattr(model, "with_regression", False)
+
     all_probs = []
+    all_deltas = []
     model.eval()
     with torch.no_grad():
         for i in range(0, len(windows), batch_size):
             batch = torch.from_numpy(windows[i:i + batch_size]).to(device)
-            logits = model(batch)
+            out = model(batch)
+            if isinstance(out, tuple):
+                logits, delta_pred = out
+                all_deltas.append(delta_pred.cpu().numpy())
+            else:
+                logits = out
             probs = torch.softmax(logits, dim=1).cpu().numpy()
             all_probs.append(probs)
 
     probs = np.concatenate(all_probs, axis=0)
+    if return_deltas:
+        if has_regr and all_deltas:
+            deltas = np.concatenate(all_deltas, axis=0)
+        else:
+            deltas = np.zeros(len(timestamps), dtype=np.float32)
+        return timestamps, probs, deltas
     return timestamps, probs
 
 
@@ -165,7 +186,7 @@ SHOT_CLASS_NAMES = ("backhand", "forehand", "serve")
 
 def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
                per_class_thresholds=None, min_class_conf=0.0,
-               demote_below_class_conf=None):
+               demote_below_class_conf=None, deltas=None, fps=None):
     """Find shot detections from probability curves.
 
     Default mode: peak-find on P(shot) = 1 - P(not_shot), then assign type
@@ -197,6 +218,28 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
 
     raw_detections = []
 
+    # Helper: compute corrected timestamp from peak index using regression head.
+    # delta is in frames; corrected_t = window_center_t + delta / fps.
+    apply_delta = deltas is not None and fps and fps > 0
+
+    def _peak_record(peak_idx, cname, conf):
+        shot_probs = probs[peak_idx]
+        raw_t = float(timestamps[peak_idx])
+        rec = {
+            "timestamp": round(raw_t, 3),
+            "p_shot": float(p_shot[peak_idx]),
+            "shot_type": cname,
+            "confidence": float(conf),
+            "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4)
+                              for c in range(len(CLASSES))},
+        }
+        if apply_delta:
+            d_frames = float(deltas[peak_idx])
+            rec["delta_frames"] = round(d_frames, 2)
+            rec["raw_timestamp"] = round(raw_t, 3)
+            rec["timestamp"] = round(raw_t + d_frames / fps, 3)
+        return rec
+
     if per_class_thresholds:
         # Peak-find each class probability curve independently
         for cname in SHOT_CLASS_NAMES:
@@ -206,15 +249,8 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
             cidx = CLASS_TO_IDX[cname]
             peaks, _ = find_peaks(probs[:, cidx], height=t_c, prominence=prominence)
             for peak_idx in peaks:
-                shot_probs = probs[peak_idx]
-                raw_detections.append({
-                    "timestamp": round(float(timestamps[peak_idx]), 3),
-                    "p_shot": float(p_shot[peak_idx]),
-                    "shot_type": cname,
-                    "confidence": float(shot_probs[cidx]),
-                    "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4)
-                                      for c in range(len(CLASSES))},
-                })
+                raw_detections.append(_peak_record(
+                    peak_idx, cname, probs[peak_idx, cidx]))
     else:
         # Original mode: peak on P(shot), classify via argmax
         peaks, _ = find_peaks(p_shot, height=threshold, prominence=prominence)
@@ -224,14 +260,8 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
         for peak_idx in peaks:
             shot_probs = probs[peak_idx]
             best_class = max(shot_class_idxs, key=lambda c: shot_probs[c])
-            raw_detections.append({
-                "timestamp": round(float(timestamps[peak_idx]), 3),
-                "p_shot": float(p_shot[peak_idx]),
-                "shot_type": CLASSES[best_class],
-                "confidence": float(shot_probs[best_class]),
-                "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4)
-                                  for c in range(len(CLASSES))},
-            })
+            raw_detections.append(_peak_record(
+                peak_idx, CLASSES[best_class], shot_probs[best_class]))
 
     if not raw_detections:
         return []
@@ -281,10 +311,14 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
 
     print(f"  Sliding window ({len(frames)} frames, step={step_sec}s)...")
     t0 = time.time()
-    timestamps, probs = sliding_window_inference(
-        model, device, frames, fps, step_sec=step_sec, batch_size=batch_size
+    has_regr = getattr(model, "with_regression", False)
+    timestamps, probs, deltas = sliding_window_inference(
+        model, device, frames, fps, step_sec=step_sec, batch_size=batch_size,
+        return_deltas=True,
     )
     inference_time = time.time() - t0
+    if has_regr:
+        print(f"  Regression head active: refining timestamps with delta_frames")
 
     if len(timestamps) == 0:
         # No valid windows = no detectable shots. Return a VALID empty result
@@ -325,13 +359,15 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
         per_class_thresholds=per_class_thresholds,
         min_class_conf=min_class_conf,
         demote_below_class_conf=demote_below_class_conf,
+        deltas=deltas if has_regr else None,
+        fps=fps,
     )
 
     # Build output detections in fused_detect format
     output_detections = []
     for det in detections:
         frame_idx = int(round(det["timestamp"] * fps))
-        output_detections.append({
+        out = {
             "timestamp": det["timestamp"],
             "frame": frame_idx,
             "shot_type": det["shot_type"],
@@ -340,7 +376,12 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
             "source": "sequence_cnn",
             "p_shot": round(det["p_shot"], 4),
             "probabilities": det["probabilities"],
-        })
+        }
+        # Surface regression-head fields when present
+        if "delta_frames" in det:
+            out["delta_frames"] = det["delta_frames"]
+            out["raw_timestamp"] = det["raw_timestamp"]
+        output_detections.append(out)
 
     # Type counts
     type_counts = {}
