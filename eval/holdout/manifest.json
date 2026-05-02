@@ -1,0 +1,60 @@
+{
+  "_comment": "Frozen 6-video holdout for eval_holdout.py. Do not modify without re-evaluating every approved model.",
+  "created_at": "2026-05-02",
+  "videos": [
+    {
+      "video_id": "IMG_1004",
+      "video_path": "preprocessed/IMG_1004.mp4",
+      "video_sha256": "22a391141a810f1e2ef93de1044d7346a1d1c09a6be34932a190b3722321d693",
+      "gt_path": "detections/IMG_1004_fused.json",
+      "gt_sha256": "461236717666b7c38ab7f44b4af9c1315e36f0c8a0c1bca6f3f96fc26f704098",
+      "camera_angle": "side",
+      "picked_reason": "mixed: 4 BH / 5 FH / 15 serve, 24 shots"
+    },
+    {
+      "video_id": "IMG_1007",
+      "video_path": "preprocessed/IMG_1007.mp4",
+      "video_sha256": "8addb0d58dc6a2e2278385468ab948b28b5ed835291831057a61a9c407d677b7",
+      "gt_path": "detections/IMG_1007_fused.json",
+      "gt_sha256": "2706f467e1588c2ab6310b1c10435148a3af6241f6fd7f1385304e7313cb78b6",
+      "camera_angle": "front_left",
+      "picked_reason": "oddball angle, balanced 14/12/16, 48 shots"
+    },
+    {
+      "video_id": "IMG_1008",
+      "video_path": "preprocessed/IMG_1008.mp4",
+      "video_sha256": "da88227b7635b177f2b991eaae799f6312a5d7383afb69e29f939c6fd4ac4d24",
+      "gt_path": "detections/IMG_1008_fused.json",
+      "gt_sha256": "963292693961064e771c08a555dcda5fcce09427c29cf01822fa022c9a0cab43",
+      "camera_angle": "front_right",
+      "picked_reason": "FH+BH heavy, 52 shots, no serves"
+    },
+    {
+      "video_id": "IMG_0994",
+      "video_path": "preprocessed/IMG_0994.mp4",
+      "video_sha256": "16ae701838e573c22394fa5b1ed1bb3f4e2cf539607934ac603f2fd9713e6619",
+      "gt_path": "detections/IMG_0994_fused.json",
+      "gt_sha256": "3670f225550b5cd012c115e0d337819b6a2cafca2ccc62b431f9838c880e0844",
+      "camera_angle": "front",
+      "picked_reason": "groundstroke-only 25 FH / 11 BH, 36 shots"
+    },
+    {
+      "video_id": "IMG_6851",
+      "video_path": "preprocessed/IMG_6851.mp4",
+      "video_sha256": "36a3d078f53b1b918a3f82ce723bc378f1dcd7c847e970b10adcf800449afaf6",
+      "gt_path": "detections/IMG_6851_fused.json",
+      "gt_sha256": "8f074cc1ee55046214fa5c5f70a08aa7c48a4789938f26bff9401c1595398ae9",
+      "camera_angle": "side_left",
+      "picked_reason": "serve-only 57, model stress test"
+    },
+    {
+      "video_id": "IMG_6713",
+      "video_path": "preprocessed/IMG_6713.mp4",
+      "video_sha256": "8fb61e5304b8f62be42f61ec2bef63a7e748530c5e2dfafa3dea6657953bf06b",
+      "gt_path": "detections/IMG_6713_fused.json",
+      "gt_sha256": "115d32d8d203b26a4701ae93b995cd11f9fda41164d50a2d3cc308ff0b21dad7",
+      "camera_angle": "left_side",
+      "picked_reason": "known weak spot from MEMORY.md, 22 BH / 14 FH"
+    }
+  ]
+}

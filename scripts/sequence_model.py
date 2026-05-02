@@ -282,16 +282,26 @@ def load_model(model_path=None, device=None):
         else:
             device = torch.device("cpu")
 
-    model = ShotClassifierCNN(num_classes=len(CLASSES))
-
-    if os.path.exists(model_path):
-        state = torch.load(model_path, map_location=device, weights_only=True)
-        model.load_state_dict(state)
-        model.to(device)
-        model.eval()
-        return model, device
-    else:
+    if not os.path.exists(model_path):
         return None, device
+
+    state = torch.load(model_path, map_location=device, weights_only=True)
+
+    # Detect num_classes from the saved fc layer — supports legacy 6-class
+    # models (e.g. broken_28814eeb with volleys) for evaluation, even though
+    # production is 4-class. fc.weight has shape (num_classes, in_features).
+    num_classes = len(CLASSES)
+    if "fc.weight" in state:
+        num_classes = state["fc.weight"].shape[0]
+
+    model = ShotClassifierCNN(num_classes=num_classes)
+    model.load_state_dict(state)
+    model.to(device)
+    model.eval()
+    # Stash classes used at training time for downstream code
+    model.num_classes = num_classes
+    return model, device
+
 
 
 def predict_single(model, device, frames, center_frame):

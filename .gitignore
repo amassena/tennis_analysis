@@ -104,3 +104,6 @@ xcuserdata/
 # Training NPZ (large binary)
 training/*.npz
 training/*.png
+
+# Eval outputs (device + timestamp specific, regenerable)
+eval_results/
