@@ -99,7 +99,7 @@ This is the second handoff under the protocol (the protocol setup itself was the
 
 ## Response — 2026-05-02 (executed by `main` session)
 
-**Commit:** `a38b263`
+**Commit:** `fd4f6f0`
 
 ### Acceptance test 1 — `/inbox` lists this brief from main session
 
