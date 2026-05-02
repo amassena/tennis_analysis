@@ -10,6 +10,15 @@ Drop-anywhere capture for bugs, ideas, and UX papercuts. Add a one-liner the mom
 - [ ] **Missed second serve detection** — the 1D-CNN catches the first serve but misses the second serve in many sessions. Likely confidence threshold or nms gap issue.
 - [ ] **Shot misclassification (FH↔serve, FH↔BH)** — confidence often >0.95 even when wrong. Calibration issue, not just threshold.
 - [ ] **Camera angle misidentification** — comparison alignment picks wrong-angle pro clips because user's angle isn't reliably detected.
+- [ ] **Coordinator routing imbalance** — Andrew-PC has done 4× more jobs than tmassena despite CLAUDE.md saying tmassena is PRIMARY. Decide doc-update vs routing-fix; track here. Discovered 2026-05-02 during model-divergence triage.
+
+## Research loop / data engine
+
+- [ ] **Verification system build** — sidecars, eval_holdout.py, compare_models.py gate, triage_reprocess.py. Spec in design-partner session. Components reuse most of validate_pipeline.py from feature/detection/improve-shot-classification branch. ~1 day total.
+- [ ] **Triage of 36 broken-model jobs** from Andrew-PC since 2026-04-03. Job IDs in design-partner session memory. Run after triage_reprocess.py ships. Threshold: total_disagreement >= 3 → REPROCESS.
+- [ ] **Backfill camera_angle on 44 GT files** via shot_review.py. Only ~1 of 6 sampled has it populated. Skip dominant_hand backfill (all righties) but enforce required-at-save going forward.
+- [ ] **MV-0 backups to R2 + Drive** (andrew@massena.com, 42TB available). GT is currently triple-redundant on Mac+andrew-pc+tmassena so no SPOF, but no off-site copy exists. Drive primary for raw/preprocessed, R2 primary for GT/models. Rclone copy (NOT sync). Restore-test required.
+- [ ] **Wikidata-backed pro library** when library grows past ~20 players. P741 SPARQL lookup, cache to pros/wikidata_cache.json. See DESIGN principle 7.
 
 ## UX papercuts
 
