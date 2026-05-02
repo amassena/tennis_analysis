@@ -10,6 +10,7 @@ Each GPU machine runs this worker. It:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import socket
@@ -39,6 +40,27 @@ EXPORTS_DIR = PROJECT_ROOT / "exports"
 CLIPS_DIR = PROJECT_ROOT / "clips"
 HIGHLIGHTS_DIR = PROJECT_ROOT / "highlights"
 THUMBS_DIR = PROJECT_ROOT / "thumbs"
+MODELS_DIR = PROJECT_ROOT / "models"
+
+# Production shot detector hash. If models/sequence_detector.pt does not match
+# this, the worker refuses to start. Prevents the 2026-05-02 incident
+# where andrew-pc shipped 36 jobs with a divergent broken model.
+EXPECTED_MODEL_SHA256 = "bbe8a42b607cd6b4b97d0cf2b1ded0b6baff28dd060c8084b011ee4d1ff90bef"
+
+
+def _verify_canonical_model_hash():
+    path = MODELS_DIR / "sequence_detector.pt"
+    if not path.exists():
+        sys.exit(f"FATAL: model not found at {path}\nWorker refuses to start.")
+    h = hashlib.sha256(path.read_bytes()).hexdigest()
+    if h != EXPECTED_MODEL_SHA256:
+        sys.exit(
+            f"FATAL: model hash mismatch.\n"
+            f"  expected: {EXPECTED_MODEL_SHA256}\n"
+            f"  actual:   {h}\n"
+            f"  path:     {path}\n"
+            f"Worker refuses to start. Fix the model before resuming."
+        )
 
 
 def log(msg: str, level: str = "INFO"):
@@ -1036,6 +1058,10 @@ def process_local_video(video_path: str, upload_id: str = None):
 
 
 def main():
+    # Refuse to start if the canonical shot detector hash is wrong.
+    # See incident 2026-05-02: divergent model on andrew-pc shipped 36 broken jobs.
+    _verify_canonical_model_hash()
+
     parser = argparse.ArgumentParser(description="GPU Worker for tennis pipeline")
     subparsers = parser.add_subparsers(dest="command")
 
