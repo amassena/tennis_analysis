@@ -60,6 +60,19 @@ def short(h):
     return h[:8]
 
 
+def _path_for_sidecar(p):
+    """Return path-string suitable for embedding in a sidecar.
+
+    Prefers a path relative to PROJECT_ROOT for portability across machines.
+    Falls back to absolute string for paths outside the project (e.g. /tmp).
+    """
+    p = Path(p)
+    try:
+        return str(p.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(p)
+
+
 def normalize_gt_shots(gt_data):
     """Strip ignored types (practice, offscreen, unknown_shot) from GT."""
     out = []
@@ -268,13 +281,9 @@ def evaluate(model_path, manifest_path, output_path):
     out = {
         "schema_version": 1,
         "model_sha256": model_sha,
-        "model_path": str(Path(model_path).relative_to(PROJECT_ROOT)
-                          if str(Path(model_path)).startswith(str(PROJECT_ROOT))
-                          else model_path),
+        "model_path": _path_for_sidecar(model_path),
         "manifest_sha256": manifest_sha,
-        "manifest_path": str(Path(manifest_path).relative_to(PROJECT_ROOT)
-                             if str(Path(manifest_path)).startswith(str(PROJECT_ROOT))
-                             else manifest_path),
+        "manifest_path": _path_for_sidecar(manifest_path),
         "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "evaluated_on": socket.gethostname(),
         "elapsed_seconds": round(elapsed, 1),
@@ -320,7 +329,7 @@ def evaluate(model_path, manifest_path, output_path):
     if sidecar_path.exists():
         try:
             sc = json.loads(sidecar_path.read_text())
-            sc["holdout_eval_results"] = str(output_path.relative_to(PROJECT_ROOT))
+            sc["holdout_eval_results"] = _path_for_sidecar(output_path)
             sc["holdout_eval_at"] = out["evaluated_at"]
             sidecar_path.write_text(json.dumps(sc, indent=2))
             print(f"[eval_holdout] updated sidecar: {sidecar_path.name}")

@@ -61,6 +61,23 @@ Hetzner VM (5.78.96.237)                       Local GPU machines
    - Legacy `grouped` kept for older videos
 7. **Gallery index regen** — `update_r2_index.py` (runs JS syntax check before upload)
 
+## Model deploy gate
+
+No model file may be promoted to `deploy_status: approved` (or copied to `models/sequence_detector.pt` on a worker) without first passing `compare_models.py` against the current production baseline.
+
+**Workflow to promote a candidate:**
+
+1. Train: `train_sequence_model.py --output models/<candidate>.pt` (writes `.sidecar.json` with `deploy_status: candidate` automatically; refuses to train if any holdout video appears in training set)
+2. Evaluate: `eval_holdout.py models/<candidate>.pt` (writes `eval_results/<sha8>_<date>.json`, populates sidecar)
+3. Gate: `compare_models.py models/baseline_<sha8>_<date>.pt models/<candidate>.pt`
+   - Exit 0 → PASS, candidate may be promoted
+   - Exit 1 → BLOCK, see printed reasons
+4. (If PASS) human flips sidecar's `deploy_status` from `candidate` to `approved`
+5. SCP candidate + sidecar to GPU machines as `models/sequence_detector.pt` + `.sidecar.json`
+6. Worker on each machine FATALs unless sha matches sidecar AND status is `approved`
+
+The deploy gate rules are committed at `~/.claude/projects/-Users-andrewhome/memory/project_model_deploy_gate_rules.md`. Do not change without explicit user approval. Acceptance regression test: broken model `baseline_28814eeb_BROKEN_20260502.pt` MUST exit 1 against canonical baseline.
+
 ## Machine Setup
 
 Every GPU machine needs:
