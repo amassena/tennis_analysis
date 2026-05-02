@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -d \"$CLAUDE_PROJECT_DIR/.handoffs/inbox\" ]; then count=$(ls \"$CLAUDE_PROJECT_DIR/.handoffs/inbox/\"*.md 2>/dev/null | wc -l | tr -d ' '); if [ \"$count\" -gt 0 ]; then echo \"📬 $count brief(s) in .handoffs/inbox/ — run /inbox to view\"; fi; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
