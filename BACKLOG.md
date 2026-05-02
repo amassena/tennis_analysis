@@ -10,7 +10,7 @@ Drop-anywhere capture for bugs, ideas, and UX papercuts. Add a one-liner the mom
 - [ ] **Missed second serve detection** — the 1D-CNN catches the first serve but misses the second serve in many sessions. Likely confidence threshold or nms gap issue.
 - [ ] **Shot misclassification (FH↔serve, FH↔BH)** — confidence often >0.95 even when wrong. Calibration issue, not just threshold.
 - [ ] **Camera angle misidentification** — comparison alignment picks wrong-angle pro clips because user's angle isn't reliably detected.
-- [ ] **Coordinator routing imbalance** — Andrew-PC has done 4× more jobs than tmassena despite CLAUDE.md saying tmassena is PRIMARY. Decide doc-update vs routing-fix; track here. Discovered 2026-05-02 during model-divergence triage.
+- [x] ~~**Coordinator routing imbalance** — Andrew-PC has done 4× more jobs than tmassena despite CLAUDE.md saying tmassena is PRIMARY.~~ **Resolved 2026-05-02:** root cause was tmassena being repeatedly powered off (not a routing bug). Doc is correct (tmassena PRIMARY); the imbalance was just availability. Going forward tmassena stays on.
 
 ## Research loop / data engine
 
