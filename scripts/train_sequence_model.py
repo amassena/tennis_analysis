@@ -401,6 +401,12 @@ def main():
     parser.add_argument("--label-smoothing", type=float, default=0.05)
     parser.add_argument("--skip-cv", action="store_true")
     parser.add_argument("--output", default=os.path.join(MODELS_DIR, "sequence_detector.pt"))
+    parser.add_argument("--no-sidecar", action="store_true",
+                        help="Skip writing <output>.sidecar.json (default: write)")
+    parser.add_argument("--holdout-manifest",
+                        default=os.path.join(PROJECT_ROOT, "eval", "holdout", "manifest.json"),
+                        help="Path to holdout manifest. If any holdout video appears "
+                             "in training data, training is refused. Pass empty string to skip.")
     args = parser.parse_args()
 
     # Select device
@@ -425,6 +431,30 @@ def main():
         print(f"\nLoading samples from {args.poses_dir} (live extraction)...")
         X, y, videos = load_all_samples_live(args.poses_dir, args.det_dir)
     print(f"Loaded in {time.time() - t0:.1f}s")
+
+    # Holdout-leak assertion. Refuses to train if any video in the
+    # eval holdout appears in the training set. Without this gate the
+    # 2026-05-02 incident style of "trained-and-evaluated on the same
+    # data, deployed broken" is reachable again.
+    if args.holdout_manifest:
+        if os.path.exists(args.holdout_manifest):
+            with open(args.holdout_manifest) as f:
+                manifest = json.load(f)
+            holdout_ids = {v["video_id"] for v in manifest.get("videos", [])}
+            train_ids = set(videos) if videos is not None else set()
+            leaked = holdout_ids & train_ids
+            if leaked:
+                sys.exit(
+                    f"FATAL: holdout videos appear in training set: {sorted(leaked)}\n"
+                    f"  manifest: {args.holdout_manifest}\n"
+                    f"  re-run prepare_sequence_data.py excluding these video_ids,\n"
+                    f"  or pass --holdout-manifest '' to override (NOT recommended)."
+                )
+            print(f"Holdout-leak check passed ({len(holdout_ids)} holdout ids, "
+                  f"none in training set)")
+        else:
+            print(f"WARNING: holdout manifest not found at {args.holdout_manifest} — "
+                  f"leak check skipped.")
 
     # Distribution
     label_counts = defaultdict(int)
@@ -493,6 +523,66 @@ def main():
     print(f"\nModel saved to {args.output}")
     print(f"Metadata saved to {meta_path}")
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+    # Sidecar — self-describing model identity. Always on unless --no-sidecar.
+    if not args.no_sidecar:
+        write_sidecar(args, meta, X, videos)
+
+
+def write_sidecar(args, meta, X, videos):
+    """Write <output>.sidecar.json — the canonical model identity record."""
+    import hashlib, socket, subprocess
+    from datetime import datetime, timezone
+
+    model_path = args.output
+    sidecar_path = model_path + ".sidecar.json"
+
+    model_sha = hashlib.sha256(open(model_path, "rb").read()).hexdigest()
+    train_data_sha = None
+    train_data_manifest = None
+    if args.npz and os.path.exists(args.npz):
+        train_data_sha = hashlib.sha256(open(args.npz, "rb").read()).hexdigest()
+    if videos is not None:
+        try:
+            train_data_manifest = sorted(set(str(v) for v in videos))
+        except Exception:
+            train_data_manifest = None
+
+    git_commit = None
+    try:
+        r = subprocess.run(["git", "-C", str(PROJECT_ROOT), "rev-parse", "HEAD"],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            git_commit = r.stdout.strip()
+    except Exception:
+        pass
+
+    sidecar = {
+        "schema_version": 1,
+        "model_sha256": model_sha,
+        "model_path": str(Path(model_path).relative_to(PROJECT_ROOT))
+                       if str(Path(model_path)).startswith(str(PROJECT_ROOT))
+                       else model_path,
+        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "trained_on": socket.gethostname(),
+        "trained_commit": git_commit,
+        "trained_command": " ".join(sys.argv),
+        "training_data_sha256": train_data_sha,
+        "training_data_manifest": train_data_manifest,
+        "classes": meta.get("classes"),
+        "architecture": (
+            f"ShotClassifierCNN(num_classes={len(meta.get('classes', []))}, "
+            f"with_regression={meta.get('with_regression', False)}, "
+            f"lambda_regr={meta.get('lambda_regr', 0.0)})"
+        ),
+        "loocv_accuracy": meta.get("loocv_accuracy"),
+        "holdout_eval_results": None,
+        "holdout_eval_at": None,
+        "deploy_status": "candidate",
+    }
+    with open(sidecar_path, "w") as f:
+        json.dump(sidecar, f, indent=2)
+    print(f"Sidecar saved to {sidecar_path}")
 
 
 if __name__ == "__main__":
