@@ -42,24 +42,55 @@ HIGHLIGHTS_DIR = PROJECT_ROOT / "highlights"
 THUMBS_DIR = PROJECT_ROOT / "thumbs"
 MODELS_DIR = PROJECT_ROOT / "models"
 
-# Production shot detector hash. If models/sequence_detector.pt does not match
-# this, the worker refuses to start. Prevents the 2026-05-02 incident
-# where andrew-pc shipped 36 jobs with a divergent broken model.
-EXPECTED_MODEL_SHA256 = "bbe8a42b607cd6b4b97d0cf2b1ded0b6baff28dd060c8084b011ee4d1ff90bef"
+# Sidecar-based model verification. Replaces the hardcoded hash from the
+# 2026-05-02 incident response with a self-describing record:
+#   <model>.sidecar.json carries the expected sha256 and deploy_status.
+# Worker refuses to start if:
+#   - sidecar is missing
+#   - actual sha256 doesn't match the one in the sidecar
+#   - deploy_status is anything other than "approved"
 
 
-def _verify_canonical_model_hash():
-    path = MODELS_DIR / "sequence_detector.pt"
-    if not path.exists():
-        sys.exit(f"FATAL: model not found at {path}\nWorker refuses to start.")
-    h = hashlib.sha256(path.read_bytes()).hexdigest()
-    if h != EXPECTED_MODEL_SHA256:
+def _verify_canonical_model():
+    model_path = MODELS_DIR / "sequence_detector.pt"
+    sidecar_path = model_path.with_suffix(model_path.suffix + ".sidecar.json")
+
+    if not model_path.exists():
+        sys.exit(f"FATAL: model not found at {model_path}\nWorker refuses to start.")
+    if not sidecar_path.exists():
+        sys.exit(
+            f"FATAL: no sidecar at {sidecar_path}.\n"
+            f"  Without a sidecar we cannot verify model identity. Refusing to start.\n"
+            f"  Fix: scripts/backfill_sidecars.py {model_path.relative_to(PROJECT_ROOT)} "
+            f"--classes <comma-separated> --deploy-status approved"
+        )
+
+    import json as _json
+    try:
+        sidecar = _json.loads(sidecar_path.read_text())
+    except Exception as e:
+        sys.exit(f"FATAL: cannot parse sidecar {sidecar_path}: {e}")
+
+    actual = hashlib.sha256(model_path.read_bytes()).hexdigest()
+    expected = sidecar.get("model_sha256")
+    if actual != expected:
         sys.exit(
             f"FATAL: model hash mismatch.\n"
-            f"  expected: {EXPECTED_MODEL_SHA256}\n"
-            f"  actual:   {h}\n"
-            f"  path:     {path}\n"
-            f"Worker refuses to start. Fix the model before resuming."
+            f"  expected (sidecar): {expected}\n"
+            f"  actual (file):     {actual}\n"
+            f"  model:    {model_path}\n"
+            f"  sidecar:  {sidecar_path}\n"
+            f"Refusing to start. Either restore the model that matches the sidecar, "
+            f"or update the sidecar (and confirm deploy_status)."
+        )
+
+    status = sidecar.get("deploy_status")
+    if status != "approved":
+        sys.exit(
+            f"FATAL: model deploy_status is '{status}', not 'approved'.\n"
+            f"  sidecar: {sidecar_path}\n"
+            f"Refusing to claim jobs with a non-approved model. Run compare_models.py "
+            f"to gate the candidate; update deploy_status to 'approved' only after the gate passes."
         )
 
 
@@ -1060,7 +1091,7 @@ def process_local_video(video_path: str, upload_id: str = None):
 def main():
     # Refuse to start if the canonical shot detector hash is wrong.
     # See incident 2026-05-02: divergent model on andrew-pc shipped 36 broken jobs.
-    _verify_canonical_model_hash()
+    _verify_canonical_model()
 
     parser = argparse.ArgumentParser(description="GPU Worker for tennis pipeline")
     subparsers = parser.add_subparsers(dest="command")
