@@ -21,6 +21,13 @@ The two halves are NOT redundant. Local does the things humans need fast. Cloud 
 4. **Pro comparisons must be apples-to-apples.** Same handedness, same camera angle, same shot type. Otherwise it teaches nothing.
 5. **Filmstrips are billboards, not videos.** Static, glanceable, optimized for the moment of contact. If you need motion, watch the video.
 6. **Confidence-gated content.** If our shot detector is <0.85 confident, don't surface that shot as a coaching example.
+7. **Don't ask humans for facts that are already structured-public.**
+   For entity attributes that exist in Wikipedia/Wikidata/ATP/etc.
+   (handedness, height, tournament surface, event year), look them up
+   on import — don't build a tagging UI. Reserve human attention for
+   the genuinely subjective: camera_angle (your phone's position), failure-
+   mode tags on corrections, label edits. The bar: "could a stranger
+   answer this from a search?" If yes, automate. If no, ask.
 
 ## Cross-platform parity
 
@@ -48,3 +55,6 @@ Rule: any feature that lands on web should have an iOS plan within 2 weeks. If i
 - **Don't generate text in images.** Use SVG/HTML for any text. Image gen models misspell.
 - **Don't ship deep features without instrumentation.** If we can't measure it, we can't improve it.
 - **Don't trust ground-truth labels in pro clips library.** Verify with our own shot classifier.
+- **Don't build a UI to tag what's already on Wikipedia.** If you find
+  yourself adding a dropdown for player handedness, tournament surface,
+  or anything similarly public, write a Wikidata lookup instead.
