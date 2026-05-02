@@ -42,6 +42,18 @@ SLOWMO_SPEED = 0.25  # 4x slow motion
 # Shot types eligible for comparison
 COMPARABLE_TYPES = {'forehand', 'backhand', 'serve'}
 
+# Pro player handedness — must match user's dominant_hand for the
+# comparison to teach correct mechanics. Mirror-reversed matches (e.g.
+# Nadal vs a right-handed user) train the wrong side.
+# When library grows past ~20 players, replace with a Wikidata SPARQL
+# lookup on P741 ("plays") — see DESIGN.md principle 7.
+PRO_HANDEDNESS = {
+    "alcaraz":  "R",
+    "djokovic": "R",
+    "federer":  "R",
+    "nadal":    "L",
+}
+
 # Label colors per shot type (same as export_videos.py)
 SHOT_COLORS = {
     'serve': (255, 140, 0),
@@ -72,18 +84,27 @@ def load_detections(video_name):
 
 
 def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None,
-                   used_files=None):
+                   used_files=None, user_hand=None):
     """Find the best matching pro clip for a given shot type.
 
     Rotates through available clips to avoid repeating the same one.
-    Returns (player_name, clip_info) or (None, None) if no match.
+    If user_hand is provided ('R' or 'L'), only pros with matching
+    handedness are considered — mirror-reversed matches train the
+    wrong mechanics.
+    Returns (player_name, clip_info, clip_key) or (None, None, None).
     """
     candidates = []
     players = library.get("players", {})
     if used_files is None:
         used_files = set()
+    user_hand = (user_hand or "").upper().strip()[:1] or None  # normalize
 
     for player_id, player_data in players.items():
+        # Hard filter on handedness — mirror-reversed pros teach the wrong side
+        if user_hand:
+            pro_hand = PRO_HANDEDNESS.get(player_id)
+            if pro_hand and pro_hand != user_hand:
+                continue
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
             if clip.get("type") == shot_type:
@@ -383,6 +404,13 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     # Detect camera angle for pro clip matching
     user_angle = detect_camera_angle(det_data)
 
+    # User's dominant hand — written by shot_review.py to top-level field.
+    # Hardcode default 'R' since all current users are right-handed; absence
+    # means we fall back to right-handed pros only (avoids mirror-reversed matches).
+    user_hand = (det_data.get("dominant_hand")
+                 or det_data.get("metadata", {}).get("dominant_hand")
+                 or "R")
+
     detections = det_data.get("detections", [])
     eligible = [
         d for d in detections
@@ -399,6 +427,7 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     print(f"  Pro library: {len(library.get('players', {}))} players")
     if user_angle:
         print(f"  Camera angle: {user_angle} (preferring matching pro clips)")
+    print(f"  User dominant hand: {user_hand} (filtering pros to matching handedness)")
 
     generated = []
     tmpdir = tempfile.mkdtemp(prefix="tennis_procomp_")
@@ -411,11 +440,13 @@ def generate_comparisons(video_path, output_dir=None, player=None,
             timestamp = det["timestamp"]
             idx = i + 1
 
-            # Find matching pro clip (rotates through available clips)
+            # Find matching pro clip (rotates through available clips,
+            # filtered by user's handedness to avoid mirror-reversed pros).
             pro_name, pro_clip, clip_key = match_pro_clip(
-                shot_type, library, player, user_angle, used_files)
+                shot_type, library, player, user_angle, used_files, user_hand=user_hand)
             if not pro_clip:
-                print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s -- no pro clip available")
+                print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s -- no pro clip available "
+                      f"(user_hand={user_hand}, may have filtered out all clips)")
                 continue
 
             used_files.add(clip_key)
