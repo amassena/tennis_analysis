@@ -172,6 +172,20 @@ This repo runs multiple parallel work streams via `git worktree`. Three coordina
 - Top 5 backlog items by section
 - Any apparent drift from DESIGN.md principles
 
+## Cross-session handoffs
+
+Sessions coordinate via `.handoffs/inbox/` and `.handoffs/archive/`. See
+`.handoffs/README.md` for full protocol. Two rules to remember:
+
+1. **At session start AND after each completed task: check `.handoffs/inbox/`.**
+   Any file with `to: <your-role>` or `to: any` is yours to pick up.
+2. **When sending a brief: write directly to `.handoffs/inbox/<filename>.md`**
+   with YAML frontmatter (`from`, `to`, `created`, `status`, `priority`,
+   `topic`). Design-partner has a narrow write exception just for this directory.
+
+Filename convention: `YYYYMMDD-HHMM-<topic>-from-<sender>.md`. Lowercase
+with hyphens.
+
 ## Component preview endpoints (self-verification)
 
 When the user describes a UI issue, **don't ask for a screenshot**. Verify it yourself:
