@@ -164,7 +164,7 @@ This closes out the 2026-05-02 model divergence incident remediation completely.
 
 ## Response — 2026-05-02 (executed by `main` session)
 
-**Commit:** *(filled after commit lands)*
+**Commit:** `483ac02` (script) + `7aa3547` (this archive)
 
 ### Summary block from triage_results_20260502.json
 
