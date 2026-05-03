@@ -88,7 +88,7 @@ After this lands, the design-partner ↔ main loop is fully zero-relay. User jus
 
 ## Response — 2026-05-02 (executed by `main` session)
 
-**Commit:** *(filled after commit)*
+**Commit:** `0b93d79`
 
 ### Acceptance test 1 — `/archive` filtering by from
 
