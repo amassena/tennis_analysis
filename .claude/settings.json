@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -d \"$CLAUDE_PROJECT_DIR/.handoffs/inbox\" ]; then count=$(ls \"$CLAUDE_PROJECT_DIR/.handoffs/inbox/\"*.md 2>/dev/null | wc -l | tr -d ' '); if [ \"$count\" -gt 0 ]; then echo \"📬 $count brief(s) in .handoffs/inbox/ — run /inbox to view\"; fi; fi"
+            "command": "if [ -d \"$CLAUDE_PROJECT_DIR/.handoffs/inbox\" ]; then in_count=$(ls \"$CLAUDE_PROJECT_DIR/.handoffs/inbox/\"*.md 2>/dev/null | wc -l | tr -d ' '); if [ \"$in_count\" -gt 0 ]; then echo \"📬 $in_count brief(s) in .handoffs/inbox/ — run /inbox\"; fi; fi; if [ -d \"$CLAUDE_PROJECT_DIR/.handoffs/archive\" ]; then recent=$(find \"$CLAUDE_PROJECT_DIR/.handoffs/archive/\" -name \"*.md\" -mtime -1 2>/dev/null | wc -l | tr -d ' '); if [ \"$recent\" -gt 0 ]; then echo \"📨 $recent recent archive completion(s) (last 24h) — run /archive to view\"; fi; fi"
           }
         ]
       }
