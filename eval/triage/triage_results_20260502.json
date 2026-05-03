@@ -1,0 +1,2496 @@
+{
+  "schema_version": 1,
+  "good_model": {
+    "path": "models\\baseline_bbe8a42b_20260502.pt",
+    "sha256": "bbe8a42b607cd6b4b97d0cf2b1ded0b6baff28dd060c8084b011ee4d1ff90bef"
+  },
+  "bad_model": {
+    "path": "models\\baseline_28814eeb_BROKEN_20260502.pt",
+    "sha256": "28814eeb33060b0624581f64d3e3c1435bfad5a32a6a614dc3c6a3b36af231d4"
+  },
+  "tolerance_seconds": 0.5,
+  "evaluated_at": "2026-05-03T00:16:49+00:00",
+  "evaluated_on": "Andrew-PC",
+  "elapsed_seconds": 992.1,
+  "videos": [
+    {
+      "video_id": "c8a2824f",
+      "filename_stem": "IMG_1108",
+      "shots_good": 131,
+      "shots_bad": 136,
+      "added_by_broken": 7,
+      "removed_by_broken": 2,
+      "reclassified": 1,
+      "total_disagreement": 10,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 188.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 240.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 487.05,
+          "t_bad": 487.25,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 187.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 207.75,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 239.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 333.35,
+          "type_bad": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 359.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 437.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 567.45,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "d7114edf",
+      "filename_stem": "IMG_1109",
+      "shots_good": 153,
+      "shots_bad": 154,
+      "added_by_broken": 6,
+      "removed_by_broken": 5,
+      "reclassified": 0,
+      "total_disagreement": 11,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (5 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 67.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 296.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 354.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 704.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 715.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 66.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 297.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 308.55,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 580.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 703.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 715.05,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "59a97faf",
+      "filename_stem": "IMG_1110",
+      "shots_good": 86,
+      "shots_bad": 85,
+      "added_by_broken": 0,
+      "removed_by_broken": 1,
+      "reclassified": 0,
+      "total_disagreement": 1,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 459.15,
+          "type_good": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "ada5f7c1",
+      "filename_stem": "IMG_1111",
+      "shots_good": 92,
+      "shots_bad": 92,
+      "added_by_broken": 3,
+      "removed_by_broken": 3,
+      "reclassified": 0,
+      "total_disagreement": 6,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (3 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 68.35,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 526.85,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 584.45,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 10.05,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 258.45,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 508.65,
+          "type_bad": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "15256443",
+      "filename_stem": "IMG_1112",
+      "shots_good": 31,
+      "shots_bad": 33,
+      "added_by_broken": 6,
+      "removed_by_broken": 4,
+      "reclassified": 0,
+      "total_disagreement": 10,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (4 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 62.05,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 163.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 179.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 454.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 55.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 156.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 278.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 294.75,
+          "type_bad": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 348.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 375.55,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "94918302",
+      "filename_stem": "IMG_1113",
+      "shots_good": 89,
+      "shots_bad": 87,
+      "added_by_broken": 1,
+      "removed_by_broken": 3,
+      "reclassified": 0,
+      "total_disagreement": 4,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (3 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 122.55,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 277.75,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 460.45,
+          "type_good": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 461.15,
+          "type_bad": "serve"
+        }
+      ]
+    },
+    {
+      "video_id": "039f6fb1",
+      "filename_stem": "IMG_1118",
+      "shots_good": 144,
+      "shots_bad": 145,
+      "added_by_broken": 10,
+      "removed_by_broken": 9,
+      "reclassified": 1,
+      "total_disagreement": 20,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (9 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 74.55,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 417.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 506.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 563.85,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 688.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 708.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 746.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 800.25,
+          "t_bad": 800.65,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 875.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 894.35,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 75.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 417.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 476.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 564.45,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 607.75,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 707.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 747.45,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 771.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 875.15,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 893.75,
+          "type_bad": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "c328582e",
+      "filename_stem": "IMG_1119",
+      "shots_good": 63,
+      "shots_bad": 46,
+      "added_by_broken": 6,
+      "removed_by_broken": 23,
+      "reclassified": 1,
+      "total_disagreement": 30,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (23 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 61.85,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 139.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 150.15,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 217.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 228.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 519.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 558.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 562.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 566.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 632.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 635.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 639.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 643.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 686.25,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 747.95,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 763.85,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 769.25,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1217.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1273.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1292.55,
+          "type_good": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1302.65,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 1326.35,
+          "t_bad": 1326.25,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1372.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1415.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 41.35,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 58.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 74.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 102.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 802.05,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 1281.35,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "e50070a7",
+      "filename_stem": "IMG_1121",
+      "shots_good": 30,
+      "shots_bad": 28,
+      "added_by_broken": 1,
+      "removed_by_broken": 3,
+      "reclassified": 0,
+      "total_disagreement": 4,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (3 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 339.25,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 386.25,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 464.05,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 567.75,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "03ba586f",
+      "filename_stem": "IMG_1122",
+      "shots_good": 8,
+      "shots_bad": 8,
+      "added_by_broken": 0,
+      "removed_by_broken": 0,
+      "reclassified": 0,
+      "total_disagreement": 0,
+      "recommendation": "KEEP",
+      "reason": "within expected noise (total_disagreement=0, no false negatives)",
+      "disagreement_log": []
+    },
+    {
+      "video_id": "f4bfcf04",
+      "filename_stem": "IMG_1123",
+      "shots_good": 44,
+      "shots_bad": 45,
+      "added_by_broken": 3,
+      "removed_by_broken": 2,
+      "reclassified": 2,
+      "total_disagreement": 7,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 212.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 289.55,
+          "t_bad": 289.55,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 300.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 303.55,
+          "t_bad": 303.55,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 215.85,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 224.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 312.25,
+          "type_bad": "serve"
+        }
+      ]
+    },
+    {
+      "video_id": "8dc22723",
+      "filename_stem": "IMG_1124",
+      "shots_good": 119,
+      "shots_bad": 119,
+      "added_by_broken": 3,
+      "removed_by_broken": 3,
+      "reclassified": 0,
+      "total_disagreement": 6,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (3 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 57.15,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 65.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 411.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 66.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 411.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 554.25,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "e54f3ccb",
+      "filename_stem": "IMG_1125",
+      "shots_good": 33,
+      "shots_bad": 34,
+      "added_by_broken": 3,
+      "removed_by_broken": 2,
+      "reclassified": 1,
+      "total_disagreement": 6,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 69.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 150.05,
+          "t_bad": 149.95,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 551.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 79.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 260.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 396.45,
+          "type_bad": "serve"
+        }
+      ]
+    },
+    {
+      "video_id": "201ae7d7",
+      "filename_stem": "IMG_1127",
+      "shots_good": 42,
+      "shots_bad": 39,
+      "added_by_broken": 1,
+      "removed_by_broken": 4,
+      "reclassified": 1,
+      "total_disagreement": 6,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (4 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 12.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 175.65,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 598.95,
+          "type_good": "serve"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 657.85,
+          "t_bad": 657.75,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 665.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 660.65,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "29f3835a",
+      "filename_stem": "IMG_1129",
+      "shots_good": 242,
+      "shots_bad": 235,
+      "added_by_broken": 6,
+      "removed_by_broken": 13,
+      "reclassified": 1,
+      "total_disagreement": 20,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (13 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 202.05,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 205.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 220.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 295.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 300.25,
+          "t_bad": 300.45,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 378.25,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 411.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 554.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 911.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 968.05,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 987.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1031.95,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1068.85,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1252.05,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 296.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 412.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 553.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 911.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 1068.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 1272.25,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "a61736c1",
+      "filename_stem": "IMG_1130",
+      "shots_good": 39,
+      "shots_bad": 40,
+      "added_by_broken": 8,
+      "removed_by_broken": 7,
+      "reclassified": 0,
+      "total_disagreement": 15,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (7 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 4.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 42.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 76.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 106.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 116.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 128.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 167.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 17.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 43.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 76.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 106.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 117.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 129.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 210.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 275.45,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "a5ebf8d7",
+      "filename_stem": "IMG_1131",
+      "shots_good": 0,
+      "shots_bad": 0,
+      "added_by_broken": 0,
+      "removed_by_broken": 0,
+      "reclassified": 0,
+      "total_disagreement": 0,
+      "recommendation": "KEEP",
+      "reason": "within expected noise (total_disagreement=0, no false negatives)",
+      "disagreement_log": []
+    },
+    {
+      "video_id": "95c22d7b",
+      "filename_stem": "IMG_1133",
+      "shots_good": 10,
+      "shots_bad": 10,
+      "added_by_broken": 1,
+      "removed_by_broken": 1,
+      "reclassified": 0,
+      "total_disagreement": 2,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 9.25,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 54.75,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "f7e654c7",
+      "filename_stem": "IMG_1134",
+      "shots_good": 74,
+      "shots_bad": 76,
+      "added_by_broken": 3,
+      "removed_by_broken": 1,
+      "reclassified": 1,
+      "total_disagreement": 5,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "reclassified",
+          "t_good": 127.85,
+          "t_bad": 127.65,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 797.45,
+          "type_good": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 288.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 292.15,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 798.05,
+          "type_bad": "serve"
+        }
+      ]
+    },
+    {
+      "video_id": "818dbf0e",
+      "filename_stem": "IMG_1135",
+      "shots_good": 16,
+      "shots_bad": 25,
+      "added_by_broken": 10,
+      "removed_by_broken": 1,
+      "reclassified": 1,
+      "total_disagreement": 12,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "reclassified",
+          "t_good": 105.75,
+          "t_bad": 105.65,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 277.25,
+          "type_good": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 37.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 40.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 42.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 45.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 73.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 90.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 112.35,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 147.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 239.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 277.85,
+          "type_bad": "serve"
+        }
+      ]
+    },
+    {
+      "video_id": "ddd6bf7c",
+      "filename_stem": "IMG_1136",
+      "shots_good": 46,
+      "shots_bad": 48,
+      "added_by_broken": 3,
+      "removed_by_broken": 1,
+      "reclassified": 1,
+      "total_disagreement": 5,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 7.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 401.05,
+          "t_bad": 400.85,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 7.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 188.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 398.35,
+          "type_bad": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "0fa431ed",
+      "filename_stem": "IMG_1137",
+      "shots_good": 73,
+      "shots_bad": 74,
+      "added_by_broken": 2,
+      "removed_by_broken": 1,
+      "reclassified": 1,
+      "total_disagreement": 4,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 123.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 510.95,
+          "t_bad": 510.75,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 123.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 233.35,
+          "type_bad": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "faf27bac",
+      "filename_stem": "IMG_1138",
+      "shots_good": 87,
+      "shots_bad": 85,
+      "added_by_broken": 2,
+      "removed_by_broken": 4,
+      "reclassified": 2,
+      "total_disagreement": 8,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (4 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 78.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 274.55,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 701.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 703.75,
+          "t_bad": 703.65,
+          "type_good": "serve",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 716.25,
+          "t_bad": 716.65,
+          "type_good": "backhand",
+          "type_bad": "serve"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 755.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 79.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 722.75,
+          "type_bad": "serve"
+        }
+      ]
+    },
+    {
+      "video_id": "3747def1",
+      "filename_stem": "IMG_1139",
+      "shots_good": 13,
+      "shots_bad": 13,
+      "added_by_broken": 2,
+      "removed_by_broken": 2,
+      "reclassified": 1,
+      "total_disagreement": 5,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 138.95,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 160.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 190.45,
+          "t_bad": 190.45,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 140.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 219.15,
+          "type_bad": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "5bff547f",
+      "filename_stem": "IMG_1140",
+      "shots_good": 35,
+      "shots_bad": 36,
+      "added_by_broken": 3,
+      "removed_by_broken": 2,
+      "reclassified": 2,
+      "total_disagreement": 7,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "reclassified",
+          "t_good": 34.15,
+          "t_bad": 34.15,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 363.55,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 403.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 554.55,
+          "t_bad": 554.95,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 48.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 234.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 359.25,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "146c4021",
+      "filename_stem": "IMG_1141",
+      "shots_good": 82,
+      "shots_bad": 82,
+      "added_by_broken": 4,
+      "removed_by_broken": 4,
+      "reclassified": 0,
+      "total_disagreement": 8,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (4 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 140.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 268.55,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 630.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 141.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 465.95,
+          "type_bad": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 630.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 697.35,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "a2bf3c51",
+      "filename_stem": "IMG_1169",
+      "shots_good": 82,
+      "shots_bad": 76,
+      "added_by_broken": 4,
+      "removed_by_broken": 10,
+      "reclassified": 0,
+      "total_disagreement": 14,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (10 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 170.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 217.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 224.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 242.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 282.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 297.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 307.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 312.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 319.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 329.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 218.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 225.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 243.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 329.95,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "cf2ec3f4",
+      "filename_stem": "IMG_1184",
+      "shots_good": 38,
+      "shots_bad": 35,
+      "added_by_broken": 1,
+      "removed_by_broken": 4,
+      "reclassified": 1,
+      "total_disagreement": 6,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (4 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 16.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 22.45,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 75.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 97.55,
+          "t_bad": 97.05,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 157.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 88.55,
+          "type_bad": "backhand"
+        }
+      ]
+    },
+    {
+      "video_id": "f8e0ab4c",
+      "filename_stem": "IMG_1185",
+      "shots_good": 25,
+      "shots_bad": 22,
+      "added_by_broken": 0,
+      "removed_by_broken": 3,
+      "reclassified": 1,
+      "total_disagreement": 4,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (3 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 73.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 75.35,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 93.45,
+          "t_bad": 93.25,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 135.95,
+          "type_good": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "de56a813",
+      "filename_stem": "IMG_1187",
+      "shots_good": 45,
+      "shots_bad": 61,
+      "added_by_broken": 18,
+      "removed_by_broken": 2,
+      "reclassified": 1,
+      "total_disagreement": 21,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "reclassified",
+          "t_good": 100.25,
+          "t_bad": 100.15,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 207.55,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 305.35,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 11.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 19.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 26.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 58.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 75.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 93.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 243.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 301.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 304.75,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 314.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 317.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 320.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 326.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 417.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 437.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 440.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 456.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 462.75,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "a2d63142",
+      "filename_stem": "IMG_1188",
+      "shots_good": 11,
+      "shots_bad": 12,
+      "added_by_broken": 2,
+      "removed_by_broken": 1,
+      "reclassified": 1,
+      "total_disagreement": 4,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "reclassified",
+          "t_good": 60.65,
+          "t_bad": 60.55,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 120.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 80.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 119.85,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "afb9df6d",
+      "filename_stem": "IMG_1191",
+      "shots_good": 40,
+      "shots_bad": 75,
+      "added_by_broken": 37,
+      "removed_by_broken": 2,
+      "reclassified": 0,
+      "total_disagreement": 39,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (2 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 249.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 523.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 55.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 73.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 102.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 111.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 124.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 163.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 174.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 178.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 225.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 228.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 231.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 234.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 249.05,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 291.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 296.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 299.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 308.45,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 311.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 323.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 330.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 366.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 368.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 384.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 386.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 390.45,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 401.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 408.85,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 412.25,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 452.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 461.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 464.55,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 471.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 474.55,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 496.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 502.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 508.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 523.75,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "16385c5f",
+      "filename_stem": "IMG_1192",
+      "shots_good": 55,
+      "shots_bad": 57,
+      "added_by_broken": 15,
+      "removed_by_broken": 13,
+      "reclassified": 2,
+      "total_disagreement": 30,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (13 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 42.15,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 62.95,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 70.95,
+          "t_bad": 70.95,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 74.95,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 111.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 169.45,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 183.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 187.05,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 218.25,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 240.75,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 325.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 357.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 517.85,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 533.05,
+          "t_bad": 533.05,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 544.25,
+          "type_good": "serve"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 38.35,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 63.55,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 74.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 80.85,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 89.95,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 102.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 107.75,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 132.05,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 168.75,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 186.35,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 240.15,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 277.85,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 310.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 324.45,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 328.05,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "9f84e09c",
+      "filename_stem": "IMG_1193",
+      "shots_good": 16,
+      "shots_bad": 14,
+      "added_by_broken": 1,
+      "removed_by_broken": 3,
+      "reclassified": 7,
+      "total_disagreement": 11,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (3 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 42.65,
+          "type_good": "serve"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 105.95,
+          "t_bad": 105.95,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 112.65,
+          "type_good": "serve"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 117.25,
+          "t_bad": 117.35,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 123.75,
+          "t_bad": 123.75,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 185.55,
+          "t_bad": 185.55,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 191.45,
+          "t_bad": 191.45,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 203.75,
+          "t_bad": 203.75,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 228.55,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 239.55,
+          "t_bad": 239.95,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 112.05,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "2b5edd87",
+      "filename_stem": "IMG_1195",
+      "shots_good": 50,
+      "shots_bad": 51,
+      "added_by_broken": 16,
+      "removed_by_broken": 15,
+      "reclassified": 6,
+      "total_disagreement": 37,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (15 false negatives)",
+      "disagreement_log": [
+        {
+          "kind": "reclassified",
+          "t_good": 40.65,
+          "t_bad": 40.65,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 44.45,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 72.35,
+          "type_good": "serve"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 102.75,
+          "t_bad": 102.85,
+          "type_good": "serve",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 157.35,
+          "type_good": "serve"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 284.05,
+          "t_bad": 284.05,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 307.15,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 481.65,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 512.65,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 542.65,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 562.25,
+          "t_bad": 562.25,
+          "type_good": "backhand",
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 564.45,
+          "t_bad": 564.35,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 744.25,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 760.55,
+          "type_good": "forehand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 849.95,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "reclassified",
+          "t_good": 917.55,
+          "t_bad": 917.45,
+          "type_good": "forehand",
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 975.35,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1025.35,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1055.15,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1099.95,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "removed_by_broken",
+          "t_good": 1111.75,
+          "type_good": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 47.55,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 183.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 313.65,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 316.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 367.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 394.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 397.75,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 428.35,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 512.05,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 699.65,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 704.05,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 710.95,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 881.25,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 931.35,
+          "type_bad": "backhand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 976.15,
+          "type_bad": "forehand"
+        },
+        {
+          "kind": "added_by_broken",
+          "t_bad": 1055.95,
+          "type_bad": "forehand"
+        }
+      ]
+    },
+    {
+      "video_id": "d506581a",
+      "filename_stem": "IMG_7110",
+      "shots_good": 42,
+      "shots_bad": 41,
+      "added_by_broken": 0,
+      "removed_by_broken": 1,
+      "reclassified": 0,
+      "total_disagreement": 1,
+      "recommendation": "REPROCESS",
+      "reason": "removed_by_broken >= 1 (1 false negative)",
+      "disagreement_log": [
+        {
+          "kind": "removed_by_broken",
+          "t_good": 27.25,
+          "type_good": "forehand"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_videos": 36,
+    "evaluated": 36,
+    "skipped": 0,
+    "reprocess_count": 34,
+    "keep_count": 2,
+    "total_added_by_broken": 188,
+    "total_removed_by_broken": 155,
+    "total_reclassified": 36
+  }
+}
