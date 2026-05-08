@@ -206,6 +206,42 @@ def claim_job() -> dict:
     return None
 
 
+def download_source_from_r2(video_id: str) -> Path | None:
+    """Try to fetch source MOV from R2 source/{video_id}.{mov,mp4} prefix.
+
+    Used by the iPhone Shortcut ingest path: iOS uploads land in R2 source/
+    via the Worker; GPU pipeline pulls from there instead of iCloud.
+
+    Returns local Path on success, None if not found (caller falls back to iCloud).
+    """
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    client, bucket = _get_r2_client()
+    if not client:
+        return None
+    for ext in ("mov", "mp4"):
+        r2_key = f"source/{video_id}.{ext}"
+        try:
+            head = client.head_object(Bucket=bucket, Key=r2_key)
+        except Exception:
+            continue
+        size_mb = head.get("ContentLength", 0) / (1024 * 1024)
+        local_path = RAW_DIR / f"{video_id}.{ext}"
+        if local_path.exists() and local_path.stat().st_size == head.get("ContentLength"):
+            log(f"R2 source already cached locally: {local_path}")
+            return local_path
+        log(f"Downloading source from R2: {r2_key} ({size_mb:.1f} MB)")
+        try:
+            client.download_file(bucket, r2_key, str(local_path))
+            return local_path
+        except Exception as e:
+            log(f"R2 download failed ({r2_key}): {e}", "WARN")
+            try:
+                local_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+    return None
+
+
 def download_from_icloud(icloud_asset_id: str, filename: str) -> Path:
     """Download video from iCloud to raw directory."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -917,9 +953,12 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
     # Update status to processing
     api_request("POST", f"/jobs/{video_id}/processing?worker_id={WORKER_ID}")
 
-    # Download from iCloud
-    report_stage(video_id, "downloading", 0, f"Downloading {filename}")
-    video_path = download_from_icloud(icloud_asset_id, filename)
+    # Source resolution: try R2 first (iPhone Shortcut ingest), fall back to iCloud.
+    report_stage(video_id, "downloading", 0, f"Resolving source for {filename}")
+    video_path = download_source_from_r2(video_id)
+    if video_path is None:
+        report_stage(video_id, "downloading", 10, f"Downloading {filename} from iCloud")
+        video_path = download_from_icloud(icloud_asset_id, filename)
     report_stage(video_id, "downloading", 100, "Download complete")
     if upload_id:
         report_queue_status(upload_id, stage="downloading", progress=100)
