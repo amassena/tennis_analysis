@@ -453,6 +453,42 @@ async function handleIphoneUpload(request, env, cors) {
     return jsonResponse({ error: 'R2 put failed: ' + err.message }, 500, cors);
   }
 
+  // Marker file picked up by the Hetzner-side poller, which creates the
+  // coordinator job. This is the primary registration path; the HTTP fetch
+  // below is an optional fast-track that requires a CF DNS-only subdomain
+  // (CF blocks Worker fetches to bare origin IPs — error 1003).
+  const markerKey = `uploads/${videoId}.json`;
+  try {
+    await env.BUCKET.put(
+      markerKey,
+      JSON.stringify({
+        video_id: videoId,
+        asset_id: assetId,
+        filename,
+        created_at: createdAt,
+        uploaded_at: new Date().toISOString(),
+        r2_source_key: r2Key,
+        source: 'iphone_shortcut',
+        status: 'awaiting_coordinator',
+      }),
+      { httpMetadata: { contentType: 'application/json' } },
+    );
+  } catch (err) {
+    // Non-fatal: MOV is in R2; the user can re-run the Shortcut to
+    // re-write the marker. Log via response field for diagnostic visibility.
+    return jsonResponse(
+      {
+        video_id: videoId,
+        status: 'queued_no_marker',
+        r2_key: r2Key,
+        asset_id: assetId,
+        marker_error: err.message,
+      },
+      200,
+      cors,
+    );
+  }
+
   // Register the job with the coordinator. Failures here are non-fatal for
   // the upload itself (the MOV is in R2) — the user can retry to re-trigger,
   // or a future poller can backfill from R2.
