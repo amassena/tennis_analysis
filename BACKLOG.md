@@ -44,3 +44,10 @@ Drop-anywhere capture for bugs, ideas, and UX papercuts. Add a one-liner the mom
 - [ ] iOS app has no Pro Comparison view (web has it via gallery)
 - [ ] iOS app session review doesn't show Coach summary (only filmstrips)
 - [ ] Web has search; iOS doesn't (since iOS is just a WebView wrapper, this is fine — but the in-app camera screen has no way to find prior session)
+
+## Pipeline robustness
+
+- [ ] **R2 source-MOV caching** — every successful preprocess uploads source MOV to `source/{vid}.MOV` in R2. Asset resolution becomes local → R2 → iCloud. Eliminates iCloud-auth coupling for reprocess. ~600 GB / ~$9/mo storage cost. Surfaced 2026-05-07 by iCloud lockout incident.
+- [ ] **Coordinator worker kill switch** — `worker_pool` table with `enabled bool`, `POST /api/worker/:id/disable` endpoint, worker checks its own enabled state before claiming. Use cases: thermal throttle, suspect model canary, OS patch, auth failure auto-park. Surfaced 2026-05-07 by iCloud lockout incident.
+- [ ] **Atomic iCloud session writes** — pyicloud overwrites cookie jar mid-auth, leaving partial state on failure. Wrap auth in `session.candidate/ → atomic rename` pattern so failed auths never touch the active session dir. Surfaced 2026-05-07 by iCloud lockout incident.
+- [ ] **Watcher: distinguish `-20209` from session-stale** — on hard account-lock errors, alert + sleep 1h instead of systemd-restart-loop. Less urgent if R2 source caching lands first. Surfaced 2026-05-07 by iCloud lockout incident.
