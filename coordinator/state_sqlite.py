@@ -253,6 +253,15 @@ class SQLiteStateBackend(StateBackend):
             row = await cursor.fetchone()
             return row is not None
 
+    async def get_job_by_asset_id(self, icloud_asset_id: str) -> Optional[VideoJob]:
+        """Look up a job by iCloud asset id (or iOS PHAsset id)."""
+        async with self._db.execute(
+            "SELECT * FROM jobs WHERE icloud_asset_id = ? LIMIT 1",
+            (icloud_asset_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return self._row_to_job(row) if row else None
+
     async def get_stats(self) -> dict:
         """Get job statistics."""
         stats = {}

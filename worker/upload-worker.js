@@ -453,12 +453,49 @@ async function handleIphoneUpload(request, env, cors) {
     return jsonResponse({ error: 'R2 put failed: ' + err.message }, 500, cors);
   }
 
+  // Register the job with the coordinator. Failures here are non-fatal for
+  // the upload itself (the MOV is in R2) — the user can retry to re-trigger,
+  // or a future poller can backfill from R2.
+  let coordinatorStatus = 'skipped';
+  let coordinatorError = null;
+  if (env.COORDINATOR_URL && env.COORDINATOR_TOKEN) {
+    try {
+      const coordResp = await fetch(`${env.COORDINATOR_URL}/jobs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env.COORDINATOR_TOKEN}`,
+        },
+        body: JSON.stringify({
+          icloud_asset_id: assetId,
+          filename,
+          album_name: 'iphone_shortcut',
+          video_id: videoId,
+        }),
+      });
+      const rawText = await coordResp.text();
+      let coordData = {};
+      try { coordData = JSON.parse(rawText); } catch {}
+      if (coordResp.ok) {
+        coordinatorStatus = coordData.status || 'created';
+      } else {
+        coordinatorStatus = 'failed';
+        coordinatorError = `HTTP ${coordResp.status}: ${rawText.slice(0, 200)}`;
+      }
+    } catch (err) {
+      coordinatorStatus = 'failed';
+      coordinatorError = err.message;
+    }
+  }
+
   return jsonResponse(
     {
       video_id: videoId,
       status: 'queued',
       r2_key: r2Key,
       asset_id: assetId,
+      coordinator: coordinatorStatus,
+      coordinator_error: coordinatorError,
     },
     200,
     cors,

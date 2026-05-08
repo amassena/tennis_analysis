@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
@@ -23,6 +23,21 @@ from .state_sqlite import SQLiteStateBackend
 # Configuration
 DB_PATH = os.environ.get("COORDINATOR_DB", "coordinator.db")
 STALE_CLAIM_SECONDS = int(os.environ.get("STALE_CLAIM_SECONDS", "3600"))
+
+# Shared-secret token gating write endpoints called from Cloudflare Worker
+# (e.g. iPhone Shortcut ingest path). When unset, write endpoints are open
+# (legacy behavior — only the iCloud watcher had access since coordinator
+# bound to localhost). Set INTERNAL_API_TOKEN in the systemd unit to enable.
+INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
+
+
+def _require_internal_token(authorization: Optional[str]) -> None:
+    """Raise 401 if INTERNAL_API_TOKEN is set and the bearer doesn't match."""
+    if not INTERNAL_API_TOKEN:
+        return
+    expected = f"Bearer {INTERNAL_API_TOKEN}"
+    if authorization != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 # State backend (swap implementation for AWS)
 state: StateBackend = None
@@ -51,6 +66,10 @@ class AddJobRequest(BaseModel):
     icloud_asset_id: str
     filename: str
     album_name: Optional[str] = None
+    # Optional client-supplied video_id (e.g. iPhone Shortcut ingest, where the
+    # video_id is derived deterministically from the iOS asset_id by the Worker
+    # and used as the R2 source key — pipeline must agree on the ID).
+    video_id: Optional[str] = None
 
 
 class ClaimResponse(BaseModel):
@@ -94,16 +113,33 @@ async def health_check():
 
 
 @app.post("/jobs")
-async def add_job(request: AddJobRequest):
+async def add_job(
+    request: AddJobRequest,
+    authorization: Optional[str] = Header(None),
+):
     """
     Add a new video job to the queue.
-    Called by iCloud watcher when new videos are detected.
+
+    Callers:
+      - iCloud watcher (localhost, legacy)
+      - Cloudflare Worker via Shortcut ingest (token-gated)
+
+    When INTERNAL_API_TOKEN is set, requires `Authorization: Bearer <token>`.
     """
+    _require_internal_token(authorization)
+
     # Check if already exists
     if await state.job_exists(request.icloud_asset_id):
-        return {"status": "exists", "message": "Job already in queue"}
+        # Return the existing video_id so the caller can map asset_id → video_id
+        existing = await state.get_job_by_asset_id(request.icloud_asset_id) \
+            if hasattr(state, "get_job_by_asset_id") else None
+        return {
+            "status": "exists",
+            "message": "Job already in queue",
+            "video_id": existing.video_id if existing else None,
+        }
 
-    video_id = str(uuid.uuid4())[:8]
+    video_id = request.video_id or str(uuid.uuid4())[:8]
     job = VideoJob(
         video_id=video_id,
         icloud_asset_id=request.icloud_asset_id,
