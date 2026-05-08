@@ -13,6 +13,8 @@
  *   PUT  /api/upload/:id/:part     → upload chunk
  *   POST /api/upload/:id/complete  → finalize upload
  *   POST /api/upload/link          → iCloud share link
+ *   POST /api/upload/iphone        → iOS Shortcut single-shot upload (Bearer auth)
+ *   GET  /api/upload/iphone/check  → idempotency probe (?asset_id=…)
  *   GET  /api/status/:id           → check processing status
  *   POST /api/status/:id/update    → update processing status (auth)
  *   GET  /api/queue                → list all uploads and their status
@@ -201,6 +203,14 @@ async function handleApi(request, env, path) {
       return await handleLink(request, env, cors);
     }
 
+    if (path === '/api/upload/iphone' && request.method === 'POST') {
+      return await handleIphoneUpload(request, env, cors);
+    }
+
+    if (path === '/api/upload/iphone/check' && request.method === 'GET') {
+      return await handleIphoneCheck(request, env, cors);
+    }
+
     const completeMatch = path.match(/^\/api\/upload\/([^/]+)\/complete$/);
     if (completeMatch && request.method === 'POST') {
       return await handleComplete(request, env, cors, completeMatch[1]);
@@ -355,6 +365,148 @@ async function handleLink(request, env, cors) {
   });
 
   return jsonResponse({ id, status: 'pending' }, 200, cors);
+}
+
+// ---------------------------------------------------------------------------
+// iPhone Shortcut upload — single-shot streaming POST with Bearer auth
+//
+// Headers (required unless noted):
+//   Authorization: Bearer <IPHONE_UPLOAD_TOKEN>
+//   X-Asset-Id:    iOS PHAsset localIdentifier (idempotency key)
+//   X-Filename:    original filename, e.g. IMG_1234.MOV
+//   X-Created-At:  ISO-8601 recording date (optional)
+//
+// Body: raw video bytes (NOT multipart). Apple Shortcuts can post raw via
+//   "Get URL Contents" with body type "File". Multipart is harder to assemble.
+//
+// Responses:
+//   200: { video_id, status: 'queued', r2_key, asset_id }
+//   401: missing/invalid bearer
+//   400: missing required header
+//   409: duplicate (asset_id already uploaded) — returns existing video_id
+//   500: storage error
+// ---------------------------------------------------------------------------
+
+async function handleIphoneUpload(request, env, cors) {
+  const auth = request.headers.get('authorization') || '';
+  const expected = env.IPHONE_UPLOAD_TOKEN;
+  if (!expected || auth !== `Bearer ${expected}`) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  const assetId = request.headers.get('x-asset-id');
+  const filename = request.headers.get('x-filename');
+  const createdAt = request.headers.get('x-created-at') || '';
+
+  if (!assetId || !filename) {
+    return jsonResponse({ error: 'X-Asset-Id and X-Filename headers required' }, 400, cors);
+  }
+
+  if (!request.body) {
+    return jsonResponse({ error: 'request body required' }, 400, cors);
+  }
+
+  // Sanitize filename: extension only matters for content-type; keep alphanumeric core.
+  const ext = (filename.split('.').pop() || 'mov').toLowerCase();
+  if (!['mov', 'mp4'].includes(ext)) {
+    return jsonResponse({ error: 'Only .mov and .mp4 files allowed' }, 400, cors);
+  }
+
+  // Deterministic video_id from asset_id so retries are idempotent.
+  const videoId = await iphoneVideoIdFromAssetId(assetId);
+  const r2Key = `source/${videoId}.${ext}`;
+
+  // Idempotency check: if R2 already has this key, treat as duplicate.
+  try {
+    const existing = await env.BUCKET.head(r2Key);
+    if (existing) {
+      return jsonResponse(
+        {
+          video_id: videoId,
+          status: 'duplicate',
+          r2_key: r2Key,
+          asset_id: assetId,
+          message: 'asset_id already uploaded',
+        },
+        409,
+        cors,
+      );
+    }
+  } catch {}
+
+  // Stream the body directly to R2.
+  try {
+    await env.BUCKET.put(r2Key, request.body, {
+      httpMetadata: {
+        contentType: ext === 'mp4' ? 'video/mp4' : 'video/quicktime',
+        contentDisposition: `attachment; filename="${filename}"`,
+      },
+      customMetadata: {
+        ios_asset_id: assetId,
+        original_filename: filename,
+        created_at: createdAt,
+        uploaded_at: new Date().toISOString(),
+        source: 'iphone_shortcut',
+      },
+    });
+  } catch (err) {
+    return jsonResponse({ error: 'R2 put failed: ' + err.message }, 500, cors);
+  }
+
+  return jsonResponse(
+    {
+      video_id: videoId,
+      status: 'queued',
+      r2_key: r2Key,
+      asset_id: assetId,
+    },
+    200,
+    cors,
+  );
+}
+
+async function handleIphoneCheck(request, env, cors) {
+  const auth = request.headers.get('authorization') || '';
+  const expected = env.IPHONE_UPLOAD_TOKEN;
+  if (!expected || auth !== `Bearer ${expected}`) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  const url = new URL(request.url);
+  const assetId = url.searchParams.get('asset_id');
+  if (!assetId) {
+    return jsonResponse({ error: 'asset_id query param required' }, 400, cors);
+  }
+
+  const videoId = await iphoneVideoIdFromAssetId(assetId);
+  for (const ext of ['mov', 'mp4']) {
+    const r2Key = `source/${videoId}.${ext}`;
+    const obj = await env.BUCKET.head(r2Key);
+    if (obj) {
+      return jsonResponse(
+        {
+          uploaded: true,
+          video_id: videoId,
+          r2_key: r2Key,
+          size: obj.size,
+        },
+        200,
+        cors,
+      );
+    }
+  }
+
+  return jsonResponse({ uploaded: false, video_id: videoId }, 200, cors);
+}
+
+async function iphoneVideoIdFromAssetId(assetId) {
+  const data = new TextEncoder().encode(assetId);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = [...new Uint8Array(hash)]
+    .slice(0, 4)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `iphone_${hex}`;
 }
 
 async function handleStatus(env, cors, id) {
