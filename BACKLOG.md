@@ -19,6 +19,9 @@ Drop-anywhere capture for bugs, ideas, and UX papercuts. Add a one-liner the mom
 - [ ] **Backfill camera_angle on 44 GT files** via shot_review.py. Only ~1 of 6 sampled has it populated. Skip dominant_hand backfill (all righties) but enforce required-at-save going forward.
 - [ ] **MV-0 backups to R2 + Drive** (andrew@massena.com, 42TB available). GT is currently triple-redundant on Mac+andrew-pc+tmassena so no SPOF, but no off-site copy exists. Drive primary for raw/preprocessed, R2 primary for GT/models. Rclone copy (NOT sync). Restore-test required.
 - [ ] **Wikidata-backed pro library** when library grows past ~20 players. P741 SPARQL lookup, cache to pros/wikidata_cache.json. See DESIGN principle 7.
+- [ ] **Active-learning loop on corrections (P3)** — once ~50 user corrections accumulate via the gallery shot-correction UI, surface low-confidence model predictions in the gallery for review (sort by max disagreement between model conf and audio-confirmed contacts; visually flag chips below threshold). Karpathy data-engine pattern. Surfaced 2026-05-09 by design-partner.
+- [ ] **Audio-as-confirmation in production inference (P2)** — production inference (`sequence_cnn`) is pose-only; the 43%-no-prediction gap on BH→FH audit suggests reintroducing audio as a confirmation pass (boost confidence on pose events that coincide with audio peaks). Scope as separate brief if `improve-shot-classification` threshold tuning hits a ceiling.
+- [ ] **Promote `audit_world_landmarks.py` to CI** — run on a small fixed video set whenever `biomechanical_analysis.py` changes. Long-term value as biomech regression test. Surfaced 2026-05-09 by design-partner.
 
 ## UX papercuts
 
