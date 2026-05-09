@@ -18,6 +18,7 @@ Use `git worktree add ../tennis_<short-name> -b feature/<category>/<name>` to st
 | Filmstrip impact window | `feature/visual/filmstrip-impact-window` | `~/tennis_worktrees/filmstrip/` | scripts/swing_composite.py | active |
 | Dynamic track keep-in-frame | `feature/visual/dynamic-track-keep-in-frame` | `~/tennis_worktrees/dyntrack/` | scripts/dynamic_track.py | active |
 | Shot detection accuracy | `feature/detection/improve-shot-classification` | `~/tennis_worktrees/detection/` | scripts/detect_shots_sequence.py, scripts/sequence_model.py, training/ | active — per-class peak finding + class-conf demote-to-unknown_shot opt-in flags landed (F1 on GT 0.929 → 0.934 with `--per-class-thresh "serve=0.8,forehand=0.8,backhand=0.8"`). Production default unchanged. |
+| Pro library expansion | `feature/comparison/pro-library` | `~/tennis_worktrees/pro-library/` | pros/index.json, pros/wikidata_cache.json, scripts/pro_comparison.py, scripts/fetch_pros_from_wikidata.py | ready-to-merge — index.json bumped to v3 (4 → 24 players, +qid/handedness/gender/birth_year/backhand_style); PRO_HANDEDNESS dict removed from pro_comparison.py and replaced with index.json lookup; new `--cross-gender` flag (default same-gender). 20 new entries have empty `clips:[]` — footage backfill is a separate item. |
 
 ## Categories (for naming new features)
 
@@ -37,6 +38,10 @@ Use `git worktree add ../tennis_<short-name> -b feature/<category>/<name>` to st
 | `scripts/swing_composite.py` | filmstrip-impact-window |
 | `scripts/dynamic_track.py` | dynamic-track-keep-in-frame |
 | `scripts/detect_shots_sequence.py` | improve-shot-classification |
+| `scripts/pro_comparison.py` | pro-library |
+| `scripts/fetch_pros_from_wikidata.py` | pro-library |
+| `pros/index.json` | pro-library |
+| `pros/wikidata_cache.json` | pro-library |
 | `scripts/update_r2_index.py` | (none — main only) |
 | `scripts/claude_coach.py` | (none — main only) |
 | `ios/CourtIQ/**` | (none — main only) |

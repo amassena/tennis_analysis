@@ -42,17 +42,15 @@ SLOWMO_SPEED = 0.25  # 4x slow motion
 # Shot types eligible for comparison
 COMPARABLE_TYPES = {'forehand', 'backhand', 'serve'}
 
-# Pro player handedness — must match user's dominant_hand for the
-# comparison to teach correct mechanics. Mirror-reversed matches (e.g.
-# Nadal vs a right-handed user) train the wrong side.
-# When library grows past ~20 players, replace with a Wikidata SPARQL
-# lookup on P741 ("plays") — see DESIGN.md principle 7.
-PRO_HANDEDNESS = {
-    "alcaraz":  "R",
-    "djokovic": "R",
-    "federer":  "R",
-    "nadal":    "L",
-}
+# Mapping between user-side single-letter codes ('R'/'L') and the
+# library's full-word handedness field ('right'/'left' from Wikidata).
+_HAND_TO_CODE = {"right": "R", "left": "L"}
+_CODE_TO_HAND = {"R": "right", "L": "left"}
+
+# Mapping for user-side single-letter gender ('M'/'F') against the
+# library's full-word gender field ('male'/'female').
+_GENDER_TO_CODE = {"male": "M", "female": "F"}
+_CODE_TO_GENDER = {"M": "male", "F": "female"}
 
 # Label colors per shot type (same as export_videos.py)
 SHOT_COLORS = {
@@ -84,26 +82,41 @@ def load_detections(video_name):
 
 
 def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None,
-                   used_files=None, user_hand=None):
+                   used_files=None, user_hand=None, user_gender=None,
+                   cross_gender=False):
     """Find the best matching pro clip for a given shot type.
 
     Rotates through available clips to avoid repeating the same one.
-    If user_hand is provided ('R' or 'L'), only pros with matching
-    handedness are considered — mirror-reversed matches train the
-    wrong mechanics.
+
+    Filtering (per DESIGN.md principle 4 — apples-to-apples):
+    - If user_hand is provided ('R' or 'L'), only pros whose
+      ``handedness`` field in pros/index.json matches are kept —
+      mirror-reversed matches teach the wrong mechanics.
+    - If user_gender is provided ('M' or 'F') and ``cross_gender`` is
+      False (default), only same-gender pros are kept. Pros without a
+      ``gender`` field are kept (legacy entries pre-v3 schema).
+
     Returns (player_name, clip_info, clip_key) or (None, None, None).
     """
     candidates = []
     players = library.get("players", {})
     if used_files is None:
         used_files = set()
-    user_hand = (user_hand or "").upper().strip()[:1] or None  # normalize
+    user_hand = (user_hand or "").upper().strip()[:1] or None
+    user_gender = (user_gender or "").upper().strip()[:1] or None
 
     for player_id, player_data in players.items():
         # Hard filter on handedness — mirror-reversed pros teach the wrong side
         if user_hand:
-            pro_hand = PRO_HANDEDNESS.get(player_id)
+            pro_hand_word = (player_data.get("handedness") or "").lower()
+            pro_hand = _HAND_TO_CODE.get(pro_hand_word)
             if pro_hand and pro_hand != user_hand:
+                continue
+        # Hard filter on gender unless caller asks for cross-gender
+        if user_gender and not cross_gender:
+            pro_gender_word = (player_data.get("gender") or "").lower()
+            pro_gender = _GENDER_TO_CODE.get(pro_gender_word)
+            if pro_gender and pro_gender != user_gender:
                 continue
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
@@ -367,7 +380,8 @@ def detect_camera_angle(det_data):
 
 
 def generate_comparisons(video_path, output_dir=None, player=None,
-                          shot_type_filter=None, max_clips=None, upload=False):
+                          shot_type_filter=None, max_clips=None, upload=False,
+                          cross_gender=False):
     """Generate comparison clips for all eligible shots in a video.
 
     Args:
@@ -411,6 +425,13 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                  or det_data.get("metadata", {}).get("dominant_hand")
                  or "R")
 
+    # User's gender — used to default-filter pros to same gender so mechanics
+    # are comparable. Override with cross_gender=True (e.g. study Henin's 1HBH
+    # as a male right-hander). No default if absent — caller didn't tag it,
+    # gender filter is skipped.
+    user_gender = (det_data.get("gender")
+                   or det_data.get("metadata", {}).get("gender"))
+
     detections = det_data.get("detections", [])
     eligible = [
         d for d in detections
@@ -428,6 +449,9 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     if user_angle:
         print(f"  Camera angle: {user_angle} (preferring matching pro clips)")
     print(f"  User dominant hand: {user_hand} (filtering pros to matching handedness)")
+    if user_gender:
+        gender_mode = "cross-gender allowed" if cross_gender else "same-gender only"
+        print(f"  User gender: {user_gender} ({gender_mode})")
 
     generated = []
     tmpdir = tempfile.mkdtemp(prefix="tennis_procomp_")
@@ -441,9 +465,12 @@ def generate_comparisons(video_path, output_dir=None, player=None,
             idx = i + 1
 
             # Find matching pro clip (rotates through available clips,
-            # filtered by user's handedness to avoid mirror-reversed pros).
+            # filtered by user's handedness to avoid mirror-reversed pros and
+            # by gender unless cross_gender=True).
             pro_name, pro_clip, clip_key = match_pro_clip(
-                shot_type, library, player, user_angle, used_files, user_hand=user_hand)
+                shot_type, library, player, user_angle, used_files,
+                user_hand=user_hand, user_gender=user_gender,
+                cross_gender=cross_gender)
             if not pro_clip:
                 print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s -- no pro clip available "
                       f"(user_hand={user_hand}, may have filtered out all clips)")
@@ -545,6 +572,9 @@ def main():
                         help="Output directory (default: exports/{video}/)")
     parser.add_argument("--upload", action="store_true",
                         help="Upload to R2 after generating")
+    parser.add_argument("--cross-gender", action="store_true",
+                        help="Allow cross-gender matches (e.g. study Henin's "
+                        "1HBH as a male right-hander). Default: same gender only.")
     args = parser.parse_args()
 
     if not os.path.exists(args.video):
@@ -558,6 +588,7 @@ def main():
         shot_type_filter=args.shot_type,
         max_clips=args.max_clips,
         upload=args.upload,
+        cross_gender=args.cross_gender,
     )
 
 

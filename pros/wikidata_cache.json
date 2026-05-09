@@ -1,0 +1,272 @@
+{
+  "_meta": {
+    "fetched_at": "2026-05-09T06:47:37Z",
+    "source": "Wikidata SPARQL (P741, P21, P569)",
+    "schema_version": 1
+  },
+  "players": {
+    "alcaraz": {
+      "name": "Carlos Alcaraz",
+      "qid": "Q85518537",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 2003,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "sinner": {
+      "name": "Jannik Sinner",
+      "qid": "Q54812588",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 2001,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "djokovic": {
+      "name": "Novak Djokovic",
+      "qid": "Q5812",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1987,
+      "raw_p741": [
+        "Q3039938",
+        "Q14419931",
+        "Q14420068"
+      ]
+    },
+    "medvedev": {
+      "name": "Daniil Medvedev",
+      "qid": "Q21622022",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1996,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "zverev": {
+      "name": "Alexander Zverev",
+      "qid": "Q13990552",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1997,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "tsitsipas": {
+      "name": "Stefanos Tsitsipas",
+      "qid": "Q24450982",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1998,
+      "raw_p741": []
+    },
+    "rublev": {
+      "name": "Andrey Rublev",
+      "qid": "Q17373391",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1997,
+      "raw_p741": []
+    },
+    "deminaur": {
+      "name": "Alex de Minaur",
+      "qid": "Q22958938",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1999,
+      "raw_p741": []
+    },
+    "fritz": {
+      "name": "Taylor Fritz",
+      "qid": "Q17660516",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1997,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420068"
+      ]
+    },
+    "hurkacz": {
+      "name": "Hubert Hurkacz",
+      "qid": "Q18927958",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1997,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "rune": {
+      "name": "Holger Rune",
+      "qid": "Q48200561",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 2003,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "federer": {
+      "name": "Roger Federer",
+      "qid": "Q1426",
+      "handedness": "right",
+      "backhand_style": "one-handed",
+      "gender": "male",
+      "birth_year": 1981,
+      "raw_p741": [
+        "Q14419931",
+        "Q14420039"
+      ]
+    },
+    "nadal": {
+      "name": "Rafael Nadal",
+      "qid": "Q10132",
+      "handedness": "left",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1986,
+      "raw_p741": [
+        "Q789447",
+        "Q14420068"
+      ]
+    },
+    "murray": {
+      "name": "Andy Murray",
+      "qid": "Q10125",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1987,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420068"
+      ]
+    },
+    "wawrinka": {
+      "name": "Stan Wawrinka",
+      "qid": "Q193661",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "male",
+      "birth_year": 1985,
+      "raw_p741": [
+        "Q3039938"
+      ]
+    },
+    "sabalenka": {
+      "name": "Aryna Sabalenka",
+      "qid": "Q23448791",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "female",
+      "birth_year": 1998,
+      "raw_p741": []
+    },
+    "swiatek": {
+      "name": "Iga Swiatek",
+      "qid": "Q26840238",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "female",
+      "birth_year": 2001,
+      "raw_p741": []
+    },
+    "gauff": {
+      "name": "Coco Gauff",
+      "qid": "Q39263365",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 2004,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420068"
+      ]
+    },
+    "rybakina": {
+      "name": "Elena Rybakina",
+      "qid": "Q42055714",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1999,
+      "raw_p741": [
+        "Q14420068"
+      ]
+    },
+    "pegula": {
+      "name": "Jessica Pegula",
+      "qid": "Q24159",
+      "handedness": "right",
+      "backhand_style": null,
+      "gender": "female",
+      "birth_year": 1994,
+      "raw_p741": []
+    },
+    "jabeur": {
+      "name": "Ons Jabeur",
+      "qid": "Q290212",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1994,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420068"
+      ]
+    },
+    "serena": {
+      "name": "Serena Williams",
+      "qid": "Q11459",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1981,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420068"
+      ]
+    },
+    "venus": {
+      "name": "Venus Williams",
+      "qid": "Q11578",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1980,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420068"
+      ]
+    },
+    "henin": {
+      "name": "Justine Henin",
+      "qid": "Q11682",
+      "handedness": "right",
+      "backhand_style": "one-handed",
+      "gender": "female",
+      "birth_year": 1982,
+      "raw_p741": [
+        "Q3039938",
+        "Q14420039"
+      ]
+    }
+  }
+}
