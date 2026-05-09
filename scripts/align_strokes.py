@@ -59,40 +59,52 @@ def load_user_shot(video_id: str, shot_idx: int):
     return str(video_path), float(contact_t), fps, d.get("shot_type", "unknown")
 
 
-def pick_pro_clip(shot_type: str, player: str | None, angle: str | None = None):
-    """Find a pro clip matching shot_type (and optionally angle).
+# Right-handed players only — left-handed pros (Nadal, Rafa) mirror your stance
+# and make visual comparison confusing.
+EXCLUDE_PLAYERS = {"nadal"}
+
+
+def pick_pro_clip(shot_type: str, player: str | None, angle: str | None = None,
+                  strict_angle: bool = True):
+    """Find a pro clip matching shot_type and angle EXACTLY (no fallback by default).
+    Excludes left-handed players from auto-pick.
     Returns (path, contact_t, fps, player_name, clip_meta)."""
     idx = json.loads((PROS / "index.json").read_text())
     players = idx.get("players", {})
 
     if player and player not in players:
-        sys.exit(f"[ERR] no pro {player}. Have: {list(players)}")
+        sys.exit(f"[ERR] no pro {player}. Have: {sorted(players)}")
+    if player and player in EXCLUDE_PLAYERS:
+        sys.exit(f"[ERR] {player} is left-handed; comparison would be a mirror image. Pick another pro.")
 
     candidates = [(p, pdata) for p, pdata in players.items()
-                  if player is None or p == player]
+                  if (player is None or p == player) and p not in EXCLUDE_PLAYERS]
 
-    # First pass: exact angle match
-    # Second pass: any angle (fallback)
-    for require_angle in ([angle] if angle else [None]):
-        for pname, pdata in candidates:
-            for clip in pdata.get("clips", []):
-                if clip.get("type") != shot_type:
-                    continue
-                if require_angle and clip.get("angle") != require_angle:
-                    continue
-                clip_path = PROS / pname / clip["file"]
-                if clip_path.exists():
-                    contact_frame = clip.get("contact_frame", 0)
-                    fps = clip.get("fps", 60.0)
-                    return (str(clip_path), contact_frame / fps, fps,
-                            pdata.get("name", pname), clip)
+    matches = []
+    for pname, pdata in candidates:
+        for clip in pdata.get("clips", []):
+            if clip.get("type") != shot_type:
+                continue
+            if angle and clip.get("angle") != angle:
+                continue
+            clip_path = PROS / pname / clip["file"]
+            if clip_path.exists():
+                matches.append((pname, pdata, clip, clip_path))
 
-    # Fallback if angle requested but not found
-    if angle:
-        print(f"  [warn] no {angle} angle for {shot_type}, falling back to any angle")
-        return pick_pro_clip(shot_type, player, angle=None)
+    if not matches:
+        if angle and not strict_angle:
+            print(f"  [warn] no {angle} angle for {shot_type}, retrying without angle filter")
+            return pick_pro_clip(shot_type, player, angle=None, strict_angle=True)
+        avail = sorted({(c.get("type"), c.get("angle"))
+                        for _, pdata in candidates for c in pdata.get("clips", [])})
+        sys.exit(f"[ERR] no pro clip matches type={shot_type} angle={angle}. "
+                 f"Available (type, angle): {avail}")
 
-    sys.exit(f"[ERR] no pro clip for shot_type={shot_type}")
+    pname, pdata, clip, clip_path = matches[0]
+    contact_frame = clip.get("contact_frame", 0)
+    fps = clip.get("fps", 60.0)
+    return (str(clip_path), contact_frame / fps, fps,
+            pdata.get("name", pname), clip)
 
 
 def render_aligned(user_path: str, user_contact_t: float, user_label: str,

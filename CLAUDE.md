@@ -13,9 +13,19 @@ For deeper pipeline history and archived decisions, see `docs/CLAUDE.md`.
 3. **Never downsample source video.** 240fps / 1080p is the product. Optimize by GPU/parallelism, not quality loss.
 4. **Always use `.venv/bin/python`** on Mac — system Python lacks sklearn and the pipeline silently degrades.
 5. **Never overwrite production models or data without archiving first.** `models/` is gitignored. Train new models under new names; only rename to `shot_classifier.pkl` after validation.
-6. **Don't re-enable the Mac launchd watcher** (`com.tennis.watcher`). It was disabled 2026-04-15 because it duplicated the GPU pipeline locally. Parked at `~/Library/LaunchAgents/.disabled/`.
+6. **Don't re-enable the OLD Mac launchd watcher** (`com.tennis.watcher`). It was disabled 2026-04-15 because it ran the GPU pipeline locally on Mac (preprocess + pose + CNN + export). Parked at `~/Library/LaunchAgents/.disabled/`.
 
-## Architecture (as of April 2026)
+   The NEW Mac uploader (`com.tennis.uploader`, shipped 2026-05-09) is a different entity: pure I/O (PhotoKit enumeration → chunked upload to Worker → R2). No compute, no model inference. This one IS allowed. See `.handoffs/archive/20260509-0530-mac-uploader-state-from-main.md` for rationale.
+
+## Architecture (as of May 2026)
+
+> **Note:** The `tennis-watcher.service` (pyicloud) is being retired in favor of the
+> Mac PhotoKit uploader (`com.tennis.uploader`) shipped 2026-05-09. The diagram below
+> still shows the legacy ingest path; full architecture rewrite scheduled for after the
+> ~1 week soak (target 2026-05-16). See
+> `.handoffs/archive/20260509-0530-mac-uploader-state-from-main.md` for the new flow:
+> iPhone → iCloud Photos sync → Mac launchd → Worker chunked upload → R2 → poller →
+> coordinator → GPU.
 
 ```
 iPhone (240fps slo-mo) → iCloud

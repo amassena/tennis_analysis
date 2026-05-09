@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SwingLab — Architecture Whiteboards</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #f5f1e8;
+    color: #1a1a1a;
+    padding: 32px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 32px;
+    margin-bottom: 8px;
+    color: #2a2a2a;
+  }
+  .subtitle { color: #666; margin-bottom: 32px; font-size: 14px; }
+  .board {
+    background: #fff;
+    border: 2px solid #d8d2c2;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+  .board h2 {
+    font-size: 22px;
+    margin-bottom: 4px;
+    color: #c1502e;
+    border-bottom: 3px solid #c1502e;
+    padding-bottom: 8px;
+    display: inline-block;
+  }
+  .board .meta { color: #999; font-size: 13px; margin-bottom: 24px; margin-top: 4px; }
+  .mermaid {
+    background: #fafaf5;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 24px;
+  }
+  .col h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #555;
+    margin-bottom: 12px;
+    border-bottom: 1px dashed #ccc;
+    padding-bottom: 6px;
+  }
+  .col ul {
+    list-style: none;
+    font-size: 14px;
+  }
+  .col li {
+    padding: 6px 0;
+    border-bottom: 1px solid #f0ece0;
+  }
+  .col.good li::before { content: "✓ "; color: #2d8a3e; font-weight: bold; }
+  .col.bad li::before { content: "✗ "; color: #c1502e; font-weight: bold; }
+  .col.local li::before { content: "⚡ "; color: #c1502e; }
+  .col.cloud li::before { content: "☁ "; color: #2a6cb8; }
+  .phases {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 16px;
+    margin-top: 24px;
+  }
+  .phase {
+    background: #f8f4e8;
+    border: 1px solid #ddd2b8;
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .phase h4 {
+    font-size: 13px;
+    text-transform: uppercase;
+    color: #c1502e;
+    margin-bottom: 10px;
+  }
+  .phase ul { list-style: none; font-size: 13px; }
+  .phase li { padding: 4px 0; }
+  .phase li::before { content: "□ "; color: #888; }
+  .journey {
+    margin-top: 24px;
+    background: #fff8e8;
+    border-left: 4px solid #c1502e;
+    padding: 16px 24px;
+    border-radius: 4px;
+  }
+  .journey h3 { font-size: 14px; text-transform: uppercase; margin-bottom: 12px; color: #c1502e; }
+  .journey ol { padding-left: 24px; font-size: 14px; }
+  .journey li { padding: 4px 0; }
+  .journey li b { color: #c1502e; }
+</style>
+</head>
+<body>
+
+<h1>SwingLab / CourtIQ — Architecture Whiteboards</h1>
+<p class="subtitle">Where we are today, and where we're heading. April 2026.</p>
+
+<!-- ============================================================ -->
+<!-- WHITEBOARD 1 -->
+<!-- ============================================================ -->
+<div class="board">
+  <h2>Whiteboard 1 — What We Have Today</h2>
+  <p class="meta">Cloud-first pipeline, web-shareable gallery, basic iOS app</p>
+
+  <div class="mermaid">
+flowchart TB
+    classDef phone fill:#fde9e0,stroke:#c1502e,stroke-width:2px,color:#1a1a1a
+    classDef cloud fill:#dceaf7,stroke:#2a6cb8,stroke-width:2px,color:#1a1a1a
+    classDef gpu fill:#e0f0e0,stroke:#2d8a3e,stroke-width:2px,color:#1a1a1a
+    classDef edge fill:#fff4cc,stroke:#c19a2e,stroke-width:2px,color:#1a1a1a
+
+    iPhone["iPhone 16 Pro<br/>SwingLab App<br/>(WebView + camera)"]:::phone
+    iCloud["iCloud Photos<br/>240fps slo-mo"]:::cloud
+    Watch["Hetzner Watcher<br/>polls iCloud"]:::cloud
+    Coord["Coordinator<br/>FastAPI job queue"]:::cloud
+    GPU["tmassena RTX 4080<br/>(andrew-pc fallback)"]:::gpu
+    Pipeline["Pipeline:<br/>preprocess → poses<br/>→ shots → biomech<br/>→ Opus 4.7 coaching<br/>→ exports + composites"]:::gpu
+    R2["Cloudflare R2<br/>tennis-videos bucket"]:::edge
+    Worker["Cloudflare Worker<br/>tennis.playfullife.com"]:::edge
+    Gallery["Public Gallery Web<br/>sessions, coach modal,<br/>filmstrips, pro compare"]:::edge
+
+    iPhone -->|record| iCloud
+    iCloud --> Watch
+    Watch --> Coord
+    Coord -->|HTTP poll| GPU
+    GPU --> Pipeline
+    Pipeline -->|upload| R2
+    R2 --> Worker
+    Worker --> Gallery
+    iPhone -->|view| Gallery
+  </div>
+
+  <div class="columns">
+    <div class="col good">
+      <h3>Strengths</h3>
+      <ul>
+        <li>240fps slo-mo capture (high fidelity)</li>
+        <li>3D camera-invariant biomech grades</li>
+        <li>Claude Opus 4.7 coaching summaries</li>
+        <li>Web-shareable links (any device)</li>
+        <li>96.5% F1 shot detection</li>
+        <li>Self-healing iCloud auth</li>
+        <li>Pro comparison filmstrips</li>
+        <li>Cheap hosting (R2, no egress)</li>
+      </ul>
+    </div>
+    <div class="col bad">
+      <h3>Gaps</h3>
+      <ul>
+        <li>Coaching takes 5–15 min after recording</li>
+        <li>No instant feedback during practice</li>
+        <li>Single-user (no friend feed)</li>
+        <li>No history / progression view</li>
+        <li>No remote coach workflow</li>
+        <li>Cloud-dependent (no offline mode)</li>
+        <li>Sharing limited to "send link"</li>
+        <li>No social features (likes, comments)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- WHITEBOARD 2 -->
+<!-- ============================================================ -->
+<div class="board">
+  <h2>Whiteboard 2 — Where We Want to Go</h2>
+  <p class="meta">Local LLM for instant feedback + cloud for sharing/history/social</p>
+
+  <div class="mermaid">
+flowchart TB
+    classDef local fill:#fde9e0,stroke:#c1502e,stroke-width:2px,color:#1a1a1a
+    classDef cloud fill:#dceaf7,stroke:#2a6cb8,stroke-width:2px,color:#1a1a1a
+    classDef new fill:#e0f0e0,stroke:#2d8a3e,stroke-width:2px,color:#1a1a1a
+
+    subgraph Phone["📱 iPhone 18 Pro (A20, 12GB, ~50 TOPS)"]
+        Live["LIVE PRACTICE MODE<br/>AR pose overlay<br/>real-time A–F grade<br/>shot count"]:::local
+        Instant["INSTANT REVIEW<br/>filmstrip + grade<br/>quick fix tip<br/>⚡ < 3 sec"]:::local
+        LLM["ON-DEVICE LLM<br/>Qwen 2.5 7B (4-bit MLX)<br/>~2GB on disk"]:::local
+        Pose["Apple Vision pose<br/>(existing)"]:::local
+        Shot["ONNX shot detection<br/>(existing 17KB)"]:::local
+    end
+
+    subgraph CloudOld["☁️ Existing Cloud (unchanged)"]
+        OldPipe["GPU pipeline<br/>3D biomech + Opus 4.7<br/>deep coaching"]:::cloud
+        R2Old["R2 storage<br/>+ Cloudflare Worker"]:::cloud
+    end
+
+    subgraph CloudNew["✨ New Social Layer"]
+        Users["Cloudflare D1<br/>users, follows,<br/>comments, sessions"]:::new
+        Push["Push notifications<br/>(APNs)<br/>'Coach replied'<br/>'Friend posted PR'"]:::new
+        CoachMode["Coach inbox<br/>async voice memos<br/>1:N student feedback"]:::new
+        Feed["Friend feed<br/>history + PRs<br/>streaks + heatmaps"]:::new
+    end
+
+    Pose --> Shot
+    Shot --> LLM
+    LLM --> Live
+    LLM --> Instant
+    Phone -.->|background sync| OldPipe
+    OldPipe --> R2Old
+    R2Old --> Users
+    Users --> Feed
+    Users --> CoachMode
+    Feed --> Push
+    CoachMode --> Push
+    Push --> Phone
+  </div>
+
+  <div class="columns">
+    <div class="col local">
+      <h3>Local for SPEED</h3>
+      <ul>
+        <li>Live AR coaching during play</li>
+        <li>Instant per-shot grade in 2s</li>
+        <li>Quick-fix tip between points</li>
+        <li>Works offline at any court</li>
+        <li>Zero per-shot API cost</li>
+        <li>Voice synth feedback ("Bend knees more")</li>
+      </ul>
+    </div>
+    <div class="col cloud">
+      <h3>Cloud for VALUE</h3>
+      <ul>
+        <li>Deep biomech analysis (Opus quality)</li>
+        <li>Pro comparison library</li>
+        <li>Permanent shareable URLs</li>
+        <li>Cross-device history sync</li>
+        <li>Friend feed + reactions</li>
+        <li>Coach-student feedback loop</li>
+        <li>Long-term progression graphs</li>
+        <li>Backups + DR</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="journey">
+    <h3>Future User Journey</h3>
+    <ol>
+      <li><b>Practice:</b> Live AR coach on phone, A–F grade per shot in 2 seconds</li>
+      <li><b>End of session:</b> Auto-uploads to cloud while you walk to your car</li>
+      <li><b>In car:</b> Phone shows summary "32 BH, avg knee 118° (PR!)"</li>
+      <li><b>10 min later:</b> Deep cloud coaching ready, share to friends</li>
+      <li><b>Next day:</b> Coach replied with voice memo on shot #14</li>
+      <li><b>End of week:</b> Progression graph shows knee bend +8° over 2 weeks</li>
+    </ol>
+  </div>
+
+  <div class="phases">
+    <div class="phase">
+      <h4>Phase 1 — Q2</h4>
+      <ul>
+        <li>Bundle Qwen 2.5 7B (MLX 4-bit)</li>
+        <li>Wire pose → shot → LLM</li>
+        <li>Live Practice Mode in app</li>
+        <li>Voice memo feedback</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <h4>Phase 2 — Q3</h4>
+      <ul>
+        <li>Sign in with Apple</li>
+        <li>Cloudflare D1 schema</li>
+        <li>Per-user gallery</li>
+        <li>History + PRs + streaks</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <h4>Phase 3 — Q4</h4>
+      <ul>
+        <li>Friend follows</li>
+        <li>Friend feed</li>
+        <li>Reactions + comments</li>
+        <li>Auto-share toggles</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <h4>Phase 4 — 2027</h4>
+      <ul>
+        <li>Coach role + invite</li>
+        <li>Coach inbox</li>
+        <li>Async voice memos</li>
+        <li>Subscription billing</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    themeVariables: { fontFamily: '-apple-system, system-ui, sans-serif' }
+  });
+</script>
+
+</body>
+</html>

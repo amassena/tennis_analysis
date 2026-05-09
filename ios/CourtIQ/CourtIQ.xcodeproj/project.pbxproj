@@ -18,6 +18,7 @@
 		9E7239CE8B982DFC6FC622EA /* TennisSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */; };
 		B635E0582ACE1E1C04F1ABDC /* SessionRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81919A058C6F2DB4692A72AB /* SessionRecording.swift */; };
 		BFD4823B905590FF0C40BF3D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB29C472F8C615C04C04C14C /* ContentView.swift */; };
+		C5910D796116F0640FEAF60E /* R2Uploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C4D1064E2874CB7189C8F6 /* R2Uploader.swift */; };
 		D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E18FC4BF081E8B9FDCC00 /* CourtIQApp.swift */; };
 		EAE3441A1E3C5D3209248C9C /* ShotClassifier.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 74B6920863227888EF49C2A4 /* ShotClassifier.onnx */; };
 /* End PBXBuildFile section */
@@ -29,14 +30,15 @@
 		59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewWrapper.swift; sourceTree = "<group>"; };
 		5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionReviewView.swift; sourceTree = "<group>"; };
 		65F33FB7B573676A5E3CDE8A /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
-		74B6920863227888EF49C2A4 /* ShotClassifier.onnx */ = {isa = PBXFileReference; path = ShotClassifier.onnx; sourceTree = "<group>"; };
-		80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */ = {isa = PBXFileReference; path = ShotClassifier.onnx.data; sourceTree = "<group>"; };
+		74B6920863227888EF49C2A4 /* ShotClassifier.onnx */ = {isa = PBXFileReference; lastKnownFileType = file; path = ShotClassifier.onnx; sourceTree = "<group>"; };
+		80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = ShotClassifier.onnx.data; sourceTree = "<group>"; };
 		80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TennisSession.swift; sourceTree = "<group>"; };
 		81919A058C6F2DB4692A72AB /* SessionRecording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecording.swift; sourceTree = "<group>"; };
 		9DA888E123D9FAD2EB645A25 /* ShotDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotDetector.swift; sourceTree = "<group>"; };
 		B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseProcessor.swift; sourceTree = "<group>"; };
-		CC65490CBBD6E27B41C0DABF /* CourtIQ.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CourtIQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CC65490CBBD6E27B41C0DABF /* SwingLab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwingLab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB29C472F8C615C04C04C14C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F6C4D1064E2874CB7189C8F6 /* R2Uploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = R2Uploader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -70,7 +72,7 @@
 		4FC4CC78A732C08DCF4D35DB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CC65490CBBD6E27B41C0DABF /* CourtIQ.app */,
+				CC65490CBBD6E27B41C0DABF /* SwingLab.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -78,6 +80,7 @@
 		550CA001667316F273200946 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				F6C4D1064E2874CB7189C8F6 /* R2Uploader.swift */,
 				81919A058C6F2DB4692A72AB /* SessionRecording.swift */,
 				74B6920863227888EF49C2A4 /* ShotClassifier.onnx */,
 				80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */,
@@ -142,7 +145,7 @@
 			packageProductDependencies = (
 			);
 			productName = CourtIQ;
-			productReference = CC65490CBBD6E27B41C0DABF /* CourtIQ.app */;
+			productReference = CC65490CBBD6E27B41C0DABF /* SwingLab.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -154,6 +157,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					8352B5DADC438FA03A8A38D1 = {
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 55EF04DC6C3302A6A96EE4CA /* Build configuration list for PBXProject "CourtIQ" */;
@@ -198,6 +204,7 @@
 				D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */,
 				2E314A34A9BE3AAA9B42C968 /* PoseOverlayView.swift in Sources */,
 				461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */,
+				C5910D796116F0640FEAF60E /* R2Uploader.swift in Sources */,
 				B635E0582ACE1E1C04F1ABDC /* SessionRecording.swift in Sources */,
 				7D0C2D92E206699A11729D82 /* SessionReviewView.swift in Sources */,
 				819E8575E6E4EA07E17BEA16 /* ShotDetector.swift in Sources */,
@@ -214,10 +221,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwingLab;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SwingLab uses the camera to analyze your tennis form in real time.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SwingLab uses the microphone to detect ball-strike sounds for shot timing.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "SwingLab saves recordings to your Photos library for cloud processing.";
 				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -292,10 +302,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwingLab;
 				INFOPLIST_KEY_NSCameraUsageDescription = "SwingLab uses the camera to analyze your tennis form in real time.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SwingLab uses the microphone to detect ball-strike sounds for shot timing.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "SwingLab saves recordings to your Photos library for cloud processing.";
 				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -1,0 +1,608 @@
+{
+  "video": "IMG_6665",
+  "total_shots": 52,
+  "shots_with_speed": 43,
+  "avg_speed_mph": 65.9,
+  "max_speed_mph": 153.5,
+  "shots_with_landing": 19,
+  "in_count": 14,
+  "out_count": 5,
+  "shots": [
+    {
+      "shot_idx": 0,
+      "frame": 1671,
+      "timestamp": 27.85,
+      "shot_type": "forehand",
+      "ball_speed_mph": 81.4,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 1,
+      "frame": 1839,
+      "timestamp": 30.65,
+      "shot_type": "backhand",
+      "ball_speed_mph": 42.1,
+      "landing": {
+        "x": -2.49,
+        "y": 5.95
+      },
+      "line_call": "IN",
+      "margin_meters": 1.62,
+      "shot_depth": 5.95
+    },
+    {
+      "shot_idx": 2,
+      "frame": 5151,
+      "timestamp": 85.85,
+      "shot_type": "backhand",
+      "ball_speed_mph": 26.1,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 3,
+      "frame": 5355,
+      "timestamp": 89.25,
+      "shot_type": "forehand",
+      "ball_speed_mph": 46.2,
+      "landing": {
+        "x": 5.02,
+        "y": 3.47
+      },
+      "line_call": "OUT",
+      "margin_meters": -0.907,
+      "shot_depth": 3.47
+    },
+    {
+      "shot_idx": 4,
+      "frame": 6891,
+      "timestamp": 114.85,
+      "shot_type": "forehand",
+      "ball_speed_mph": 67.4,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 5,
+      "frame": 8433,
+      "timestamp": 140.55,
+      "shot_type": "forehand",
+      "ball_speed_mph": 117.7,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 6,
+      "frame": 8601,
+      "timestamp": 143.35,
+      "shot_type": "backhand",
+      "ball_speed_mph": 41.5,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 7,
+      "frame": 9045,
+      "timestamp": 150.75,
+      "shot_type": "backhand",
+      "ball_speed_mph": null,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 8,
+      "frame": 10953,
+      "timestamp": 182.55,
+      "shot_type": "forehand",
+      "ball_speed_mph": 37.0,
+      "landing": {
+        "x": -0.33,
+        "y": -0.31
+      },
+      "line_call": "IN",
+      "margin_meters": 3.781,
+      "shot_depth": 0.31
+    },
+    {
+      "shot_idx": 9,
+      "frame": 13647,
+      "timestamp": 227.45,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": {
+        "x": 0.73,
+        "y": 14.42
+      },
+      "line_call": "OUT",
+      "margin_meters": -2.536,
+      "shot_depth": 14.42
+    },
+    {
+      "shot_idx": 10,
+      "frame": 13833,
+      "timestamp": 230.55,
+      "shot_type": "forehand",
+      "ball_speed_mph": 117.8,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 11,
+      "frame": 16023,
+      "timestamp": 267.05,
+      "shot_type": "forehand",
+      "ball_speed_mph": 22.5,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 12,
+      "frame": 16437,
+      "timestamp": 273.95,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 13,
+      "frame": 16593,
+      "timestamp": 276.55,
+      "shot_type": "forehand",
+      "ball_speed_mph": 88.9,
+      "landing": {
+        "x": 2.15,
+        "y": 10.37
+      },
+      "line_call": "IN",
+      "margin_meters": 1.517,
+      "shot_depth": 10.37
+    },
+    {
+      "shot_idx": 14,
+      "frame": 18045,
+      "timestamp": 300.75,
+      "shot_type": "backhand",
+      "ball_speed_mph": 30.9,
+      "landing": {
+        "x": 0.32,
+        "y": 10.99
+      },
+      "line_call": "IN",
+      "margin_meters": 0.896,
+      "shot_depth": 10.99
+    },
+    {
+      "shot_idx": 15,
+      "frame": 18615,
+      "timestamp": 310.25,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": {
+        "x": 1.66,
+        "y": 6.23
+      },
+      "line_call": "IN",
+      "margin_meters": 2.458,
+      "shot_depth": 6.23
+    },
+    {
+      "shot_idx": 16,
+      "frame": 18777,
+      "timestamp": 312.95,
+      "shot_type": "forehand",
+      "ball_speed_mph": 91.2,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 17,
+      "frame": 19095,
+      "timestamp": 318.25,
+      "shot_type": "forehand",
+      "ball_speed_mph": 21.1,
+      "landing": {
+        "x": -2.77,
+        "y": -2.92
+      },
+      "line_call": "IN",
+      "margin_meters": 1.341,
+      "shot_depth": 2.92
+    },
+    {
+      "shot_idx": 18,
+      "frame": 20049,
+      "timestamp": 334.15,
+      "shot_type": "backhand",
+      "ball_speed_mph": 49.2,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 19,
+      "frame": 23139,
+      "timestamp": 385.65,
+      "shot_type": "serve",
+      "ball_speed_mph": 66.0,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 20,
+      "frame": 23277,
+      "timestamp": 387.95,
+      "shot_type": "forehand",
+      "ball_speed_mph": 146.8,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 21,
+      "frame": 23457,
+      "timestamp": 390.95,
+      "shot_type": "backhand",
+      "ball_speed_mph": null,
+      "landing": {
+        "x": -2.11,
+        "y": -4.36
+      },
+      "line_call": "IN",
+      "margin_meters": 2.008,
+      "shot_depth": 4.36
+    },
+    {
+      "shot_idx": 22,
+      "frame": 24147,
+      "timestamp": 402.45,
+      "shot_type": "serve",
+      "ball_speed_mph": 58.3,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 23,
+      "frame": 24531,
+      "timestamp": 408.85,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": {
+        "x": 2.52,
+        "y": 5.0
+      },
+      "line_call": "IN",
+      "margin_meters": 1.591,
+      "shot_depth": 5.0
+    },
+    {
+      "shot_idx": 24,
+      "frame": 26865,
+      "timestamp": 447.75,
+      "shot_type": "serve",
+      "ball_speed_mph": 75.5,
+      "landing": {
+        "x": 0.59,
+        "y": 21.87
+      },
+      "line_call": "OUT",
+      "margin_meters": -9.982,
+      "shot_depth": 21.87
+    },
+    {
+      "shot_idx": 25,
+      "frame": 27363,
+      "timestamp": 456.05,
+      "shot_type": "serve",
+      "ball_speed_mph": 50.0,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 26,
+      "frame": 27525,
+      "timestamp": 458.75,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": {
+        "x": 0.9,
+        "y": 20.97
+      },
+      "line_call": "OUT",
+      "margin_meters": -9.083,
+      "shot_depth": 20.97
+    },
+    {
+      "shot_idx": 27,
+      "frame": 28995,
+      "timestamp": 483.25,
+      "shot_type": "serve",
+      "ball_speed_mph": 56.8,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 28,
+      "frame": 29145,
+      "timestamp": 485.75,
+      "shot_type": "forehand",
+      "ball_speed_mph": 81.4,
+      "landing": {
+        "x": -2.09,
+        "y": 0.04
+      },
+      "line_call": "IN",
+      "margin_meters": 2.027,
+      "shot_depth": 0.04
+    },
+    {
+      "shot_idx": 29,
+      "frame": 30585,
+      "timestamp": 509.75,
+      "shot_type": "serve",
+      "ball_speed_mph": 67.1,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 30,
+      "frame": 30741,
+      "timestamp": 512.35,
+      "shot_type": "forehand",
+      "ball_speed_mph": 94.0,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 31,
+      "frame": 32013,
+      "timestamp": 533.55,
+      "shot_type": "serve",
+      "ball_speed_mph": 45.3,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 32,
+      "frame": 33531,
+      "timestamp": 558.85,
+      "shot_type": "serve",
+      "ball_speed_mph": 119.6,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 33,
+      "frame": 34383,
+      "timestamp": 573.05,
+      "shot_type": "serve",
+      "ball_speed_mph": 66.4,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 34,
+      "frame": 34539,
+      "timestamp": 575.65,
+      "shot_type": "forehand",
+      "ball_speed_mph": 72.3,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 35,
+      "frame": 35463,
+      "timestamp": 591.05,
+      "shot_type": "serve",
+      "ball_speed_mph": 69.7,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 36,
+      "frame": 35931,
+      "timestamp": 598.85,
+      "shot_type": "serve",
+      "ball_speed_mph": 73.9,
+      "landing": {
+        "x": -2.0,
+        "y": 19.81
+      },
+      "line_call": "OUT",
+      "margin_meters": -7.925,
+      "shot_depth": 19.81
+    },
+    {
+      "shot_idx": 37,
+      "frame": 36093,
+      "timestamp": 601.55,
+      "shot_type": "forehand",
+      "ball_speed_mph": 45.9,
+      "landing": {
+        "x": -1.46,
+        "y": 3.81
+      },
+      "line_call": "IN",
+      "margin_meters": 2.657,
+      "shot_depth": 3.81
+    },
+    {
+      "shot_idx": 38,
+      "frame": 37803,
+      "timestamp": 630.05,
+      "shot_type": "serve",
+      "ball_speed_mph": 101.9,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 39,
+      "frame": 37947,
+      "timestamp": 632.45,
+      "shot_type": "forehand",
+      "ball_speed_mph": 58.8,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 40,
+      "frame": 38109,
+      "timestamp": 635.15,
+      "shot_type": "forehand",
+      "ball_speed_mph": 102.5,
+      "landing": {
+        "x": 2.89,
+        "y": 8.01
+      },
+      "line_call": "IN",
+      "margin_meters": 1.224,
+      "shot_depth": 8.01
+    },
+    {
+      "shot_idx": 41,
+      "frame": 38265,
+      "timestamp": 637.75,
+      "shot_type": "backhand",
+      "ball_speed_mph": 153.5,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 42,
+      "frame": 39657,
+      "timestamp": 660.95,
+      "shot_type": "serve",
+      "ball_speed_mph": 28.3,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 43,
+      "frame": 40275,
+      "timestamp": 671.25,
+      "shot_type": "serve",
+      "ball_speed_mph": 44.2,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 44,
+      "frame": 40983,
+      "timestamp": 683.05,
+      "shot_type": "serve",
+      "ball_speed_mph": 45.3,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 45,
+      "frame": 41157,
+      "timestamp": 685.95,
+      "shot_type": "forehand",
+      "ball_speed_mph": 35.1,
+      "landing": {
+        "x": -1.44,
+        "y": 4.9
+      },
+      "line_call": "IN",
+      "margin_meters": 2.671,
+      "shot_depth": 4.9
+    },
+    {
+      "shot_idx": 46,
+      "frame": 41397,
+      "timestamp": 689.95,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 47,
+      "frame": 42687,
+      "timestamp": 711.45,
+      "shot_type": "serve",
+      "ball_speed_mph": 49.9,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 48,
+      "frame": 43251,
+      "timestamp": 720.85,
+      "shot_type": "serve",
+      "ball_speed_mph": 32.5,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 49,
+      "frame": 43419,
+      "timestamp": 723.65,
+      "shot_type": "forehand",
+      "ball_speed_mph": null,
+      "landing": {
+        "x": 2.04,
+        "y": 8.1
+      },
+      "line_call": "IN",
+      "margin_meters": 2.078,
+      "shot_depth": 8.1
+    },
+    {
+      "shot_idx": 50,
+      "frame": 45291,
+      "timestamp": 754.85,
+      "shot_type": "serve",
+      "ball_speed_mph": 43.8,
+      "landing": null,
+      "line_call": null,
+      "margin_meters": null
+    },
+    {
+      "shot_idx": 51,
+      "frame": 45453,
+      "timestamp": 757.55,
+      "shot_type": "backhand",
+      "ball_speed_mph": 68.0,
+      "landing": {
+        "x": -2.25,
+        "y": 2.18
+      },
+      "line_call": "IN",
+      "margin_meters": 1.87,
+      "shot_depth": 2.18
+    }
+  ]
+}
