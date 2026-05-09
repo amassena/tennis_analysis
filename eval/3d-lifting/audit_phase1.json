@@ -1,0 +1,5125 @@
+{
+  "videos": [
+    {
+      "video": "IMG_0996",
+      "fps": 60,
+      "dominant_hand": "right",
+      "has_world_landmarks": false,
+      "shots_audited": [
+        {
+          "frame": 2037,
+          "timestamp": 33.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': 167, 'wrist': 150}"
+          ],
+          "knee_angle_at_contact": 141.4,
+          "trunk_rotation_at_contact": -25.7,
+          "arm_extension_at_contact": 103.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": 167,
+            "wrist": 150
+          },
+          "knee_bend_depth": 140.7,
+          "peak_swing_speed": 6.885,
+          "contact_swing_speed": 0.789
+        },
+        {
+          "frame": 2229,
+          "timestamp": 37.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 567, 'elbow': 567, 'wrist': 500}"
+          ],
+          "knee_angle_at_contact": 144.5,
+          "trunk_rotation_at_contact": -15.0,
+          "arm_extension_at_contact": 111.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 567,
+            "elbow": 567,
+            "wrist": 500
+          },
+          "knee_bend_depth": 88.5,
+          "peak_swing_speed": 8.526,
+          "contact_swing_speed": 1.649
+        },
+        {
+          "frame": 3525,
+          "timestamp": 58.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 317, 'elbow': 167, 'wrist': 17}"
+          ],
+          "knee_angle_at_contact": 142.9,
+          "trunk_rotation_at_contact": 3.6,
+          "arm_extension_at_contact": 115.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 317,
+            "elbow": 167,
+            "wrist": 17
+          },
+          "knee_bend_depth": 135.7,
+          "peak_swing_speed": 1.289,
+          "contact_swing_speed": 0.793
+        },
+        {
+          "frame": 3645,
+          "timestamp": 60.75,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 583, 'elbow': 567, 'wrist': 583}"
+          ],
+          "knee_angle_at_contact": 143.4,
+          "trunk_rotation_at_contact": 9.6,
+          "arm_extension_at_contact": 92.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 583,
+            "elbow": 567,
+            "wrist": 583
+          },
+          "knee_bend_depth": 138.7,
+          "peak_swing_speed": 7.223,
+          "contact_swing_speed": 2.003
+        },
+        {
+          "frame": 3866,
+          "timestamp": 64.435,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': -133, 'wrist': -200}"
+          ],
+          "knee_angle_at_contact": 145.8,
+          "trunk_rotation_at_contact": -66.5,
+          "arm_extension_at_contact": 146.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": -133,
+            "wrist": -200
+          },
+          "knee_bend_depth": 137.6,
+          "peak_swing_speed": 5.414,
+          "contact_swing_speed": 2.135
+        },
+        {
+          "frame": 4065,
+          "timestamp": 67.75,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 67, 'elbow': 67, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 123.2,
+          "trunk_rotation_at_contact": 18.1,
+          "arm_extension_at_contact": 83.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 67,
+            "elbow": 67,
+            "wrist": -50
+          },
+          "knee_bend_depth": 111.3,
+          "peak_swing_speed": 6.221,
+          "contact_swing_speed": 0.539
+        },
+        {
+          "frame": 4185,
+          "timestamp": 69.75,
+          "shot_type": "backhand",
+          "flags": [
+            "trunk_extreme:335.0",
+            "chain_reversed:{'hip': 0, 'shoulder': 17, 'elbow': 550, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 120.2,
+          "trunk_rotation_at_contact": 335.0,
+          "arm_extension_at_contact": 128.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": 550,
+            "wrist": 0
+          },
+          "knee_bend_depth": 118.1,
+          "peak_swing_speed": 1.065,
+          "contact_swing_speed": 0.148
+        },
+        {
+          "frame": 4480,
+          "timestamp": 74.675,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 550, 'wrist': 467}"
+          ],
+          "knee_angle_at_contact": 135.7,
+          "trunk_rotation_at_contact": -14.0,
+          "arm_extension_at_contact": 101.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 550,
+            "wrist": 467
+          },
+          "knee_bend_depth": 120.9,
+          "peak_swing_speed": 10.784,
+          "contact_swing_speed": 5.364
+        },
+        {
+          "frame": 5037,
+          "timestamp": 83.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 183, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 168.8,
+          "trunk_rotation_at_contact": -28.2,
+          "arm_extension_at_contact": 119.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 183,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 151.5,
+          "peak_swing_speed": 13.068,
+          "contact_swing_speed": 0.769
+        },
+        {
+          "frame": 5373,
+          "timestamp": 89.55,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 154.3,
+          "trunk_rotation_at_contact": -1.8,
+          "arm_extension_at_contact": 92.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 417,
+            "elbow": 417,
+            "wrist": 417
+          },
+          "knee_bend_depth": 148.3,
+          "peak_swing_speed": 8.952,
+          "contact_swing_speed": 1.848
+        },
+        {
+          "frame": 5554,
+          "timestamp": 92.571,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 121.9,
+          "trunk_rotation_at_contact": 1.6,
+          "arm_extension_at_contact": 111.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 97.7,
+          "peak_swing_speed": 9.076,
+          "contact_swing_speed": 4.305
+        },
+        {
+          "frame": 6389,
+          "timestamp": 106.477,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': 217, 'wrist': 117}"
+          ],
+          "knee_angle_at_contact": 154.7,
+          "trunk_rotation_at_contact": 13.5,
+          "arm_extension_at_contact": 102.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": 217,
+            "wrist": 117
+          },
+          "knee_bend_depth": 121.4,
+          "peak_swing_speed": 5.701,
+          "contact_swing_speed": 0.833
+        },
+        {
+          "frame": 6921,
+          "timestamp": 115.35,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 138.1,
+          "trunk_rotation_at_contact": 13.4,
+          "arm_extension_at_contact": 113.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 600,
+            "elbow": 617,
+            "wrist": 617
+          },
+          "knee_bend_depth": 137.9,
+          "peak_swing_speed": 4.493,
+          "contact_swing_speed": 0.628
+        },
+        {
+          "frame": 7125,
+          "timestamp": 118.75,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 128.0,
+          "trunk_rotation_at_contact": 23.4,
+          "arm_extension_at_contact": 81.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": 17,
+            "wrist": 17
+          },
+          "knee_bend_depth": 124.7,
+          "peak_swing_speed": 6.285,
+          "contact_swing_speed": 0.735
+        },
+        {
+          "frame": 7689,
+          "timestamp": 128.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 217, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 141.1,
+          "trunk_rotation_at_contact": -14.1,
+          "arm_extension_at_contact": 131.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 217,
+            "wrist": -17
+          },
+          "knee_bend_depth": 135.6,
+          "peak_swing_speed": 1.564,
+          "contact_swing_speed": 0.414
+        },
+        {
+          "frame": 7797,
+          "timestamp": 129.95,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 159.7,
+          "trunk_rotation_at_contact": -32.1,
+          "arm_extension_at_contact": 107.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 117,
+            "elbow": 483,
+            "wrist": 483
+          },
+          "knee_bend_depth": 154.9,
+          "peak_swing_speed": 6.355,
+          "contact_swing_speed": 0.922
+        },
+        {
+          "frame": 7989,
+          "timestamp": 133.15,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 132.7,
+          "trunk_rotation_at_contact": 18.6,
+          "arm_extension_at_contact": 102.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 33,
+            "elbow": 33,
+            "wrist": 33
+          },
+          "knee_bend_depth": 132.1,
+          "peak_swing_speed": 6.34,
+          "contact_swing_speed": 0.689
+        },
+        {
+          "frame": 8406,
+          "timestamp": 140.102,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 149.4,
+          "trunk_rotation_at_contact": 15.5,
+          "arm_extension_at_contact": 68.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 533,
+            "elbow": 533,
+            "wrist": 533
+          },
+          "knee_bend_depth": 118.9,
+          "peak_swing_speed": 4.336,
+          "contact_swing_speed": 0.44
+        },
+        {
+          "frame": 8817,
+          "timestamp": 146.95,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:118.9",
+            "trunk_extreme:332.4",
+            "chain_reversed:{'hip': 0, 'shoulder': 517, 'elbow': 633, 'wrist': 500}"
+          ],
+          "knee_angle_at_contact": 118.9,
+          "trunk_rotation_at_contact": 332.4,
+          "arm_extension_at_contact": 121.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 517,
+            "elbow": 633,
+            "wrist": 500
+          },
+          "knee_bend_depth": 116.6,
+          "peak_swing_speed": 1.731,
+          "contact_swing_speed": 1.578
+        },
+        {
+          "frame": 8973,
+          "timestamp": 149.55,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:105.6",
+            "trunk_extreme:324.9",
+            "chain_reversed:{'hip': 0, 'shoulder': 550, 'elbow': 150, 'wrist': 517}"
+          ],
+          "knee_angle_at_contact": 105.6,
+          "trunk_rotation_at_contact": 324.9,
+          "arm_extension_at_contact": 128.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 550,
+            "elbow": 150,
+            "wrist": 517
+          },
+          "knee_bend_depth": 105.5,
+          "peak_swing_speed": 2.219,
+          "contact_swing_speed": 1.082
+        },
+        {
+          "frame": 9080,
+          "timestamp": 151.334,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -217, 'wrist': -217}"
+          ],
+          "knee_angle_at_contact": 128.6,
+          "trunk_rotation_at_contact": 7.7,
+          "arm_extension_at_contact": 111.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -217,
+            "wrist": -217
+          },
+          "knee_bend_depth": 117.9,
+          "peak_swing_speed": 4.255,
+          "contact_swing_speed": 0.542
+        },
+        {
+          "frame": 9736,
+          "timestamp": 162.27,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:96.7",
+            "chain_reversed:{'hip': 0, 'shoulder': 100, 'elbow': 100, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 96.7,
+          "trunk_rotation_at_contact": 12.2,
+          "arm_extension_at_contact": 86.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 100,
+            "elbow": 100,
+            "wrist": -67
+          },
+          "knee_bend_depth": 96.7,
+          "peak_swing_speed": 6.322,
+          "contact_swing_speed": 2.08
+        },
+        {
+          "frame": 10089,
+          "timestamp": 168.15,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 500, 'elbow': 500, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 152.0,
+          "trunk_rotation_at_contact": 8.0,
+          "arm_extension_at_contact": 107.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 500,
+            "elbow": 500,
+            "wrist": 0
+          },
+          "knee_bend_depth": 149.2,
+          "peak_swing_speed": 5.985,
+          "contact_swing_speed": 0.747
+        },
+        {
+          "frame": 10437,
+          "timestamp": 173.95,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 550, 'elbow': 550, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 142.7,
+          "trunk_rotation_at_contact": 14.9,
+          "arm_extension_at_contact": 91.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 550,
+            "elbow": 550,
+            "wrist": -17
+          },
+          "knee_bend_depth": 120.2,
+          "peak_swing_speed": 5.627,
+          "contact_swing_speed": 0.65
+        },
+        {
+          "frame": 10634,
+          "timestamp": 177.229,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 128.4,
+          "trunk_rotation_at_contact": 19.8,
+          "arm_extension_at_contact": 93.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 33,
+            "wrist": 33
+          },
+          "knee_bend_depth": 126.7,
+          "peak_swing_speed": 5.495,
+          "contact_swing_speed": 0.137
+        },
+        {
+          "frame": 10826,
+          "timestamp": 180.439,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -33, 'wrist': 67}"
+          ],
+          "knee_angle_at_contact": 152.7,
+          "trunk_rotation_at_contact": 21.2,
+          "arm_extension_at_contact": 66.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -33,
+            "wrist": 67
+          },
+          "knee_bend_depth": 101.7,
+          "peak_swing_speed": 6.779,
+          "contact_swing_speed": 0.851
+        },
+        {
+          "frame": 11824,
+          "timestamp": 197.07,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -350, 'elbow': -133, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 163.1,
+          "trunk_rotation_at_contact": 9.3,
+          "arm_extension_at_contact": 127.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -350,
+            "elbow": -133,
+            "wrist": -133
+          },
+          "knee_bend_depth": 153.6,
+          "peak_swing_speed": 5.823,
+          "contact_swing_speed": 3.06
+        },
+        {
+          "frame": 11997,
+          "timestamp": 199.95,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:119.2",
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -283, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 119.2,
+          "trunk_rotation_at_contact": 13.3,
+          "arm_extension_at_contact": 79.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -283,
+            "wrist": -33
+          },
+          "knee_bend_depth": 115.7,
+          "peak_swing_speed": 6.628,
+          "contact_swing_speed": 1.464
+        },
+        {
+          "frame": 12175,
+          "timestamp": 202.911,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 300, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 153.7,
+          "trunk_rotation_at_contact": 11.8,
+          "arm_extension_at_contact": 98.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 300,
+            "wrist": 0
+          },
+          "knee_bend_depth": 99.0,
+          "peak_swing_speed": 4.834,
+          "contact_swing_speed": 0.689
+        },
+        {
+          "frame": 12633,
+          "timestamp": 210.55,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -50, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 142.2,
+          "trunk_rotation_at_contact": 20.3,
+          "arm_extension_at_contact": 97.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -50,
+            "wrist": -50
+          },
+          "knee_bend_depth": 140.3,
+          "peak_swing_speed": 6.498,
+          "contact_swing_speed": 2.454
+        },
+        {
+          "frame": 12781,
+          "timestamp": 213.023,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 150, 'elbow': 150, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 134.8,
+          "trunk_rotation_at_contact": 3.1,
+          "arm_extension_at_contact": 87.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 150,
+            "elbow": 150,
+            "wrist": -17
+          },
+          "knee_bend_depth": 118.5,
+          "peak_swing_speed": 5.747,
+          "contact_swing_speed": 1.664
+        },
+        {
+          "frame": 13004,
+          "timestamp": 216.741,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -17, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 145.7,
+          "trunk_rotation_at_contact": -14.3,
+          "arm_extension_at_contact": 69.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -17,
+            "wrist": -17
+          },
+          "knee_bend_depth": 127.2,
+          "peak_swing_speed": 4.696,
+          "contact_swing_speed": 3.092
+        },
+        {
+          "frame": 13377,
+          "timestamp": 222.95,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 146.7,
+          "trunk_rotation_at_contact": 14.4,
+          "arm_extension_at_contact": 96.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 567,
+            "elbow": 567,
+            "wrist": 567
+          },
+          "knee_bend_depth": 135.8,
+          "peak_swing_speed": 6.014,
+          "contact_swing_speed": 0.659
+        },
+        {
+          "frame": 13557,
+          "timestamp": 225.95,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 483, 'elbow': 450, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 144.0,
+          "trunk_rotation_at_contact": 14.4,
+          "arm_extension_at_contact": 75.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 483,
+            "elbow": 450,
+            "wrist": -50
+          },
+          "knee_bend_depth": 104.1,
+          "peak_swing_speed": 6.51,
+          "contact_swing_speed": 1.923
+        },
+        {
+          "frame": 14577,
+          "timestamp": 242.95,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 147.6,
+          "trunk_rotation_at_contact": 14.9,
+          "arm_extension_at_contact": 81.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 617,
+            "elbow": 617,
+            "wrist": 617
+          },
+          "knee_bend_depth": 128.8,
+          "peak_swing_speed": 4.016,
+          "contact_swing_speed": 0.466
+        },
+        {
+          "frame": 14709,
+          "timestamp": 245.15,
+          "shot_type": "forehand",
+          "flags": [
+            "knee_out_of_range:116.8",
+            "trunk_extreme:327.2",
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': -83, 'wrist': -250}"
+          ],
+          "knee_angle_at_contact": 116.8,
+          "trunk_rotation_at_contact": 327.2,
+          "arm_extension_at_contact": 129.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": -83,
+            "wrist": -250
+          },
+          "knee_bend_depth": 113.7,
+          "peak_swing_speed": 2.463,
+          "contact_swing_speed": 0.629
+        },
+        {
+          "frame": 15012,
+          "timestamp": 250.207,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 300, 'elbow': 283, 'wrist': 283}"
+          ],
+          "knee_angle_at_contact": 160.1,
+          "trunk_rotation_at_contact": -3.9,
+          "arm_extension_at_contact": 132.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 300,
+            "elbow": 283,
+            "wrist": 283
+          },
+          "knee_bend_depth": 155.8,
+          "peak_swing_speed": 6.848,
+          "contact_swing_speed": 2.293
+        },
+        {
+          "frame": 15225,
+          "timestamp": 253.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 583, 'wrist': 517}"
+          ],
+          "knee_angle_at_contact": 152.1,
+          "trunk_rotation_at_contact": -26.0,
+          "arm_extension_at_contact": 118.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 583,
+            "wrist": 517
+          },
+          "knee_bend_depth": 145.6,
+          "peak_swing_speed": 10.219,
+          "contact_swing_speed": 1.108
+        },
+        {
+          "frame": 16574,
+          "timestamp": 276.229,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:112.5",
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 0, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 112.5,
+          "trunk_rotation_at_contact": 12.6,
+          "arm_extension_at_contact": 94.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": -67
+          },
+          "knee_bend_depth": 112.5,
+          "peak_swing_speed": 5.867,
+          "contact_swing_speed": 1.081
+        },
+        {
+          "frame": 16839,
+          "timestamp": 280.65,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 137.9,
+          "trunk_rotation_at_contact": 14.0,
+          "arm_extension_at_contact": 92.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 400,
+            "elbow": 400,
+            "wrist": 400
+          },
+          "knee_bend_depth": 135.7,
+          "peak_swing_speed": 9.316,
+          "contact_swing_speed": 1.78
+        }
+      ]
+    },
+    {
+      "video": "IMG_6874",
+      "fps": 60,
+      "dominant_hand": "right",
+      "has_world_landmarks": false,
+      "shots_audited": [
+        {
+          "frame": 1077,
+          "timestamp": 17.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': -217, 'wrist': -217}"
+          ],
+          "knee_angle_at_contact": 175.9,
+          "trunk_rotation_at_contact": -5.1,
+          "arm_extension_at_contact": 129.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": -217,
+            "wrist": -217
+          },
+          "knee_bend_depth": 167.7,
+          "peak_swing_speed": 7.808,
+          "contact_swing_speed": 1.376
+        },
+        {
+          "frame": 1353,
+          "timestamp": 22.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': 17, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 146.7,
+          "trunk_rotation_at_contact": 1.7,
+          "arm_extension_at_contact": 138.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": 17,
+            "wrist": 0
+          },
+          "knee_bend_depth": 138.9,
+          "peak_swing_speed": 8.349,
+          "contact_swing_speed": 3.401
+        },
+        {
+          "frame": 1557,
+          "timestamp": 25.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -350, 'elbow': 33, 'wrist': 33}"
+          ],
+          "knee_angle_at_contact": 144.6,
+          "trunk_rotation_at_contact": -10.5,
+          "arm_extension_at_contact": 133.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -350,
+            "elbow": 33,
+            "wrist": 33
+          },
+          "knee_bend_depth": 142.5,
+          "peak_swing_speed": 14.199,
+          "contact_swing_speed": 7.897
+        },
+        {
+          "frame": 1917,
+          "timestamp": 31.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -317, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 149.5,
+          "trunk_rotation_at_contact": 20.2,
+          "arm_extension_at_contact": 113.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -317,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 141.4,
+          "peak_swing_speed": 6.524,
+          "contact_swing_speed": 4.402
+        },
+        {
+          "frame": 2133,
+          "timestamp": 35.55,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:119.2",
+            "chain_reversed:{'hip': 0, 'shoulder': 17, 'elbow': 33, 'wrist': -383}"
+          ],
+          "knee_angle_at_contact": 119.2,
+          "trunk_rotation_at_contact": -25.0,
+          "arm_extension_at_contact": 152.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": 33,
+            "wrist": -383
+          },
+          "knee_bend_depth": 117.1,
+          "peak_swing_speed": 6.405,
+          "contact_swing_speed": 1.032
+        },
+        {
+          "frame": 2589,
+          "timestamp": 43.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': 50, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 154.3,
+          "trunk_rotation_at_contact": 28.2,
+          "arm_extension_at_contact": 126.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": 50,
+            "wrist": 50
+          },
+          "knee_bend_depth": 136.6,
+          "peak_swing_speed": 8.253,
+          "contact_swing_speed": 2.753
+        },
+        {
+          "frame": 3045,
+          "timestamp": 50.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -233, 'elbow': -233, 'wrist': -233}"
+          ],
+          "knee_angle_at_contact": 166.9,
+          "trunk_rotation_at_contact": 20.8,
+          "arm_extension_at_contact": 136.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -233,
+            "elbow": -233,
+            "wrist": -233
+          },
+          "knee_bend_depth": 163.5,
+          "peak_swing_speed": 12.231,
+          "contact_swing_speed": 1.182
+        },
+        {
+          "frame": 3261,
+          "timestamp": 54.35,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 160.7,
+          "trunk_rotation_at_contact": -4.7,
+          "arm_extension_at_contact": 107.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 417,
+            "elbow": 417,
+            "wrist": 417
+          },
+          "knee_bend_depth": 156.9,
+          "peak_swing_speed": 15.069,
+          "contact_swing_speed": 15.069
+        },
+        {
+          "frame": 3513,
+          "timestamp": 58.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -283, 'elbow': 33, 'wrist': 17}"
+          ],
+          "knee_angle_at_contact": 146.7,
+          "trunk_rotation_at_contact": 4.8,
+          "arm_extension_at_contact": 131.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -283,
+            "elbow": 33,
+            "wrist": 17
+          },
+          "knee_bend_depth": 143.4,
+          "peak_swing_speed": 7.48,
+          "contact_swing_speed": 4.716
+        },
+        {
+          "frame": 3729,
+          "timestamp": 62.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 0, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 164.0,
+          "trunk_rotation_at_contact": 8.2,
+          "arm_extension_at_contact": 128.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": -133
+          },
+          "knee_bend_depth": 147.1,
+          "peak_swing_speed": 7.077,
+          "contact_swing_speed": 3.467
+        },
+        {
+          "frame": 3945,
+          "timestamp": 65.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -267, 'elbow': 0, 'wrist': -367}"
+          ],
+          "knee_angle_at_contact": 165.2,
+          "trunk_rotation_at_contact": 14.8,
+          "arm_extension_at_contact": 115.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -267,
+            "elbow": 0,
+            "wrist": -367
+          },
+          "knee_bend_depth": 159.0,
+          "peak_swing_speed": 7.664,
+          "contact_swing_speed": 3.749
+        },
+        {
+          "frame": 4209,
+          "timestamp": 70.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -283, 'elbow': -283, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 167.6,
+          "trunk_rotation_at_contact": -3.4,
+          "arm_extension_at_contact": 131.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -283,
+            "elbow": -283,
+            "wrist": 0
+          },
+          "knee_bend_depth": 152.1,
+          "peak_swing_speed": 10.776,
+          "contact_swing_speed": 2.353
+        },
+        {
+          "frame": 4473,
+          "timestamp": 74.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -83, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 126.4,
+          "trunk_rotation_at_contact": 8.3,
+          "arm_extension_at_contact": 136.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -83,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 126.1,
+          "peak_swing_speed": 11.651,
+          "contact_swing_speed": 1.211
+        },
+        {
+          "frame": 4677,
+          "timestamp": 77.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -117, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 128.4,
+          "trunk_rotation_at_contact": 15.8,
+          "arm_extension_at_contact": 129.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -117,
+            "wrist": -117
+          },
+          "knee_bend_depth": 123.3,
+          "peak_swing_speed": 6.79,
+          "contact_swing_speed": 3.189
+        },
+        {
+          "frame": 4893,
+          "timestamp": 81.55,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 130.3,
+          "trunk_rotation_at_contact": -13.8,
+          "arm_extension_at_contact": 143.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 133,
+            "elbow": 133,
+            "wrist": 133
+          },
+          "knee_bend_depth": 125.5,
+          "peak_swing_speed": 9.262,
+          "contact_swing_speed": 1.278
+        },
+        {
+          "frame": 5073,
+          "timestamp": 84.55,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:117.4",
+            "chain_reversed:{'hip': 0, 'shoulder': 367, 'elbow': 600, 'wrist': 550}"
+          ],
+          "knee_angle_at_contact": 117.4,
+          "trunk_rotation_at_contact": 0.2,
+          "arm_extension_at_contact": 148.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 367,
+            "elbow": 600,
+            "wrist": 550
+          },
+          "knee_bend_depth": 90.7,
+          "peak_swing_speed": 8.186,
+          "contact_swing_speed": 0.972
+        },
+        {
+          "frame": 5313,
+          "timestamp": 88.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -50, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 151.5,
+          "trunk_rotation_at_contact": 14.8,
+          "arm_extension_at_contact": 122.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -50,
+            "wrist": -67
+          },
+          "knee_bend_depth": 143.2,
+          "peak_swing_speed": 8.337,
+          "contact_swing_speed": 2.02
+        },
+        {
+          "frame": 5673,
+          "timestamp": 94.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -167, 'elbow': -217, 'wrist': -217}"
+          ],
+          "knee_angle_at_contact": 177.4,
+          "trunk_rotation_at_contact": 10.4,
+          "arm_extension_at_contact": 125.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -167,
+            "elbow": -217,
+            "wrist": -217
+          },
+          "knee_bend_depth": 163.5,
+          "peak_swing_speed": 13.35,
+          "contact_swing_speed": 2.588
+        },
+        {
+          "frame": 5913,
+          "timestamp": 98.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -50, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 146.5,
+          "trunk_rotation_at_contact": -0.5,
+          "arm_extension_at_contact": 102.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -50,
+            "wrist": -183
+          },
+          "knee_bend_depth": 126.8,
+          "peak_swing_speed": 8.479,
+          "contact_swing_speed": 4.342
+        },
+        {
+          "frame": 6093,
+          "timestamp": 101.55,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -17, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 129.5,
+          "trunk_rotation_at_contact": -27.3,
+          "arm_extension_at_contact": 107.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -17,
+            "wrist": -17
+          },
+          "knee_bend_depth": 120.9,
+          "peak_swing_speed": 14.597,
+          "contact_swing_speed": 4.726
+        },
+        {
+          "frame": 6249,
+          "timestamp": 104.15,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:118.9"
+          ],
+          "knee_angle_at_contact": 118.9,
+          "trunk_rotation_at_contact": -2.4,
+          "arm_extension_at_contact": 140.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 100,
+            "elbow": 300,
+            "wrist": 617
+          },
+          "knee_bend_depth": 104.5,
+          "peak_swing_speed": 17.517,
+          "contact_swing_speed": 0.167
+        },
+        {
+          "frame": 6512,
+          "timestamp": 108.536,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': -67, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 172.6,
+          "trunk_rotation_at_contact": 6.1,
+          "arm_extension_at_contact": 113.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": -67,
+            "wrist": -117
+          },
+          "knee_bend_depth": 155.4,
+          "peak_swing_speed": 2.819,
+          "contact_swing_speed": 1.096
+        },
+        {
+          "frame": 6764,
+          "timestamp": 112.736,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -517, 'elbow': -517, 'wrist': -350}"
+          ],
+          "knee_angle_at_contact": 169.9,
+          "trunk_rotation_at_contact": 13.1,
+          "arm_extension_at_contact": 139.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -517,
+            "elbow": -517,
+            "wrist": -350
+          },
+          "knee_bend_depth": 158.0,
+          "peak_swing_speed": 6.555,
+          "contact_swing_speed": 2.044
+        },
+        {
+          "frame": 6969,
+          "timestamp": 116.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -100, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 134.7,
+          "trunk_rotation_at_contact": 0.4,
+          "arm_extension_at_contact": 130.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -100,
+            "wrist": -167
+          },
+          "knee_bend_depth": 132.7,
+          "peak_swing_speed": 9.248,
+          "contact_swing_speed": 3.346
+        },
+        {
+          "frame": 7173,
+          "timestamp": 119.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 148.2,
+          "trunk_rotation_at_contact": 0.9,
+          "arm_extension_at_contact": 127.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 146.3,
+          "peak_swing_speed": 6.438,
+          "contact_swing_speed": 2.277
+        },
+        {
+          "frame": 7410,
+          "timestamp": 123.503,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:110.9",
+            "trunk_extreme:289.8",
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -200, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 110.9,
+          "trunk_rotation_at_contact": 289.8,
+          "arm_extension_at_contact": 117.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -200,
+            "wrist": -167
+          },
+          "knee_bend_depth": 110.7,
+          "peak_swing_speed": 4.531,
+          "contact_swing_speed": 0.87
+        },
+        {
+          "frame": 7610,
+          "timestamp": 126.827,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -83, 'elbow': -117, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 129.5,
+          "trunk_rotation_at_contact": 8.9,
+          "arm_extension_at_contact": 136.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -83,
+            "elbow": -117,
+            "wrist": -67
+          },
+          "knee_bend_depth": 128.5,
+          "peak_swing_speed": 4.393,
+          "contact_swing_speed": 0.316
+        },
+        {
+          "frame": 7772,
+          "timestamp": 129.528,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 100, 'elbow': 83, 'wrist': 83}"
+          ],
+          "knee_angle_at_contact": 137.8,
+          "trunk_rotation_at_contact": -8.2,
+          "arm_extension_at_contact": 122.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 100,
+            "elbow": 83,
+            "wrist": 83
+          },
+          "knee_bend_depth": 133.6,
+          "peak_swing_speed": 5.532,
+          "contact_swing_speed": 1.028
+        },
+        {
+          "frame": 8013,
+          "timestamp": 133.55,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 150.9,
+          "trunk_rotation_at_contact": 1.0,
+          "arm_extension_at_contact": 122.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 183,
+            "wrist": 533
+          },
+          "knee_bend_depth": 141.8,
+          "peak_swing_speed": 7.799,
+          "contact_swing_speed": 0.168
+        },
+        {
+          "frame": 8201,
+          "timestamp": 136.684,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': 83, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 168.5,
+          "trunk_rotation_at_contact": 5.2,
+          "arm_extension_at_contact": 128.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": 83,
+            "wrist": -17
+          },
+          "knee_bend_depth": 148.3,
+          "peak_swing_speed": 3.353,
+          "contact_swing_speed": 0.65
+        },
+        {
+          "frame": 8480,
+          "timestamp": 141.33,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:104.7",
+            "chain_reversed:{'hip': 0, 'shoulder': -467, 'elbow': -483, 'wrist': -200}"
+          ],
+          "knee_angle_at_contact": 104.7,
+          "trunk_rotation_at_contact": 16.0,
+          "arm_extension_at_contact": 127.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -467,
+            "elbow": -483,
+            "wrist": -200
+          },
+          "knee_bend_depth": 96.1,
+          "peak_swing_speed": 3.996,
+          "contact_swing_speed": 2.38
+        },
+        {
+          "frame": 8721,
+          "timestamp": 145.35,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 567, 'elbow': 250, 'wrist': 250}"
+          ],
+          "knee_angle_at_contact": 148.6,
+          "trunk_rotation_at_contact": 5.3,
+          "arm_extension_at_contact": 112.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 567,
+            "elbow": 250,
+            "wrist": 250
+          },
+          "knee_bend_depth": 143.9,
+          "peak_swing_speed": 13.859,
+          "contact_swing_speed": 2.613
+        },
+        {
+          "frame": 8973,
+          "timestamp": 149.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -550, 'elbow': -67, 'wrist': -583}"
+          ],
+          "knee_angle_at_contact": 176.5,
+          "trunk_rotation_at_contact": 14.7,
+          "arm_extension_at_contact": 90.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -550,
+            "elbow": -67,
+            "wrist": -583
+          },
+          "knee_bend_depth": 160.7,
+          "peak_swing_speed": 7.389,
+          "contact_swing_speed": 3.251
+        },
+        {
+          "frame": 9177,
+          "timestamp": 152.95,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -83, 'elbow': -67, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 137.8,
+          "trunk_rotation_at_contact": -13.6,
+          "arm_extension_at_contact": 96.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -83,
+            "elbow": -67,
+            "wrist": -50
+          },
+          "knee_bend_depth": 127.5,
+          "peak_swing_speed": 5.96,
+          "contact_swing_speed": 4.349
+        },
+        {
+          "frame": 11181,
+          "timestamp": 186.35,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 383, 'elbow': 150, 'wrist': 150}"
+          ],
+          "knee_angle_at_contact": 139.1,
+          "trunk_rotation_at_contact": 0.4,
+          "arm_extension_at_contact": 148.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 383,
+            "elbow": 150,
+            "wrist": 150
+          },
+          "knee_bend_depth": 117.1,
+          "peak_swing_speed": 6.61,
+          "contact_swing_speed": 0.283
+        },
+        {
+          "frame": 11517,
+          "timestamp": 191.95,
+          "shot_type": "backhand",
+          "flags": [
+            "trunk_degenerate",
+            "chain_reversed:{'hip': 0, 'shoulder': 383, 'elbow': 383, 'wrist': 133}"
+          ],
+          "knee_angle_at_contact": 145.2,
+          "trunk_rotation_at_contact": -0.0,
+          "arm_extension_at_contact": 120.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 383,
+            "elbow": 383,
+            "wrist": 133
+          },
+          "knee_bend_depth": 126.2,
+          "peak_swing_speed": 3.712,
+          "contact_swing_speed": 0.886
+        },
+        {
+          "frame": 11726,
+          "timestamp": 195.427,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -250, 'wrist': 300}"
+          ],
+          "knee_angle_at_contact": 145.0,
+          "trunk_rotation_at_contact": -1.4,
+          "arm_extension_at_contact": 109.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -250,
+            "wrist": 300
+          },
+          "knee_bend_depth": 110.0,
+          "peak_swing_speed": 4.922,
+          "contact_swing_speed": 0.59
+        },
+        {
+          "frame": 11997,
+          "timestamp": 199.95,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -267, 'elbow': -83, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 158.3,
+          "trunk_rotation_at_contact": -41.5,
+          "arm_extension_at_contact": 90.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -267,
+            "elbow": -83,
+            "wrist": -100
+          },
+          "knee_bend_depth": 129.1,
+          "peak_swing_speed": 7.663,
+          "contact_swing_speed": 0.706
+        },
+        {
+          "frame": 12129,
+          "timestamp": 202.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -217, 'elbow': -233, 'wrist': -233}"
+          ],
+          "knee_angle_at_contact": 165.5,
+          "trunk_rotation_at_contact": 9.6,
+          "arm_extension_at_contact": 107.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -217,
+            "elbow": -233,
+            "wrist": -233
+          },
+          "knee_bend_depth": 163.2,
+          "peak_swing_speed": 11.468,
+          "contact_swing_speed": 3.8
+        },
+        {
+          "frame": 12345,
+          "timestamp": 205.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 100, 'elbow': 100, 'wrist': 83}"
+          ],
+          "knee_angle_at_contact": 174.2,
+          "trunk_rotation_at_contact": -6.5,
+          "arm_extension_at_contact": 121.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 100,
+            "elbow": 100,
+            "wrist": 83
+          },
+          "knee_bend_depth": 168.7,
+          "peak_swing_speed": 7.136,
+          "contact_swing_speed": 1.488
+        },
+        {
+          "frame": 13977,
+          "timestamp": 232.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -167, 'elbow': -167, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 174.6,
+          "trunk_rotation_at_contact": -12.8,
+          "arm_extension_at_contact": 102.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -167,
+            "elbow": -167,
+            "wrist": -183
+          },
+          "knee_bend_depth": 163.2,
+          "peak_swing_speed": 14.588,
+          "contact_swing_speed": 4.494
+        },
+        {
+          "frame": 14172,
+          "timestamp": 236.201,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -50, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 135.3,
+          "trunk_rotation_at_contact": -6.4,
+          "arm_extension_at_contact": 134.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -50,
+            "wrist": -50
+          },
+          "knee_bend_depth": 118.7,
+          "peak_swing_speed": 4.733,
+          "contact_swing_speed": 0.669
+        },
+        {
+          "frame": 14361,
+          "timestamp": 239.35,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 267, 'elbow': 267, 'wrist': 117}"
+          ],
+          "knee_angle_at_contact": 135.7,
+          "trunk_rotation_at_contact": -17.1,
+          "arm_extension_at_contact": 105.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 267,
+            "elbow": 267,
+            "wrist": 117
+          },
+          "knee_bend_depth": 135.4,
+          "peak_swing_speed": 7.853,
+          "contact_swing_speed": 3.477
+        },
+        {
+          "frame": 14661,
+          "timestamp": 244.35,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -417, 'elbow': -450, 'wrist': -450}"
+          ],
+          "knee_angle_at_contact": 153.7,
+          "trunk_rotation_at_contact": -3.9,
+          "arm_extension_at_contact": 110.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -417,
+            "elbow": -450,
+            "wrist": -450
+          },
+          "knee_bend_depth": 137.7,
+          "peak_swing_speed": 11.814,
+          "contact_swing_speed": 2.043
+        },
+        {
+          "frame": 14853,
+          "timestamp": 247.55,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 157.4,
+          "trunk_rotation_at_contact": -1.7,
+          "arm_extension_at_contact": 123.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 417,
+            "wrist": 417
+          },
+          "knee_bend_depth": 155.6,
+          "peak_swing_speed": 10.515,
+          "contact_swing_speed": 4.838
+        },
+        {
+          "frame": 15069,
+          "timestamp": 251.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -633, 'elbow': -633, 'wrist': -450}"
+          ],
+          "knee_angle_at_contact": 135.3,
+          "trunk_rotation_at_contact": -12.9,
+          "arm_extension_at_contact": 117.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -633,
+            "elbow": -633,
+            "wrist": -450
+          },
+          "knee_bend_depth": 128.2,
+          "peak_swing_speed": 8.918,
+          "contact_swing_speed": 2.927
+        },
+        {
+          "frame": 15297,
+          "timestamp": 254.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -100, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 149.4,
+          "trunk_rotation_at_contact": 6.6,
+          "arm_extension_at_contact": 120.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -100,
+            "wrist": -17
+          },
+          "knee_bend_depth": 139.7,
+          "peak_swing_speed": 5.955,
+          "contact_swing_speed": 4.012
+        },
+        {
+          "frame": 15476,
+          "timestamp": 257.933,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -483, 'elbow': -167, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 157.7,
+          "trunk_rotation_at_contact": 13.9,
+          "arm_extension_at_contact": 102.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -483,
+            "elbow": -167,
+            "wrist": -183
+          },
+          "knee_bend_depth": 145.6,
+          "peak_swing_speed": 6.847,
+          "contact_swing_speed": 3.21
+        },
+        {
+          "frame": 15657,
+          "timestamp": 260.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -300, 'elbow': 0, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 175.7,
+          "trunk_rotation_at_contact": 8.5,
+          "arm_extension_at_contact": 126.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -300,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 169.7,
+          "peak_swing_speed": 10.294,
+          "contact_swing_speed": 1.386
+        },
+        {
+          "frame": 15834,
+          "timestamp": 263.908,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': 217, 'wrist': 167}"
+          ],
+          "knee_angle_at_contact": 121.6,
+          "trunk_rotation_at_contact": -9.1,
+          "arm_extension_at_contact": 136.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": 217,
+            "wrist": 167
+          },
+          "knee_bend_depth": 117.4,
+          "peak_swing_speed": 4.965,
+          "contact_swing_speed": 0.307
+        },
+        {
+          "frame": 16033,
+          "timestamp": 267.209,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 123.6,
+          "trunk_rotation_at_contact": -3.8,
+          "arm_extension_at_contact": 130.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 67,
+            "elbow": 183,
+            "wrist": 200
+          },
+          "knee_bend_depth": 77.6,
+          "peak_swing_speed": 5.312,
+          "contact_swing_speed": 0.336
+        },
+        {
+          "frame": 16473,
+          "timestamp": 274.55,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -33, 'wrist': 267}"
+          ],
+          "knee_angle_at_contact": 152.1,
+          "trunk_rotation_at_contact": -10.1,
+          "arm_extension_at_contact": 95.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -33,
+            "wrist": 267
+          },
+          "knee_bend_depth": 135.7,
+          "peak_swing_speed": 10.106,
+          "contact_swing_speed": 2.925
+        },
+        {
+          "frame": 16713,
+          "timestamp": 278.55,
+          "shot_type": "backhand",
+          "flags": [
+            "trunk_extreme:281.6",
+            "chain_reversed:{'hip': 0, 'shoulder': -350, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 144.5,
+          "trunk_rotation_at_contact": 281.6,
+          "arm_extension_at_contact": 102.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -350,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 133.7,
+          "peak_swing_speed": 9.414,
+          "contact_swing_speed": 1.329
+        },
+        {
+          "frame": 16904,
+          "timestamp": 281.726,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': 183, 'wrist': 183}"
+          ],
+          "knee_angle_at_contact": 179.0,
+          "trunk_rotation_at_contact": 8.2,
+          "arm_extension_at_contact": 131.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": 183,
+            "wrist": 183
+          },
+          "knee_bend_depth": 168.3,
+          "peak_swing_speed": 7.725,
+          "contact_swing_speed": 1.553
+        },
+        {
+          "frame": 17181,
+          "timestamp": 286.35,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 183, 'elbow': 183, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 149.9,
+          "trunk_rotation_at_contact": 11.2,
+          "arm_extension_at_contact": 133.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 183,
+            "elbow": 183,
+            "wrist": 50
+          },
+          "knee_bend_depth": 147.4,
+          "peak_swing_speed": 6.105,
+          "contact_swing_speed": 1.922
+        },
+        {
+          "frame": 17745,
+          "timestamp": 295.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': 233, 'wrist': -200}"
+          ],
+          "knee_angle_at_contact": 177.5,
+          "trunk_rotation_at_contact": 6.6,
+          "arm_extension_at_contact": 113.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": 233,
+            "wrist": -200
+          },
+          "knee_bend_depth": 166.1,
+          "peak_swing_speed": 5.463,
+          "contact_swing_speed": 4.779
+        },
+        {
+          "frame": 17937,
+          "timestamp": 298.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 145.5,
+          "trunk_rotation_at_contact": -16.0,
+          "arm_extension_at_contact": 118.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 139.6,
+          "peak_swing_speed": 5.029,
+          "contact_swing_speed": 0.798
+        },
+        {
+          "frame": 18120,
+          "timestamp": 301.992,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 138.0,
+          "trunk_rotation_at_contact": -13.0,
+          "arm_extension_at_contact": 132.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 217,
+            "elbow": 217,
+            "wrist": 250
+          },
+          "knee_bend_depth": 112.3,
+          "peak_swing_speed": 1.126,
+          "contact_swing_speed": 0.593
+        },
+        {
+          "frame": 18368,
+          "timestamp": 306.128,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -100, 'wrist': 117}"
+          ],
+          "knee_angle_at_contact": 154.0,
+          "trunk_rotation_at_contact": -7.0,
+          "arm_extension_at_contact": 137.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -100,
+            "wrist": 117
+          },
+          "knee_bend_depth": 83.5,
+          "peak_swing_speed": 3.575,
+          "contact_swing_speed": 0.91
+        },
+        {
+          "frame": 18567,
+          "timestamp": 309.443,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:104.5",
+            "chain_reversed:{'hip': 0, 'shoulder': -567, 'elbow': -450, 'wrist': 17}"
+          ],
+          "knee_angle_at_contact": 104.5,
+          "trunk_rotation_at_contact": -4.4,
+          "arm_extension_at_contact": 130.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -567,
+            "elbow": -450,
+            "wrist": 17
+          },
+          "knee_bend_depth": 80.7,
+          "peak_swing_speed": 4.799,
+          "contact_swing_speed": 0.213
+        },
+        {
+          "frame": 20107,
+          "timestamp": 335.125,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 33, 'elbow': -17, 'wrist': 200}"
+          ],
+          "knee_angle_at_contact": 154.9,
+          "trunk_rotation_at_contact": -11.2,
+          "arm_extension_at_contact": 124.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 33,
+            "elbow": -17,
+            "wrist": 200
+          },
+          "knee_bend_depth": 151.4,
+          "peak_swing_speed": 3.365,
+          "contact_swing_speed": 0.465
+        },
+        {
+          "frame": 20350,
+          "timestamp": 339.174,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:113.1"
+          ],
+          "knee_angle_at_contact": 113.1,
+          "trunk_rotation_at_contact": -14.4,
+          "arm_extension_at_contact": 127.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 100,
+            "elbow": 100,
+            "wrist": 150
+          },
+          "knee_bend_depth": 93.8,
+          "peak_swing_speed": 1.116,
+          "contact_swing_speed": 0.788
+        },
+        {
+          "frame": 20627,
+          "timestamp": 343.778,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': 150, 'wrist': 350}"
+          ],
+          "knee_angle_at_contact": 124.2,
+          "trunk_rotation_at_contact": -2.2,
+          "arm_extension_at_contact": 123.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": 150,
+            "wrist": 350
+          },
+          "knee_bend_depth": 124.2,
+          "peak_swing_speed": 10.139,
+          "contact_swing_speed": 1.349
+        },
+        {
+          "frame": 20833,
+          "timestamp": 347.209,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -367, 'elbow': -533, 'wrist': -600}"
+          ],
+          "knee_angle_at_contact": 146.6,
+          "trunk_rotation_at_contact": -10.4,
+          "arm_extension_at_contact": 104.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -367,
+            "elbow": -533,
+            "wrist": -600
+          },
+          "knee_bend_depth": 121.2,
+          "peak_swing_speed": 13.419,
+          "contact_swing_speed": 4.067
+        },
+        {
+          "frame": 21129,
+          "timestamp": 352.15,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 117, 'elbow': -100, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 169.8,
+          "trunk_rotation_at_contact": 10.1,
+          "arm_extension_at_contact": 148.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 117,
+            "elbow": -100,
+            "wrist": -100
+          },
+          "knee_bend_depth": 142.2,
+          "peak_swing_speed": 14.145,
+          "contact_swing_speed": 4.424
+        },
+        {
+          "frame": 21302,
+          "timestamp": 355.036,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 250, 'elbow': 283, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 149.3,
+          "trunk_rotation_at_contact": -2.3,
+          "arm_extension_at_contact": 105.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 250,
+            "elbow": 283,
+            "wrist": 50
+          },
+          "knee_bend_depth": 123.0,
+          "peak_swing_speed": 6.213,
+          "contact_swing_speed": 1.881
+        },
+        {
+          "frame": 21507,
+          "timestamp": 358.455,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 550, 'elbow': 50, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 136.9,
+          "trunk_rotation_at_contact": -18.5,
+          "arm_extension_at_contact": 119.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 550,
+            "elbow": 50,
+            "wrist": 50
+          },
+          "knee_bend_depth": 136.7,
+          "peak_swing_speed": 8.904,
+          "contact_swing_speed": 1.411
+        },
+        {
+          "frame": 23201,
+          "timestamp": 386.678,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 400, 'elbow': 283, 'wrist': 283}"
+          ],
+          "knee_angle_at_contact": 145.0,
+          "trunk_rotation_at_contact": -5.8,
+          "arm_extension_at_contact": 152.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 400,
+            "elbow": 283,
+            "wrist": 283
+          },
+          "knee_bend_depth": 141.2,
+          "peak_swing_speed": 9.567,
+          "contact_swing_speed": 0.802
+        },
+        {
+          "frame": 23376,
+          "timestamp": 389.593,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 367, 'elbow': 617, 'wrist': 183}"
+          ],
+          "knee_angle_at_contact": 145.1,
+          "trunk_rotation_at_contact": -4.4,
+          "arm_extension_at_contact": 112.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 367,
+            "elbow": 617,
+            "wrist": 183
+          },
+          "knee_bend_depth": 130.9,
+          "peak_swing_speed": 6.212,
+          "contact_swing_speed": 0.908
+        },
+        {
+          "frame": 23599,
+          "timestamp": 393.319,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': 100, 'wrist': 167}"
+          ],
+          "knee_angle_at_contact": 149.4,
+          "trunk_rotation_at_contact": -11.8,
+          "arm_extension_at_contact": 98.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": 100,
+            "wrist": 167
+          },
+          "knee_bend_depth": 140.7,
+          "peak_swing_speed": 6.119,
+          "contact_swing_speed": 2.433
+        },
+        {
+          "frame": 23794,
+          "timestamp": 396.57,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 149.4,
+          "trunk_rotation_at_contact": -16.2,
+          "arm_extension_at_contact": 123.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 67,
+            "elbow": 317,
+            "wrist": 517
+          },
+          "knee_bend_depth": 121.8,
+          "peak_swing_speed": 5.546,
+          "contact_swing_speed": 1.07
+        },
+        {
+          "frame": 23976,
+          "timestamp": 399.608,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 83, 'wrist': -17}"
+          ],
+          "knee_angle_at_contact": 132.7,
+          "trunk_rotation_at_contact": -6.4,
+          "arm_extension_at_contact": 136.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 83,
+            "wrist": -17
+          },
+          "knee_bend_depth": 129.3,
+          "peak_swing_speed": 6.676,
+          "contact_swing_speed": 1.013
+        },
+        {
+          "frame": 24165,
+          "timestamp": 402.745,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': 567, 'wrist': 567}"
+          ],
+          "knee_angle_at_contact": 122.9,
+          "trunk_rotation_at_contact": -1.1,
+          "arm_extension_at_contact": 118.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": 567,
+            "wrist": 567
+          },
+          "knee_bend_depth": 122.7,
+          "peak_swing_speed": 9.73,
+          "contact_swing_speed": 1.128
+        },
+        {
+          "frame": 24400,
+          "timestamp": 406.666,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:115.4",
+            "chain_reversed:{'hip': 0, 'shoulder': -217, 'elbow': 0, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 115.4,
+          "trunk_rotation_at_contact": -9.2,
+          "arm_extension_at_contact": 112.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -217,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 98.2,
+          "peak_swing_speed": 5.821,
+          "contact_swing_speed": 1.646
+        },
+        {
+          "frame": 24759,
+          "timestamp": 412.648,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 200, 'elbow': 183, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 148.9,
+          "trunk_rotation_at_contact": -9.7,
+          "arm_extension_at_contact": 96.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 200,
+            "elbow": 183,
+            "wrist": 0
+          },
+          "knee_bend_depth": 134.4,
+          "peak_swing_speed": 9.883,
+          "contact_swing_speed": 0.77
+        },
+        {
+          "frame": 25031,
+          "timestamp": 417.176,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -83, 'elbow': -233, 'wrist': -233}"
+          ],
+          "knee_angle_at_contact": 174.6,
+          "trunk_rotation_at_contact": 9.1,
+          "arm_extension_at_contact": 102.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -83,
+            "elbow": -233,
+            "wrist": -233
+          },
+          "knee_bend_depth": 173.6,
+          "peak_swing_speed": 8.552,
+          "contact_swing_speed": 0.741
+        },
+        {
+          "frame": 25224,
+          "timestamp": 420.402,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 133, 'elbow': 400, 'wrist': 133}"
+          ],
+          "knee_angle_at_contact": 149.5,
+          "trunk_rotation_at_contact": -4.9,
+          "arm_extension_at_contact": 112.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 133,
+            "elbow": 400,
+            "wrist": 133
+          },
+          "knee_bend_depth": 149.0,
+          "peak_swing_speed": 5.67,
+          "contact_swing_speed": 0.982
+        },
+        {
+          "frame": 25804,
+          "timestamp": 430.063,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': 133, 'wrist': 100}"
+          ],
+          "knee_angle_at_contact": 169.7,
+          "trunk_rotation_at_contact": 5.3,
+          "arm_extension_at_contact": 140.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": 133,
+            "wrist": 100
+          },
+          "knee_bend_depth": 165.7,
+          "peak_swing_speed": 6.57,
+          "contact_swing_speed": 2.396
+        },
+        {
+          "frame": 25994,
+          "timestamp": 433.226,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:117.8",
+            "chain_reversed:{'hip': 0, 'shoulder': -333, 'elbow': -200, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 117.8,
+          "trunk_rotation_at_contact": -1.8,
+          "arm_extension_at_contact": 98.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -333,
+            "elbow": -200,
+            "wrist": -133
+          },
+          "knee_bend_depth": 110.3,
+          "peak_swing_speed": 8.726,
+          "contact_swing_speed": 1.82
+        },
+        {
+          "frame": 27698,
+          "timestamp": 461.641,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': -117, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 159.6,
+          "trunk_rotation_at_contact": 7.2,
+          "arm_extension_at_contact": 102.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": -117,
+            "wrist": -117
+          },
+          "knee_bend_depth": 159.6,
+          "peak_swing_speed": 14.137,
+          "contact_swing_speed": 1.043
+        },
+        {
+          "frame": 27920,
+          "timestamp": 465.327,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 133, 'elbow': 233, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 131.0,
+          "trunk_rotation_at_contact": -14.7,
+          "arm_extension_at_contact": 129.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 133,
+            "elbow": 233,
+            "wrist": -33
+          },
+          "knee_bend_depth": 119.1,
+          "peak_swing_speed": 6.818,
+          "contact_swing_speed": 2.167
+        },
+        {
+          "frame": 28300,
+          "timestamp": 471.669,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -383, 'elbow': -383, 'wrist': -617}"
+          ],
+          "knee_angle_at_contact": 141.3,
+          "trunk_rotation_at_contact": -15.1,
+          "arm_extension_at_contact": 114.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -383,
+            "elbow": -383,
+            "wrist": -617
+          },
+          "knee_bend_depth": 128.8,
+          "peak_swing_speed": 6.859,
+          "contact_swing_speed": 1.342
+        },
+        {
+          "frame": 28522,
+          "timestamp": 475.369,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 121.6,
+          "trunk_rotation_at_contact": -15.6,
+          "arm_extension_at_contact": 139.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 83,
+            "elbow": 150,
+            "wrist": 150
+          },
+          "knee_bend_depth": 118.9,
+          "peak_swing_speed": 16.593,
+          "contact_swing_speed": 0.243
+        },
+        {
+          "frame": 28966,
+          "timestamp": 482.759,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 33, 'elbow': 383, 'wrist': -200}"
+          ],
+          "knee_angle_at_contact": 143.7,
+          "trunk_rotation_at_contact": 0.2,
+          "arm_extension_at_contact": 108.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 33,
+            "elbow": 383,
+            "wrist": -200
+          },
+          "knee_bend_depth": 119.1,
+          "peak_swing_speed": 9.302,
+          "contact_swing_speed": 0.905
+        },
+        {
+          "frame": 29138,
+          "timestamp": 485.634,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 154.1,
+          "trunk_rotation_at_contact": 4.1,
+          "arm_extension_at_contact": 122.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 83,
+            "elbow": 83,
+            "wrist": 250
+          },
+          "knee_bend_depth": 142.6,
+          "peak_swing_speed": 11.847,
+          "contact_swing_speed": 1.162
+        },
+        {
+          "frame": 29353,
+          "timestamp": 489.219,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 131.7,
+          "trunk_rotation_at_contact": -21.5,
+          "arm_extension_at_contact": 97.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": 267,
+            "wrist": 267
+          },
+          "knee_bend_depth": 124.3,
+          "peak_swing_speed": 8.782,
+          "contact_swing_speed": 2.934
+        },
+        {
+          "frame": 29547,
+          "timestamp": 492.458,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 450, 'elbow': 433, 'wrist': 433}"
+          ],
+          "knee_angle_at_contact": 146.9,
+          "trunk_rotation_at_contact": 5.8,
+          "arm_extension_at_contact": 104.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 450,
+            "elbow": 433,
+            "wrist": 433
+          },
+          "knee_bend_depth": 146.6,
+          "peak_swing_speed": 7.105,
+          "contact_swing_speed": 3.708
+        },
+        {
+          "frame": 29723,
+          "timestamp": 495.391,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -250, 'wrist': -250}"
+          ],
+          "knee_angle_at_contact": 145.3,
+          "trunk_rotation_at_contact": -13.4,
+          "arm_extension_at_contact": 99.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -250,
+            "wrist": -250
+          },
+          "knee_bend_depth": 136.1,
+          "peak_swing_speed": 6.823,
+          "contact_swing_speed": 1.624
+        },
+        {
+          "frame": 30331,
+          "timestamp": 505.512,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -200, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 142.1,
+          "trunk_rotation_at_contact": -15.5,
+          "arm_extension_at_contact": 119.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -200,
+            "wrist": -117
+          },
+          "knee_bend_depth": 140.8,
+          "peak_swing_speed": 5.119,
+          "contact_swing_speed": 2.259
+        },
+        {
+          "frame": 30560,
+          "timestamp": 509.328,
+          "shot_type": "forehand",
+          "flags": [
+            "knee_out_of_range:110.5",
+            "chain_reversed:{'hip': 0, 'shoulder': -583, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 110.5,
+          "trunk_rotation_at_contact": -17.0,
+          "arm_extension_at_contact": 108.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -583,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 110.2,
+          "peak_swing_speed": 5.968,
+          "contact_swing_speed": 0.426
+        },
+        {
+          "frame": 31523,
+          "timestamp": 525.385,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -67, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 160.2,
+          "trunk_rotation_at_contact": -30.3,
+          "arm_extension_at_contact": 122.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -67,
+            "wrist": -167
+          },
+          "knee_bend_depth": 152.0,
+          "peak_swing_speed": 7.011,
+          "contact_swing_speed": 1.474
+        },
+        {
+          "frame": 31852,
+          "timestamp": 530.864,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': 150, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 166.1,
+          "trunk_rotation_at_contact": -0.6,
+          "arm_extension_at_contact": 111.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": 150,
+            "wrist": 0
+          },
+          "knee_bend_depth": 163.9,
+          "peak_swing_speed": 7.873,
+          "contact_swing_speed": 0.921
+        },
+        {
+          "frame": 32005,
+          "timestamp": 533.424,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -433, 'elbow': -217, 'wrist': -450}"
+          ],
+          "knee_angle_at_contact": 124.2,
+          "trunk_rotation_at_contact": -0.4,
+          "arm_extension_at_contact": 136.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -433,
+            "elbow": -217,
+            "wrist": -450
+          },
+          "knee_bend_depth": 102.3,
+          "peak_swing_speed": 4.083,
+          "contact_swing_speed": 0.309
+        },
+        {
+          "frame": 32172,
+          "timestamp": 536.202,
+          "shot_type": "backhand",
+          "flags": [],
+          "knee_angle_at_contact": 129.7,
+          "trunk_rotation_at_contact": -5.0,
+          "arm_extension_at_contact": 116.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 167,
+            "elbow": 167,
+            "wrist": 167
+          },
+          "knee_bend_depth": 120.7,
+          "peak_swing_speed": 1.725,
+          "contact_swing_speed": 0.413
+        },
+        {
+          "frame": 32635,
+          "timestamp": 543.911,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -150, 'wrist': -150}"
+          ],
+          "knee_angle_at_contact": 166.5,
+          "trunk_rotation_at_contact": 6.4,
+          "arm_extension_at_contact": 113.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -150,
+            "wrist": -150
+          },
+          "knee_bend_depth": 165.2,
+          "peak_swing_speed": 10.078,
+          "contact_swing_speed": 2.184
+        },
+        {
+          "frame": 32803,
+          "timestamp": 546.721,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -183, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 127.5,
+          "trunk_rotation_at_contact": 4.4,
+          "arm_extension_at_contact": 119.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -183,
+            "wrist": -83
+          },
+          "knee_bend_depth": 120.2,
+          "peak_swing_speed": 5.512,
+          "contact_swing_speed": 0.602
+        },
+        {
+          "frame": 33016,
+          "timestamp": 550.26,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:116.3",
+            "chain_reversed:{'hip': 0, 'shoulder': -633, 'elbow': -33, 'wrist': -283}"
+          ],
+          "knee_angle_at_contact": 116.3,
+          "trunk_rotation_at_contact": -8.1,
+          "arm_extension_at_contact": 132.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -633,
+            "elbow": -33,
+            "wrist": -283
+          },
+          "knee_bend_depth": 96.8,
+          "peak_swing_speed": 5.027,
+          "contact_swing_speed": 0.797
+        },
+        {
+          "frame": 33194,
+          "timestamp": 553.228,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -17, 'wrist': -150}"
+          ],
+          "knee_angle_at_contact": 151.4,
+          "trunk_rotation_at_contact": -4.9,
+          "arm_extension_at_contact": 119.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -17,
+            "wrist": -150
+          },
+          "knee_bend_depth": 129.6,
+          "peak_swing_speed": 8.137,
+          "contact_swing_speed": 0.743
+        },
+        {
+          "frame": 33364,
+          "timestamp": 556.068,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -533, 'elbow': 50, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 132.6,
+          "trunk_rotation_at_contact": -25.1,
+          "arm_extension_at_contact": 119.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -533,
+            "elbow": 50,
+            "wrist": -67
+          },
+          "knee_bend_depth": 121.8,
+          "peak_swing_speed": 7.917,
+          "contact_swing_speed": 0.846
+        },
+        {
+          "frame": 35528,
+          "timestamp": 592.139,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 140.1,
+          "trunk_rotation_at_contact": -20.6,
+          "arm_extension_at_contact": 112.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 133,
+            "wrist": 133
+          },
+          "knee_bend_depth": 138.9,
+          "peak_swing_speed": 5.981,
+          "contact_swing_speed": 0.59
+        },
+        {
+          "frame": 35745,
+          "timestamp": 595.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -133, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 163.8,
+          "trunk_rotation_at_contact": 17.6,
+          "arm_extension_at_contact": 120.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -133,
+            "wrist": -133
+          },
+          "knee_bend_depth": 154.4,
+          "peak_swing_speed": 6.187,
+          "contact_swing_speed": 5.777
+        },
+        {
+          "frame": 36001,
+          "timestamp": 600.02,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 152.8,
+          "trunk_rotation_at_contact": -16.2,
+          "arm_extension_at_contact": 114.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 125.9,
+          "peak_swing_speed": 6.044,
+          "contact_swing_speed": 1.26
+        },
+        {
+          "frame": 36211,
+          "timestamp": 603.525,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': 283, 'wrist': 533}"
+          ],
+          "knee_angle_at_contact": 139.8,
+          "trunk_rotation_at_contact": -12.0,
+          "arm_extension_at_contact": 89.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": 283,
+            "wrist": 533
+          },
+          "knee_bend_depth": 121.3,
+          "peak_swing_speed": 8.66,
+          "contact_swing_speed": 3.318
+        },
+        {
+          "frame": 36458,
+          "timestamp": 607.626,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -267, 'elbow': -267, 'wrist': -283}"
+          ],
+          "knee_angle_at_contact": 176.2,
+          "trunk_rotation_at_contact": 21.9,
+          "arm_extension_at_contact": 142.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -267,
+            "elbow": -267,
+            "wrist": -283
+          },
+          "knee_bend_depth": 174.0,
+          "peak_swing_speed": 11.492,
+          "contact_swing_speed": 3.275
+        },
+        {
+          "frame": 36662,
+          "timestamp": 611.031,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': 433, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 130.5,
+          "trunk_rotation_at_contact": 6.3,
+          "arm_extension_at_contact": 120.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": 433,
+            "wrist": -100
+          },
+          "knee_bend_depth": 122.6,
+          "peak_swing_speed": 9.25,
+          "contact_swing_speed": 0.396
+        },
+        {
+          "frame": 36872,
+          "timestamp": 614.527,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 433, 'elbow': 433, 'wrist': 200}"
+          ],
+          "knee_angle_at_contact": 120.4,
+          "trunk_rotation_at_contact": -8.5,
+          "arm_extension_at_contact": 117.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 433,
+            "elbow": 433,
+            "wrist": 200
+          },
+          "knee_bend_depth": 117.0,
+          "peak_swing_speed": 6.337,
+          "contact_swing_speed": 2.97
+        },
+        {
+          "frame": 37406,
+          "timestamp": 623.426,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': 0, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 174.5,
+          "trunk_rotation_at_contact": 15.3,
+          "arm_extension_at_contact": 128.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": 0,
+            "wrist": -67
+          },
+          "knee_bend_depth": 170.4,
+          "peak_swing_speed": 7.474,
+          "contact_swing_speed": 2.357
+        },
+        {
+          "frame": 37588,
+          "timestamp": 626.46,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:105.2",
+            "chain_reversed:{'hip': 0, 'shoulder': 383, 'elbow': 300, 'wrist': 100}"
+          ],
+          "knee_angle_at_contact": 105.2,
+          "trunk_rotation_at_contact": -13.2,
+          "arm_extension_at_contact": 136.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 383,
+            "elbow": 300,
+            "wrist": 100
+          },
+          "knee_bend_depth": 101.1,
+          "peak_swing_speed": 4.031,
+          "contact_swing_speed": 0.898
+        },
+        {
+          "frame": 37755,
+          "timestamp": 629.25,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': -50, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 136.8,
+          "trunk_rotation_at_contact": -6.3,
+          "arm_extension_at_contact": 95.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": -50,
+            "wrist": -117
+          },
+          "knee_bend_depth": 70.2,
+          "peak_swing_speed": 4.298,
+          "contact_swing_speed": 1.656
+        },
+        {
+          "frame": 38246,
+          "timestamp": 637.426,
+          "shot_type": "forehand",
+          "flags": [
+            "knee_out_of_range:114.2"
+          ],
+          "knee_angle_at_contact": 114.2,
+          "trunk_rotation_at_contact": 0.1,
+          "arm_extension_at_contact": 121.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 100,
+            "elbow": 250,
+            "wrist": 250
+          },
+          "knee_bend_depth": 114.1,
+          "peak_swing_speed": 5.392,
+          "contact_swing_speed": 2.067
+        },
+        {
+          "frame": 39821,
+          "timestamp": 663.681,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 163.2,
+          "trunk_rotation_at_contact": 4.5,
+          "arm_extension_at_contact": 115.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 160.6,
+          "peak_swing_speed": 9.576,
+          "contact_swing_speed": 1.989
+        },
+        {
+          "frame": 40430,
+          "timestamp": 673.825,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -350, 'elbow': -367, 'wrist': -367}"
+          ],
+          "knee_angle_at_contact": 168.3,
+          "trunk_rotation_at_contact": 2.4,
+          "arm_extension_at_contact": 103.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -350,
+            "elbow": -367,
+            "wrist": -367
+          },
+          "knee_bend_depth": 166.1,
+          "peak_swing_speed": 8.933,
+          "contact_swing_speed": 5.362
+        },
+        {
+          "frame": 40630,
+          "timestamp": 677.174,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 145.9,
+          "trunk_rotation_at_contact": -33.9,
+          "arm_extension_at_contact": 80.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 167,
+            "elbow": 200,
+            "wrist": 200
+          },
+          "knee_bend_depth": 135.0,
+          "peak_swing_speed": 9.578,
+          "contact_swing_speed": 0.631
+        },
+        {
+          "frame": 40838,
+          "timestamp": 680.625,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -67, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 141.5,
+          "trunk_rotation_at_contact": -10.2,
+          "arm_extension_at_contact": 127.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -67,
+            "wrist": 50
+          },
+          "knee_bend_depth": 134.7,
+          "peak_swing_speed": 6.679,
+          "contact_swing_speed": 2.387
+        },
+        {
+          "frame": 41141,
+          "timestamp": 685.675,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 145.8,
+          "trunk_rotation_at_contact": 5.4,
+          "arm_extension_at_contact": 107.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": 67,
+            "wrist": 67
+          },
+          "knee_bend_depth": 135.9,
+          "peak_swing_speed": 5.608,
+          "contact_swing_speed": 0.828
+        },
+        {
+          "frame": 41353,
+          "timestamp": 689.209,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 130.3,
+          "trunk_rotation_at_contact": -21.6,
+          "arm_extension_at_contact": 143.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 50,
+            "elbow": 250,
+            "wrist": 483
+          },
+          "knee_bend_depth": 125.9,
+          "peak_swing_speed": 10.565,
+          "contact_swing_speed": 2.047
+        },
+        {
+          "frame": 41565,
+          "timestamp": 692.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': -433, 'wrist': -233}"
+          ],
+          "knee_angle_at_contact": 165.9,
+          "trunk_rotation_at_contact": -2.0,
+          "arm_extension_at_contact": 76.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": -433,
+            "wrist": -233
+          },
+          "knee_bend_depth": 156.2,
+          "peak_swing_speed": 9.115,
+          "contact_swing_speed": 0.26
+        },
+        {
+          "frame": 41811,
+          "timestamp": 696.848,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:116.7",
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': -150, 'wrist': 283}"
+          ],
+          "knee_angle_at_contact": 116.7,
+          "trunk_rotation_at_contact": -3.9,
+          "arm_extension_at_contact": 109.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": -150,
+            "wrist": 283
+          },
+          "knee_bend_depth": 104.1,
+          "peak_swing_speed": 7.278,
+          "contact_swing_speed": 1.028
+        },
+        {
+          "frame": 42338,
+          "timestamp": 705.629,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -183, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 171.4,
+          "trunk_rotation_at_contact": 17.4,
+          "arm_extension_at_contact": 121.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -183,
+            "wrist": -183
+          },
+          "knee_bend_depth": 170.4,
+          "peak_swing_speed": 9.011,
+          "contact_swing_speed": 2.392
+        },
+        {
+          "frame": 42519,
+          "timestamp": 708.646,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': 50, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 144.6,
+          "trunk_rotation_at_contact": -15.6,
+          "arm_extension_at_contact": 103.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": 50,
+            "wrist": -117
+          },
+          "knee_bend_depth": 131.1,
+          "peak_swing_speed": 6.423,
+          "contact_swing_speed": 5.23
+        },
+        {
+          "frame": 42725,
+          "timestamp": 712.091,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -333, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 164.7,
+          "trunk_rotation_at_contact": 1.0,
+          "arm_extension_at_contact": 126.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -333,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 126.1,
+          "peak_swing_speed": 7.003,
+          "contact_swing_speed": 1.224
+        },
+        {
+          "frame": 42933,
+          "timestamp": 715.555,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': 33, 'wrist': 167}"
+          ],
+          "knee_angle_at_contact": 120.5,
+          "trunk_rotation_at_contact": -12.6,
+          "arm_extension_at_contact": 140.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": 33,
+            "wrist": 167
+          },
+          "knee_bend_depth": 112.7,
+          "peak_swing_speed": 5.92,
+          "contact_swing_speed": 1.004
+        },
+        {
+          "frame": 43431,
+          "timestamp": 723.857,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -33, 'wrist': 417}"
+          ],
+          "knee_angle_at_contact": 153.8,
+          "trunk_rotation_at_contact": -2.0,
+          "arm_extension_at_contact": 107.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -33,
+            "wrist": 417
+          },
+          "knee_bend_depth": 149.1,
+          "peak_swing_speed": 4.859,
+          "contact_swing_speed": 1.295
+        },
+        {
+          "frame": 45028,
+          "timestamp": 750.463,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 250, 'elbow': -233, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 177.9,
+          "trunk_rotation_at_contact": 12.1,
+          "arm_extension_at_contact": 116.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 250,
+            "elbow": -233,
+            "wrist": -167
+          },
+          "knee_bend_depth": 161.3,
+          "peak_swing_speed": 7.934,
+          "contact_swing_speed": 1.026
+        },
+        {
+          "frame": 45243,
+          "timestamp": 754.043,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 300, 'wrist': 183}"
+          ],
+          "knee_angle_at_contact": 133.6,
+          "trunk_rotation_at_contact": -11.0,
+          "arm_extension_at_contact": 108.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 300,
+            "wrist": 183
+          },
+          "knee_bend_depth": 119.4,
+          "peak_swing_speed": 7.13,
+          "contact_swing_speed": 1.255
+        },
+        {
+          "frame": 45462,
+          "timestamp": 757.697,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': 167, 'wrist': 150}"
+          ],
+          "knee_angle_at_contact": 145.9,
+          "trunk_rotation_at_contact": 4.7,
+          "arm_extension_at_contact": 108.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": 167,
+            "wrist": 150
+          },
+          "knee_bend_depth": 144.5,
+          "peak_swing_speed": 7.324,
+          "contact_swing_speed": 3.357
+        },
+        {
+          "frame": 45744,
+          "timestamp": 762.395,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 146.1,
+          "trunk_rotation_at_contact": -3.7,
+          "arm_extension_at_contact": 107.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 167,
+            "elbow": 383,
+            "wrist": 383
+          },
+          "knee_bend_depth": 119.5,
+          "peak_swing_speed": 13.323,
+          "contact_swing_speed": 2.831
+        },
+        {
+          "frame": 46088,
+          "timestamp": 768.129,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -300, 'elbow': -300, 'wrist': -300}"
+          ],
+          "knee_angle_at_contact": 176.8,
+          "trunk_rotation_at_contact": 8.7,
+          "arm_extension_at_contact": 115.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -300,
+            "elbow": -300,
+            "wrist": -300
+          },
+          "knee_bend_depth": 166.9,
+          "peak_swing_speed": 11.308,
+          "contact_swing_speed": 1.683
+        },
+        {
+          "frame": 46244,
+          "timestamp": 770.741,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 154.3,
+          "trunk_rotation_at_contact": -15.0,
+          "arm_extension_at_contact": 93.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 83,
+            "elbow": 267,
+            "wrist": 450
+          },
+          "knee_bend_depth": 136.2,
+          "peak_swing_speed": 5.597,
+          "contact_swing_speed": 2.67
+        },
+        {
+          "frame": 46426,
+          "timestamp": 773.773,
+          "shot_type": "forehand",
+          "flags": [
+            "knee_out_of_range:117.1",
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 0, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 117.1,
+          "trunk_rotation_at_contact": -27.6,
+          "arm_extension_at_contact": 109.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": -100
+          },
+          "knee_bend_depth": 111.8,
+          "peak_swing_speed": 10.68,
+          "contact_swing_speed": 0.588
+        },
+        {
+          "frame": 46764,
+          "timestamp": 779.399,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 600, 'elbow': 50, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 176.2,
+          "trunk_rotation_at_contact": -8.3,
+          "arm_extension_at_contact": 109.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 600,
+            "elbow": 50,
+            "wrist": 50
+          },
+          "knee_bend_depth": 172.6,
+          "peak_swing_speed": 7.041,
+          "contact_swing_speed": 1.099
+        },
+        {
+          "frame": 47147,
+          "timestamp": 785.79,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -33, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 147.3,
+          "trunk_rotation_at_contact": -15.9,
+          "arm_extension_at_contact": 103.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -33,
+            "wrist": -183
+          },
+          "knee_bend_depth": 141.0,
+          "peak_swing_speed": 6.767,
+          "contact_swing_speed": 0.954
+        },
+        {
+          "frame": 49830,
+          "timestamp": 830.497,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -233, 'elbow': -233, 'wrist': -233}"
+          ],
+          "knee_angle_at_contact": 172.2,
+          "trunk_rotation_at_contact": 5.6,
+          "arm_extension_at_contact": 121.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -233,
+            "elbow": -233,
+            "wrist": -233
+          },
+          "knee_bend_depth": 165.8,
+          "peak_swing_speed": 9.881,
+          "contact_swing_speed": 2.652
+        },
+        {
+          "frame": 50006,
+          "timestamp": 833.439,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 550, 'elbow': 517, 'wrist': 517}"
+          ],
+          "knee_angle_at_contact": 136.0,
+          "trunk_rotation_at_contact": -18.1,
+          "arm_extension_at_contact": 101.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 550,
+            "elbow": 517,
+            "wrist": 517
+          },
+          "knee_bend_depth": 121.9,
+          "peak_swing_speed": 6.397,
+          "contact_swing_speed": 3.07
+        },
+        {
+          "frame": 50428,
+          "timestamp": 840.47,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 217, 'elbow': -167, 'wrist': 133}"
+          ],
+          "knee_angle_at_contact": 140.4,
+          "trunk_rotation_at_contact": -6.8,
+          "arm_extension_at_contact": 138.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 217,
+            "elbow": -167,
+            "wrist": 133
+          },
+          "knee_bend_depth": 123.2,
+          "peak_swing_speed": 4.717,
+          "contact_swing_speed": 0.475
+        },
+        {
+          "frame": 50693,
+          "timestamp": 844.888,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -150, 'wrist': -333}"
+          ],
+          "knee_angle_at_contact": 172.2,
+          "trunk_rotation_at_contact": 13.8,
+          "arm_extension_at_contact": 118.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -150,
+            "wrist": -333
+          },
+          "knee_bend_depth": 169.9,
+          "peak_swing_speed": 5.639,
+          "contact_swing_speed": 0.716
+        },
+        {
+          "frame": 50868,
+          "timestamp": 847.802,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -50, 'wrist': 67}"
+          ],
+          "knee_angle_at_contact": 123.1,
+          "trunk_rotation_at_contact": -24.9,
+          "arm_extension_at_contact": 113.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -50,
+            "wrist": 67
+          },
+          "knee_bend_depth": 117.8,
+          "peak_swing_speed": 5.489,
+          "contact_swing_speed": 0.15
+        },
+        {
+          "frame": 51448,
+          "timestamp": 857.464,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 135.8,
+          "trunk_rotation_at_contact": -9.2,
+          "arm_extension_at_contact": 116.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 217,
+            "wrist": 217
+          },
+          "knee_bend_depth": 121.3,
+          "peak_swing_speed": 6.01,
+          "contact_swing_speed": 0.61
+        },
+        {
+          "frame": 51645,
+          "timestamp": 860.748,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:101.2",
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': 67, 'wrist': 17}"
+          ],
+          "knee_angle_at_contact": 101.2,
+          "trunk_rotation_at_contact": -10.7,
+          "arm_extension_at_contact": 130.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 67,
+            "wrist": 17
+          },
+          "knee_bend_depth": 85.8,
+          "peak_swing_speed": 5.232,
+          "contact_swing_speed": 0.545
+        },
+        {
+          "frame": 51941,
+          "timestamp": 865.676,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -167, 'elbow': 83, 'wrist': 50}"
+          ],
+          "knee_angle_at_contact": 169.0,
+          "trunk_rotation_at_contact": 10.8,
+          "arm_extension_at_contact": 118.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -167,
+            "elbow": 83,
+            "wrist": 50
+          },
+          "knee_bend_depth": 164.8,
+          "peak_swing_speed": 7.655,
+          "contact_swing_speed": 2.544
+        },
+        {
+          "frame": 52080,
+          "timestamp": 868.004,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': 233, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 133.5,
+          "trunk_rotation_at_contact": -8.9,
+          "arm_extension_at_contact": 118.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": 233,
+            "wrist": -117
+          },
+          "knee_bend_depth": 119.3,
+          "peak_swing_speed": 6.737,
+          "contact_swing_speed": 0.752
+        },
+        {
+          "frame": 52265,
+          "timestamp": 871.076,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 141.2,
+          "trunk_rotation_at_contact": -18.0,
+          "arm_extension_at_contact": 110.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 33,
+            "elbow": 183,
+            "wrist": 183
+          },
+          "knee_bend_depth": 120.3,
+          "peak_swing_speed": 8.466,
+          "contact_swing_speed": 3.189
+        },
+        {
+          "frame": 54413,
+          "timestamp": 906.876,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': -17, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 169.1,
+          "trunk_rotation_at_contact": 12.7,
+          "arm_extension_at_contact": 86.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": -17,
+            "wrist": -117
+          },
+          "knee_bend_depth": 167.0,
+          "peak_swing_speed": 6.69,
+          "contact_swing_speed": 1.877
+        },
+        {
+          "frame": 54580,
+          "timestamp": 909.662,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 50, 'elbow': 33, 'wrist': 33}"
+          ],
+          "knee_angle_at_contact": 138.6,
+          "trunk_rotation_at_contact": -22.0,
+          "arm_extension_at_contact": 108.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 50,
+            "elbow": 33,
+            "wrist": 33
+          },
+          "knee_bend_depth": 133.6,
+          "peak_swing_speed": 6.373,
+          "contact_swing_speed": 0.514
+        },
+        {
+          "frame": 54779,
+          "timestamp": 912.986,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -83, 'elbow': 17, 'wrist': 67}"
+          ],
+          "knee_angle_at_contact": 142.9,
+          "trunk_rotation_at_contact": -12.7,
+          "arm_extension_at_contact": 110.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -83,
+            "elbow": 17,
+            "wrist": 67
+          },
+          "knee_bend_depth": 127.6,
+          "peak_swing_speed": 10.491,
+          "contact_swing_speed": 1.467
+        },
+        {
+          "frame": 54957,
+          "timestamp": 915.95,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': 0, 'wrist': 0}"
+          ],
+          "knee_angle_at_contact": 154.6,
+          "trunk_rotation_at_contact": -8.8,
+          "arm_extension_at_contact": 110.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 153.2,
+          "peak_swing_speed": 7.569,
+          "contact_swing_speed": 4.669
+        },
+        {
+          "frame": 55220,
+          "timestamp": 920.327,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -133, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 143.3,
+          "trunk_rotation_at_contact": -11.2,
+          "arm_extension_at_contact": 105.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -133,
+            "wrist": -133
+          },
+          "knee_bend_depth": 139.5,
+          "peak_swing_speed": 8.411,
+          "contact_swing_speed": 2.319
+        },
+        {
+          "frame": 55485,
+          "timestamp": 924.75,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -167, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 143.9,
+          "trunk_rotation_at_contact": 12.1,
+          "arm_extension_at_contact": 121.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -167,
+            "wrist": -167
+          },
+          "knee_bend_depth": 135.8,
+          "peak_swing_speed": 9.489,
+          "contact_swing_speed": 3.494
+        },
+        {
+          "frame": 55793,
+          "timestamp": 929.886,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -117, 'elbow': -117, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 134.8,
+          "trunk_rotation_at_contact": 3.5,
+          "arm_extension_at_contact": 103.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -117,
+            "elbow": -117,
+            "wrist": -83
+          },
+          "knee_bend_depth": 117.6,
+          "peak_swing_speed": 8.949,
+          "contact_swing_speed": 2.95
+        },
+        {
+          "frame": 55993,
+          "timestamp": 933.219,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 149.4,
+          "trunk_rotation_at_contact": 5.5,
+          "arm_extension_at_contact": 121.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 140.2,
+          "peak_swing_speed": 8.147,
+          "contact_swing_speed": 1.064
+        },
+        {
+          "frame": 56951,
+          "timestamp": 949.18,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': -17, 'wrist': -283}"
+          ],
+          "knee_angle_at_contact": 162.1,
+          "trunk_rotation_at_contact": -28.5,
+          "arm_extension_at_contact": 107.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": -17,
+            "wrist": -283
+          },
+          "knee_bend_depth": 140.2,
+          "peak_swing_speed": 6.349,
+          "contact_swing_speed": 2.122
+        },
+        {
+          "frame": 57163,
+          "timestamp": 952.72,
+          "shot_type": "backhand",
+          "flags": [
+            "knee_out_of_range:117.7",
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': 150, 'wrist': 150}"
+          ],
+          "knee_angle_at_contact": 117.7,
+          "trunk_rotation_at_contact": 12.7,
+          "arm_extension_at_contact": 113.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": 150,
+            "wrist": 150
+          },
+          "knee_bend_depth": 73.7,
+          "peak_swing_speed": 7.715,
+          "contact_swing_speed": 1.869
+        },
+        {
+          "frame": 57465,
+          "timestamp": 957.75,
+          "shot_type": "backhand",
+          "flags": [
+            "trunk_extreme:324.9"
+          ],
+          "knee_angle_at_contact": 163.7,
+          "trunk_rotation_at_contact": 324.9,
+          "arm_extension_at_contact": 162.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": 17,
+            "wrist": 17
+          },
+          "knee_bend_depth": 135.6,
+          "peak_swing_speed": 11.244,
+          "contact_swing_speed": 0.422
+        },
+        {
+          "frame": 57621,
+          "timestamp": 960.35,
+          "shot_type": "backhand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -50, 'wrist': 383}"
+          ],
+          "knee_angle_at_contact": 120.5,
+          "trunk_rotation_at_contact": -4.3,
+          "arm_extension_at_contact": 118.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -50,
+            "wrist": 383
+          },
+          "knee_bend_depth": 119.4,
+          "peak_swing_speed": 11.75,
+          "contact_swing_speed": 1.043
+        },
+        {
+          "frame": 57995,
+          "timestamp": 966.591,
+          "shot_type": "forehand",
+          "flags": [],
+          "knee_angle_at_contact": 152.8,
+          "trunk_rotation_at_contact": -17.0,
+          "arm_extension_at_contact": 101.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 134.3,
+          "peak_swing_speed": 6.805,
+          "contact_swing_speed": 3.09
+        },
+        {
+          "frame": 58438,
+          "timestamp": 973.962,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 133, 'elbow': -17, 'wrist': 200}"
+          ],
+          "knee_angle_at_contact": 155.7,
+          "trunk_rotation_at_contact": -19.6,
+          "arm_extension_at_contact": 98.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 133,
+            "elbow": -17,
+            "wrist": 200
+          },
+          "knee_bend_depth": 152.4,
+          "peak_swing_speed": 6.605,
+          "contact_swing_speed": 0.635
+        },
+        {
+          "frame": 58677,
+          "timestamp": 977.949,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -267, 'elbow': -350, 'wrist': -350}"
+          ],
+          "knee_angle_at_contact": 174.1,
+          "trunk_rotation_at_contact": 20.0,
+          "arm_extension_at_contact": 113.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -267,
+            "elbow": -350,
+            "wrist": -350
+          },
+          "knee_bend_depth": 171.2,
+          "peak_swing_speed": 12.315,
+          "contact_swing_speed": 2.215
+        },
+        {
+          "frame": 58890,
+          "timestamp": 981.492,
+          "shot_type": "forehand",
+          "flags": [
+            "knee_out_of_range:114.1",
+            "chain_reversed:{'hip': 0, 'shoulder': -167, 'elbow': -17, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 114.1,
+          "trunk_rotation_at_contact": 16.1,
+          "arm_extension_at_contact": 128.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -167,
+            "elbow": -17,
+            "wrist": -83
+          },
+          "knee_bend_depth": 108.3,
+          "peak_swing_speed": 9.881,
+          "contact_swing_speed": 2.387
+        },
+        {
+          "frame": 61075,
+          "timestamp": 1017.923,
+          "shot_type": "forehand",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 600, 'elbow': 433, 'wrist': 433}"
+          ],
+          "knee_angle_at_contact": 169.4,
+          "trunk_rotation_at_contact": -5.7,
+          "arm_extension_at_contact": 110.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 600,
+            "elbow": 433,
+            "wrist": 433
+          },
+          "knee_bend_depth": 160.6,
+          "peak_swing_speed": 8.373,
+          "contact_swing_speed": 1.532
+        }
+      ]
+    },
+    {
+      "video": "IMG_6851",
+      "fps": 60,
+      "dominant_hand": "right",
+      "has_world_landmarks": false,
+      "shots_audited": [
+        {
+          "frame": 3321,
+          "timestamp": 55.35,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -167, 'elbow': -167, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 166.9,
+          "trunk_rotation_at_contact": -12.1,
+          "arm_extension_at_contact": 71.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -167,
+            "elbow": -167,
+            "wrist": -167
+          },
+          "knee_bend_depth": 115.2,
+          "peak_swing_speed": 38.947,
+          "contact_swing_speed": 12.903
+        },
+        {
+          "frame": 3945,
+          "timestamp": 65.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 163.3,
+          "trunk_rotation_at_contact": -14.2,
+          "arm_extension_at_contact": 136.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 123.3,
+          "peak_swing_speed": 38.978,
+          "contact_swing_speed": 34.407
+        },
+        {
+          "frame": 4389,
+          "timestamp": 73.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 117, 'elbow': -317, 'wrist': -317}"
+          ],
+          "knee_angle_at_contact": 144.3,
+          "trunk_rotation_at_contact": -52.2,
+          "arm_extension_at_contact": 116.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 117,
+            "elbow": -317,
+            "wrist": -317
+          },
+          "knee_bend_depth": 140.8,
+          "peak_swing_speed": 43.768,
+          "contact_swing_speed": 11.302
+        },
+        {
+          "frame": 5409,
+          "timestamp": 90.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 169.0,
+          "trunk_rotation_at_contact": -1.5,
+          "arm_extension_at_contact": 105.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 144.4,
+          "peak_swing_speed": 30.032,
+          "contact_swing_speed": 3.504
+        },
+        {
+          "frame": 5685,
+          "timestamp": 94.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -167, 'elbow': -167, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 175.0,
+          "trunk_rotation_at_contact": 0.8,
+          "arm_extension_at_contact": 146.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -167,
+            "elbow": -167,
+            "wrist": -167
+          },
+          "knee_bend_depth": 143.7,
+          "peak_swing_speed": 46.467,
+          "contact_swing_speed": 33.479
+        },
+        {
+          "frame": 6021,
+          "timestamp": 100.35,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -350, 'wrist': -350}"
+          ],
+          "knee_angle_at_contact": 161.5,
+          "trunk_rotation_at_contact": -19.8,
+          "arm_extension_at_contact": 110.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -350,
+            "wrist": -350
+          },
+          "knee_bend_depth": 130.3,
+          "peak_swing_speed": 32.488,
+          "contact_swing_speed": 1.341
+        },
+        {
+          "frame": 7209,
+          "timestamp": 120.15,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 176.8,
+          "trunk_rotation_at_contact": -0.2,
+          "arm_extension_at_contact": 103.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 67,
+            "elbow": 67,
+            "wrist": 67
+          },
+          "knee_bend_depth": 156.9,
+          "peak_swing_speed": 46.709,
+          "contact_swing_speed": 5.404
+        },
+        {
+          "frame": 7665,
+          "timestamp": 127.75,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 178.1,
+          "trunk_rotation_at_contact": 6.5,
+          "arm_extension_at_contact": 133.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 173.5,
+          "peak_swing_speed": 42.833,
+          "contact_swing_speed": 5.071
+        },
+        {
+          "frame": 8025,
+          "timestamp": 133.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -183, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 160.8,
+          "trunk_rotation_at_contact": -19.9,
+          "arm_extension_at_contact": 100.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -183,
+            "wrist": -183
+          },
+          "knee_bend_depth": 140.2,
+          "peak_swing_speed": 48.386,
+          "contact_swing_speed": 3.223
+        },
+        {
+          "frame": 8901,
+          "timestamp": 148.35,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -250, 'wrist': -250}"
+          ],
+          "knee_angle_at_contact": 166.0,
+          "trunk_rotation_at_contact": -9.4,
+          "arm_extension_at_contact": 111.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -250,
+            "wrist": -250
+          },
+          "knee_bend_depth": 110.5,
+          "peak_swing_speed": 47.285,
+          "contact_swing_speed": 6.663
+        },
+        {
+          "frame": 9225,
+          "timestamp": 153.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -250, 'wrist': -250}"
+          ],
+          "knee_angle_at_contact": 177.1,
+          "trunk_rotation_at_contact": -1.9,
+          "arm_extension_at_contact": 106.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -250,
+            "wrist": -250
+          },
+          "knee_bend_depth": 130.9,
+          "peak_swing_speed": 41.329,
+          "contact_swing_speed": 1.439
+        },
+        {
+          "frame": 9813,
+          "timestamp": 163.55,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 178.1,
+          "trunk_rotation_at_contact": -0.3,
+          "arm_extension_at_contact": 135.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 145.0,
+          "peak_swing_speed": 28.238,
+          "contact_swing_speed": 11.502
+        },
+        {
+          "frame": 10653,
+          "timestamp": 177.55,
+          "shot_type": "serve",
+          "flags": [
+            "arm_out_of_range:50.4",
+            "chain_reversed:{'hip': 0, 'shoulder': -100, 'elbow': -133, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 160.4,
+          "trunk_rotation_at_contact": -13.6,
+          "arm_extension_at_contact": 50.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -100,
+            "elbow": -133,
+            "wrist": -133
+          },
+          "knee_bend_depth": 144.3,
+          "peak_swing_speed": 29.536,
+          "contact_swing_speed": 29.536
+        },
+        {
+          "frame": 11073,
+          "timestamp": 184.55,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 117, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 178.7,
+          "trunk_rotation_at_contact": 6.4,
+          "arm_extension_at_contact": 105.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 117,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 144.2,
+          "peak_swing_speed": 38.193,
+          "contact_swing_speed": 28.862
+        },
+        {
+          "frame": 11529,
+          "timestamp": 192.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -200, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 168.0,
+          "trunk_rotation_at_contact": -9.7,
+          "arm_extension_at_contact": 113.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -200,
+            "wrist": -100
+          },
+          "knee_bend_depth": 135.6,
+          "peak_swing_speed": 30.773,
+          "contact_swing_speed": 17.662
+        },
+        {
+          "frame": 12537,
+          "timestamp": 208.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 33, 'elbow': -133, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 174.3,
+          "trunk_rotation_at_contact": -0.4,
+          "arm_extension_at_contact": 143.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 33,
+            "elbow": -133,
+            "wrist": -133
+          },
+          "knee_bend_depth": 139.4,
+          "peak_swing_speed": 46.499,
+          "contact_swing_speed": 0.549
+        },
+        {
+          "frame": 12885,
+          "timestamp": 214.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': -117, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 163.9,
+          "trunk_rotation_at_contact": -6.0,
+          "arm_extension_at_contact": 108.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": -117,
+            "wrist": -117
+          },
+          "knee_bend_depth": 153.6,
+          "peak_swing_speed": 43.879,
+          "contact_swing_speed": 3.851
+        },
+        {
+          "frame": 13509,
+          "timestamp": 225.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -233, 'wrist': -233}"
+          ],
+          "knee_angle_at_contact": 177.5,
+          "trunk_rotation_at_contact": 0.2,
+          "arm_extension_at_contact": 95.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -233,
+            "wrist": -233
+          },
+          "knee_bend_depth": 148.0,
+          "peak_swing_speed": 44.218,
+          "contact_swing_speed": 12.227
+        },
+        {
+          "frame": 14397,
+          "timestamp": 239.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 178.3,
+          "trunk_rotation_at_contact": 2.6,
+          "arm_extension_at_contact": 142.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 131.3,
+          "peak_swing_speed": 42.306,
+          "contact_swing_speed": 5.793
+        },
+        {
+          "frame": 14793,
+          "timestamp": 246.55,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -267, 'elbow': -267, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 168.5,
+          "trunk_rotation_at_contact": -11.0,
+          "arm_extension_at_contact": 105.6,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -267,
+            "elbow": -267,
+            "wrist": -167
+          },
+          "knee_bend_depth": 128.6,
+          "peak_swing_speed": 43.833,
+          "contact_swing_speed": 8.474
+        },
+        {
+          "frame": 15357,
+          "timestamp": 255.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -67, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 166.6,
+          "trunk_rotation_at_contact": -9.4,
+          "arm_extension_at_contact": 144.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -67,
+            "wrist": -117
+          },
+          "knee_bend_depth": 135.1,
+          "peak_swing_speed": 25.57,
+          "contact_swing_speed": 2.167
+        },
+        {
+          "frame": 17637,
+          "timestamp": 293.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 17, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 168.8,
+          "trunk_rotation_at_contact": -11.7,
+          "arm_extension_at_contact": 88.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 130.4,
+          "peak_swing_speed": 32.229,
+          "contact_swing_speed": 32.229
+        },
+        {
+          "frame": 18009,
+          "timestamp": 300.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -250, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 170.6,
+          "trunk_rotation_at_contact": -8.5,
+          "arm_extension_at_contact": 106.0,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -250,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 131.7,
+          "peak_swing_speed": 34.633,
+          "contact_swing_speed": 34.633
+        },
+        {
+          "frame": 18381,
+          "timestamp": 306.35,
+          "shot_type": "serve",
+          "flags": [
+            "arm_out_of_range:59.9",
+            "chain_reversed:{'hip': 0, 'shoulder': -183, 'elbow': -183, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 165.4,
+          "trunk_rotation_at_contact": -12.7,
+          "arm_extension_at_contact": 59.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -183,
+            "elbow": -183,
+            "wrist": -183
+          },
+          "knee_bend_depth": 135.0,
+          "peak_swing_speed": 30.505,
+          "contact_swing_speed": 19.09
+        },
+        {
+          "frame": 19629,
+          "timestamp": 327.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 158.0,
+          "trunk_rotation_at_contact": -4.4,
+          "arm_extension_at_contact": 143.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 148.2,
+          "peak_swing_speed": 31.374,
+          "contact_swing_speed": 3.372
+        },
+        {
+          "frame": 20073,
+          "timestamp": 334.55,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -167, 'wrist': -167}"
+          ],
+          "knee_angle_at_contact": 166.6,
+          "trunk_rotation_at_contact": -4.0,
+          "arm_extension_at_contact": 111.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -167,
+            "wrist": -167
+          },
+          "knee_bend_depth": 151.2,
+          "peak_swing_speed": 45.85,
+          "contact_swing_speed": 30.915
+        },
+        {
+          "frame": 20481,
+          "timestamp": 341.35,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -150, 'elbow': -233, 'wrist': -267}"
+          ],
+          "knee_angle_at_contact": 146.4,
+          "trunk_rotation_at_contact": -38.4,
+          "arm_extension_at_contact": 133.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -150,
+            "elbow": -233,
+            "wrist": -267
+          },
+          "knee_bend_depth": 143.6,
+          "peak_swing_speed": 27.676,
+          "contact_swing_speed": 4.251
+        },
+        {
+          "frame": 21333,
+          "timestamp": 355.55,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 169.6,
+          "trunk_rotation_at_contact": 0.3,
+          "arm_extension_at_contact": 143.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 83,
+            "elbow": 83,
+            "wrist": 83
+          },
+          "knee_bend_depth": 149.2,
+          "peak_swing_speed": 30.436,
+          "contact_swing_speed": 1.963
+        },
+        {
+          "frame": 21729,
+          "timestamp": 362.15,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 162.0,
+          "trunk_rotation_at_contact": -24.3,
+          "arm_extension_at_contact": 83.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 33,
+            "wrist": 33
+          },
+          "knee_bend_depth": 144.9,
+          "peak_swing_speed": 37.073,
+          "contact_swing_speed": 3.371
+        },
+        {
+          "frame": 22125,
+          "timestamp": 368.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -100, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 175.9,
+          "trunk_rotation_at_contact": -0.7,
+          "arm_extension_at_contact": 153.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -100,
+            "wrist": -100
+          },
+          "knee_bend_depth": 139.3,
+          "peak_swing_speed": 33.344,
+          "contact_swing_speed": 3.276
+        },
+        {
+          "frame": 23037,
+          "timestamp": 383.95,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 161.3,
+          "trunk_rotation_at_contact": -15.8,
+          "arm_extension_at_contact": 136.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 114.2,
+          "peak_swing_speed": 35.4,
+          "contact_swing_speed": 3.769
+        },
+        {
+          "frame": 23649,
+          "timestamp": 394.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 17, 'elbow': -600, 'wrist': -600}"
+          ],
+          "knee_angle_at_contact": 171.2,
+          "trunk_rotation_at_contact": 2.2,
+          "arm_extension_at_contact": 145.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": -600,
+            "wrist": -600
+          },
+          "knee_bend_depth": 169.0,
+          "peak_swing_speed": 27.017,
+          "contact_swing_speed": 0.466
+        },
+        {
+          "frame": 23985,
+          "timestamp": 399.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 176.6,
+          "trunk_rotation_at_contact": -0.8,
+          "arm_extension_at_contact": 105.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 151.1,
+          "peak_swing_speed": 39.851,
+          "contact_swing_speed": 17.837
+        },
+        {
+          "frame": 24849,
+          "timestamp": 414.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -83, 'elbow': -50, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 167.6,
+          "trunk_rotation_at_contact": -8.2,
+          "arm_extension_at_contact": 81.1,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -83,
+            "elbow": -50,
+            "wrist": -50
+          },
+          "knee_bend_depth": 148.6,
+          "peak_swing_speed": 28.571,
+          "contact_swing_speed": 13.224
+        },
+        {
+          "frame": 25521,
+          "timestamp": 425.35,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 168.1,
+          "trunk_rotation_at_contact": -14.4,
+          "arm_extension_at_contact": 106.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 36.5,
+          "peak_swing_speed": 28.738,
+          "contact_swing_speed": 7.581
+        },
+        {
+          "frame": 26409,
+          "timestamp": 440.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -133, 'elbow': -117, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 149.8,
+          "trunk_rotation_at_contact": -34.4,
+          "arm_extension_at_contact": 134.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -133,
+            "elbow": -117,
+            "wrist": -117
+          },
+          "knee_bend_depth": 139.9,
+          "peak_swing_speed": 29.85,
+          "contact_swing_speed": 8.735
+        },
+        {
+          "frame": 27321,
+          "timestamp": 455.35,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -83, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 168.1,
+          "trunk_rotation_at_contact": -2.2,
+          "arm_extension_at_contact": 138.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -83,
+            "wrist": -67
+          },
+          "knee_bend_depth": 153.0,
+          "peak_swing_speed": 34.183,
+          "contact_swing_speed": 29.681
+        },
+        {
+          "frame": 27705,
+          "timestamp": 461.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -200, 'elbow': -183, 'wrist': -183}"
+          ],
+          "knee_angle_at_contact": 160.9,
+          "trunk_rotation_at_contact": -23.9,
+          "arm_extension_at_contact": 91.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -200,
+            "elbow": -183,
+            "wrist": -183
+          },
+          "knee_bend_depth": 133.0,
+          "peak_swing_speed": 46.041,
+          "contact_swing_speed": 9.316
+        },
+        {
+          "frame": 29241,
+          "timestamp": 487.35,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 151.6,
+          "trunk_rotation_at_contact": -19.9,
+          "arm_extension_at_contact": 141.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 117
+          },
+          "knee_bend_depth": 122.8,
+          "peak_swing_speed": 40.89,
+          "contact_swing_speed": 6.227
+        },
+        {
+          "frame": 29709,
+          "timestamp": 495.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 17, 'elbow': -117, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 156.9,
+          "trunk_rotation_at_contact": -9.3,
+          "arm_extension_at_contact": 109.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 17,
+            "elbow": -117,
+            "wrist": -117
+          },
+          "knee_bend_depth": 152.8,
+          "peak_swing_speed": 41.232,
+          "contact_swing_speed": 37.79
+        },
+        {
+          "frame": 30093,
+          "timestamp": 501.55,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -133, 'wrist': -133}"
+          ],
+          "knee_angle_at_contact": 149.8,
+          "trunk_rotation_at_contact": -9.3,
+          "arm_extension_at_contact": 141.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -133,
+            "wrist": -133
+          },
+          "knee_bend_depth": 127.9,
+          "peak_swing_speed": 41.176,
+          "contact_swing_speed": 41.176
+        },
+        {
+          "frame": 30717,
+          "timestamp": 511.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -367, 'elbow': -467, 'wrist': -450}"
+          ],
+          "knee_angle_at_contact": 167.7,
+          "trunk_rotation_at_contact": -0.4,
+          "arm_extension_at_contact": 115.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -367,
+            "elbow": -467,
+            "wrist": -450
+          },
+          "knee_bend_depth": 157.1,
+          "peak_swing_speed": 39.396,
+          "contact_swing_speed": 1.506
+        },
+        {
+          "frame": 31917,
+          "timestamp": 531.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -450, 'wrist': -283}"
+          ],
+          "knee_angle_at_contact": 161.3,
+          "trunk_rotation_at_contact": -0.8,
+          "arm_extension_at_contact": 102.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -450,
+            "wrist": -283
+          },
+          "knee_bend_depth": 146.9,
+          "peak_swing_speed": 42.113,
+          "contact_swing_speed": 0.66
+        },
+        {
+          "frame": 32325,
+          "timestamp": 538.75,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 159.0,
+          "trunk_rotation_at_contact": -14.1,
+          "arm_extension_at_contact": 120.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 138.1,
+          "peak_swing_speed": 31.95,
+          "contact_swing_speed": 15.014
+        },
+        {
+          "frame": 32781,
+          "timestamp": 546.35,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 159.3,
+          "trunk_rotation_at_contact": 3.5,
+          "arm_extension_at_contact": 79.4,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 0,
+            "wrist": 0
+          },
+          "knee_bend_depth": 153.2,
+          "peak_swing_speed": 43.029,
+          "contact_swing_speed": 4.04
+        },
+        {
+          "frame": 33957,
+          "timestamp": 565.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -17, 'elbow': -50, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 162.2,
+          "trunk_rotation_at_contact": 2.5,
+          "arm_extension_at_contact": 141.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -17,
+            "elbow": -50,
+            "wrist": -50
+          },
+          "knee_bend_depth": 136.6,
+          "peak_swing_speed": 35.638,
+          "contact_swing_speed": 5.967
+        },
+        {
+          "frame": 34305,
+          "timestamp": 571.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -433, 'elbow': 150, 'wrist': 150}"
+          ],
+          "knee_angle_at_contact": 166.3,
+          "trunk_rotation_at_contact": 2.3,
+          "arm_extension_at_contact": 113.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -433,
+            "elbow": 150,
+            "wrist": 150
+          },
+          "knee_bend_depth": 155.1,
+          "peak_swing_speed": 34.113,
+          "contact_swing_speed": 1.58
+        },
+        {
+          "frame": 34953,
+          "timestamp": 582.55,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -367, 'elbow': 233, 'wrist': 233}"
+          ],
+          "knee_angle_at_contact": 160.8,
+          "trunk_rotation_at_contact": -4.8,
+          "arm_extension_at_contact": 118.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -367,
+            "elbow": 233,
+            "wrist": 233
+          },
+          "knee_bend_depth": 154.3,
+          "peak_swing_speed": 28.986,
+          "contact_swing_speed": 0.912
+        },
+        {
+          "frame": 36225,
+          "timestamp": 603.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -100, 'wrist': -100}"
+          ],
+          "knee_angle_at_contact": 159.1,
+          "trunk_rotation_at_contact": -6.8,
+          "arm_extension_at_contact": 130.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -100,
+            "wrist": -100
+          },
+          "knee_bend_depth": 82.7,
+          "peak_swing_speed": 40.533,
+          "contact_swing_speed": 30.128
+        },
+        {
+          "frame": 38469,
+          "timestamp": 641.15,
+          "shot_type": "serve",
+          "flags": [
+            "trunk_degenerate",
+            "chain_reversed:{'hip': 0, 'shoulder': 567, 'elbow': -50, 'wrist': -50}"
+          ],
+          "knee_angle_at_contact": 169.5,
+          "trunk_rotation_at_contact": -0.0,
+          "arm_extension_at_contact": 117.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 567,
+            "elbow": -50,
+            "wrist": -50
+          },
+          "knee_bend_depth": 148.9,
+          "peak_swing_speed": 37.964,
+          "contact_swing_speed": 1.303
+        },
+        {
+          "frame": 39117,
+          "timestamp": 651.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -33, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 167.0,
+          "trunk_rotation_at_contact": -1.9,
+          "arm_extension_at_contact": 141.7,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -33,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 152.9,
+          "peak_swing_speed": 47.157,
+          "contact_swing_speed": 3.673
+        },
+        {
+          "frame": 39465,
+          "timestamp": 657.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 0, 'elbow': -83, 'wrist': -83}"
+          ],
+          "knee_angle_at_contact": 160.2,
+          "trunk_rotation_at_contact": -6.7,
+          "arm_extension_at_contact": 84.8,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": -83,
+            "wrist": -83
+          },
+          "knee_bend_depth": 89.7,
+          "peak_swing_speed": 41.856,
+          "contact_swing_speed": 23.216
+        },
+        {
+          "frame": 39945,
+          "timestamp": 665.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 167, 'elbow': 67, 'wrist': 67}"
+          ],
+          "knee_angle_at_contact": 163.1,
+          "trunk_rotation_at_contact": -12.2,
+          "arm_extension_at_contact": 87.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 167,
+            "elbow": 67,
+            "wrist": 67
+          },
+          "knee_bend_depth": 112.8,
+          "peak_swing_speed": 44.878,
+          "contact_swing_speed": 2.777
+        },
+        {
+          "frame": 41565,
+          "timestamp": 692.75,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': 33, 'elbow': -67, 'wrist': -67}"
+          ],
+          "knee_angle_at_contact": 165.9,
+          "trunk_rotation_at_contact": -5.1,
+          "arm_extension_at_contact": 145.5,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 33,
+            "elbow": -67,
+            "wrist": -67
+          },
+          "knee_bend_depth": 120.1,
+          "peak_swing_speed": 40.416,
+          "contact_swing_speed": 3.137
+        },
+        {
+          "frame": 41949,
+          "timestamp": 699.15,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -67, 'elbow': -33, 'wrist': -33}"
+          ],
+          "knee_angle_at_contact": 159.5,
+          "trunk_rotation_at_contact": -17.2,
+          "arm_extension_at_contact": 124.9,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -67,
+            "elbow": -33,
+            "wrist": -33
+          },
+          "knee_bend_depth": 141.9,
+          "peak_swing_speed": 31.204,
+          "contact_swing_speed": 6.124
+        },
+        {
+          "frame": 42297,
+          "timestamp": 704.95,
+          "shot_type": "serve",
+          "flags": [
+            "chain_reversed:{'hip': 0, 'shoulder': -50, 'elbow': -117, 'wrist': -117}"
+          ],
+          "knee_angle_at_contact": 164.4,
+          "trunk_rotation_at_contact": -4.4,
+          "arm_extension_at_contact": 134.2,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": -50,
+            "elbow": -117,
+            "wrist": -117
+          },
+          "knee_bend_depth": 110.6,
+          "peak_swing_speed": 38.845,
+          "contact_swing_speed": 23.989
+        },
+        {
+          "frame": 43053,
+          "timestamp": 717.55,
+          "shot_type": "serve",
+          "flags": [],
+          "knee_angle_at_contact": 163.2,
+          "trunk_rotation_at_contact": 2.1,
+          "arm_extension_at_contact": 140.3,
+          "kinetic_chain_timing_ms": {
+            "hip": 0,
+            "shoulder": 0,
+            "elbow": 17,
+            "wrist": 17
+          },
+          "knee_bend_depth": 161.6,
+          "peak_swing_speed": 44.328,
+          "contact_swing_speed": 0.641
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "total_shots": 256,
+    "total_flagged": 216,
+    "flag_rate": 0.84375,
+    "by_flag_category": {
+      "chain_reversed": 212,
+      "trunk_extreme": 7,
+      "knee_out_of_range": 24,
+      "trunk_degenerate": 2,
+      "arm_out_of_range": 2
+    },
+    "by_shot_type": {
+      "forehand": {
+        "total": 137,
+        "flagged": 118
+      },
+      "backhand": {
+        "total": 62,
+        "flagged": 50
+      },
+      "serve": {
+        "total": 57,
+        "flagged": 48
+      }
+    }
+  }
+}
