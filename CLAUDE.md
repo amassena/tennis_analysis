@@ -123,7 +123,12 @@ ssh tmassena 'schtasks /run /tn TennisGPUWorker'
 
 ## Cloudflare Worker (`worker/upload-worker.js`)
 
-Deploy: `cd worker && CLOUDFLARE_API_TOKEN=... npx wrangler deploy`
+Deploy:
+- One-shot, non-interactive (sources token from `~/tennis_analysis/.env`):
+  `./scripts/deploy_gallery.sh worker` (or `gallery`, or no arg for both).
+  Claude can run this directly via the Bash tool — no need to copy commands
+  to a separate terminal.
+- Manual fallback: `cd worker && CLOUDFLARE_API_TOKEN=... npx wrangler deploy`
 
 Routes: `tennis.playfullife.com/*`, `media.playfullife.com/*` (301→tennis), `playfullife.com/*`, `www.*`
 
