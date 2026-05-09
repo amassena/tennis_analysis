@@ -56,10 +56,95 @@ def _safe(val, decimals=3):
     return round(float(val), decimals)
 
 
-def analyze_shot(frames, center_frame, fps, dominant_hand="right"):
+def _smooth_window(seq, window=5):
+    """Centered moving-average smoother for a 1D numeric sequence.
+
+    Used on per-frame joint velocities before peak-picking, so noise spikes
+    from MediaPipe's per-frame jitter don't masquerade as velocity peaks.
+    """
+    n = len(seq)
+    if window <= 1 or n <= 1:
+        return list(seq)
+    half = window // 2
+    out = [0.0] * n
+    for i in range(n):
+        lo = max(0, i - half)
+        hi = min(n, i + half + 1)
+        out[i] = sum(seq[lo:hi]) / (hi - lo)
+    return out
+
+
+def _peak_with_min_prominence(seq, min_prominence=0.5):
+    """Largest local maximum with prominence >= threshold; argmax fallback.
+
+    A "local max" here is i where seq[i] > seq[i-1] and seq[i] >= seq[i+1].
+    Prominence is seq[i] minus the higher of the two adjacent valley floors
+    (lowest values reached before encountering a higher peak on each side).
+    Falls back to plain argmax if no qualifying peak — the relative ordering
+    across joints is more important than perfect peak isolation per joint.
+    """
+    n = len(seq)
+    if n == 0:
+        return None
+    if n <= 2:
+        return int(max(range(n), key=lambda k: seq[k]))
+    best_idx, best_val = None, -float("inf")
+    for i in range(1, n - 1):
+        if seq[i] > seq[i - 1] and seq[i] >= seq[i + 1]:
+            left_floor = seq[i]
+            for j in range(i - 1, -1, -1):
+                left_floor = min(left_floor, seq[j])
+                if seq[j] > seq[i]:
+                    break
+            right_floor = seq[i]
+            for j in range(i + 1, n):
+                right_floor = min(right_floor, seq[j])
+                if seq[j] > seq[i]:
+                    break
+            prom = seq[i] - max(left_floor, right_floor)
+            if prom >= min_prominence and seq[i] > best_val:
+                best_val = seq[i]
+                best_idx = i
+    if best_idx is None:
+        return int(max(range(n), key=lambda k: seq[k]))
+    return best_idx
+
+
+def _accel_zero_crossing_peak(velocities):
+    """Pick a velocity peak via acceleration-sign-change (+ → −).
+
+    Amplitude-insensitive — robust on noisy biomech signals where a single
+    spurious spike could otherwise dominate a max-vel detector.
+    Returns the index whose velocity is highest among + → − crossings, or
+    None if no crossing occurred (caller should fall back).
+    """
+    n = len(velocities)
+    if n < 3:
+        return None
+    accel = [velocities[i + 1] - velocities[i] for i in range(n - 1)]
+    candidates = []
+    for i in range(1, len(accel)):
+        if accel[i - 1] > 0 and accel[i] <= 0:
+            candidates.append(i)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda k: velocities[k])
+
+
+def analyze_shot(frames, center_frame, fps, dominant_hand="right",
+                 kinetic_peak_method="smoothed"):
     """Compute full biomechanical analysis for a single shot.
 
     Returns dict with swing profile, joint angles, kinetic chain, phase durations.
+
+    kinetic_peak_method:
+      - "smoothed"            (default) — moving-average smooth + min-prominence
+                              peak. Most robust on noisy MediaPipe outputs.
+      - "accel_zero_crossing" — smooth, then pick the largest + → − accel
+                              transition. Amplitude-insensitive; complements the
+                              "smoothed" path under design-partner's A/B plan.
+      - "legacy"              — original argmax-of-raw-velocity. Available for
+                              regression comparison via --legacy-kinematic-peak.
     """
     n = len(frames)
     cf = min(center_frame, n - 1)
@@ -99,6 +184,10 @@ def analyze_shot(frames, center_frame, fps, dominant_hand="right"):
             sh_angle = _line_angle_xz(ls, rs)
             hip_angle = _line_angle_xz(lh, rh)
             trunk_rot = math.degrees(sh_angle - hip_angle)
+            # Clamp to [-180, 180]: angles near ±π wrap (e.g. 175° vs -175°
+            # → raw diff 350° though the physical rotation is -10°). Without
+            # this, audit `trunk_extreme:|x|>90` flags fire on tiny rotations.
+            trunk_rot = ((trunk_rot + 180.0) % 360.0) - 180.0
 
     # ── Knee bend depth ──────────────────────────────────────────
     min_knee_angle = 180.0
@@ -169,27 +258,49 @@ def analyze_shot(frames, center_frame, fps, dominant_hand="right"):
     recovery_time_ms = round(recovery_frames / fps * 1000)
 
     # ── Kinetic chain timing ─────────────────────────────────────
-    # Track peak velocity time of: hip, shoulder, elbow, wrist
-    # Correct order: proximal → distal (hip → shoulder → elbow → wrist)
+    # Track peak velocity time of: hip, shoulder, elbow, wrist.
+    # Correct order: proximal → distal (hip → shoulder → elbow → wrist).
+    # Per-frame velocity from world_landmarks is noise-dominated at high fps,
+    # so naïve argmax used to pick a noise spike. We now (a) smooth the
+    # velocity series and (b) require a local maximum with min prominence,
+    # which fixes the "chain reversed" flag rate (see eval/3d-lifting/REPORT.md).
     chain_times = {}
     search_start = max(0, cf - 30)
     search_end = min(n, cf + 10)
+    win_len = max(0, search_end - search_start)
 
     for joint_name, joint_idx in [("hip", d_hip), ("shoulder", d_shoulder),
                                    ("elbow", d_elbow), ("wrist", d_wrist)]:
-        max_vel = 0
-        max_frame = cf
-        for i in range(search_start + 1, search_end):
+        # Build a dense per-frame velocity series over the window. Frames
+        # without a detection contribute 0 (a gap-fill that beats skipping —
+        # a missing frame between two real ones doesn't fake a peak).
+        vels = [0.0] * win_len
+        for k in range(1, win_len):
+            i = search_start + k
             if not frames[i] or not frames[i - 1]:
                 continue
             p_curr = get_keypoint(frames[i], joint_idx)
             p_prev = get_keypoint(frames[i - 1], joint_idx)
             if p_curr and p_prev:
-                vel = math.sqrt(sum((a - b) ** 2 for a, b in zip(p_curr[:3], p_prev[:3]))) * fps
-                if vel > max_vel:
-                    max_vel = vel
-                    max_frame = i
-        chain_times[joint_name] = max_frame
+                vels[k] = math.sqrt(
+                    sum((a - b) ** 2 for a, b in zip(p_curr[:3], p_prev[:3]))
+                ) * fps
+
+        if kinetic_peak_method == "legacy":
+            peak_local = int(max(range(win_len), key=lambda k: vels[k])) if win_len else 0
+        else:
+            smoothed = _smooth_window(vels, window=5)
+            if kinetic_peak_method == "accel_zero_crossing":
+                peak_local = _accel_zero_crossing_peak(smoothed)
+                if peak_local is None:
+                    # No accel crossing in window — fall back to smoothed peak.
+                    peak_local = _peak_with_min_prominence(smoothed, min_prominence=0.5)
+            else:  # "smoothed" — default
+                peak_local = _peak_with_min_prominence(smoothed, min_prominence=0.5)
+            if peak_local is None:
+                peak_local = 0
+
+        chain_times[joint_name] = search_start + peak_local
 
     # Check if ordering is correct (proximal → distal)
     chain_order = ["hip", "shoulder", "elbow", "wrist"]
@@ -240,10 +351,15 @@ def analyze_shot(frames, center_frame, fps, dominant_hand="right"):
     }
 
 
-def analyze_session(detections_path, poses_path, output_path=None):
+def analyze_session(detections_path, poses_path, output_path=None,
+                    kinetic_peak_method="smoothed"):
     """Run biomechanical analysis on all shots in a session.
 
     Returns full session analysis dict.
+
+    kinetic_peak_method: see analyze_shot. Defaults to "smoothed" (the
+    fix shipped 2026-05-09); pass "legacy" to reproduce pre-fix behavior
+    for regression comparison.
     """
     with open(detections_path) as f:
         det_data = json.load(f)
@@ -268,7 +384,8 @@ def analyze_session(detections_path, poses_path, output_path=None):
         shot_type = det["shot_type"]
         timestamp = det.get("timestamp", 0)
 
-        analysis = analyze_shot(frames, frame_idx, fps, dominant_hand)
+        analysis = analyze_shot(frames, frame_idx, fps, dominant_hand,
+                                kinetic_peak_method=kinetic_peak_method)
         analysis["timestamp"] = timestamp
         analysis["frame"] = frame_idx
         analysis["shot_type"] = shot_type
@@ -440,7 +557,22 @@ def main():
                         help="Analyze all reviewed videos")
     parser.add_argument("--compare", nargs="+",
                         help="Compare session analysis JSONs")
+    parser.add_argument("--legacy-kinematic-peak", action="store_true",
+                        help="Use the pre-2026-05-09 raw-velocity argmax for "
+                             "kinetic chain timing (regression comparison only).")
+    parser.add_argument("--accel-zero-crossing", action="store_true",
+                        help="Use acceleration zero-crossing instead of "
+                             "smoothed-velocity peak detection. Mutually "
+                             "exclusive with --legacy-kinematic-peak.")
     args = parser.parse_args()
+
+    if args.legacy_kinematic_peak and args.accel_zero_crossing:
+        parser.error("--legacy-kinematic-peak and --accel-zero-crossing are mutually exclusive")
+    kinetic_peak_method = (
+        "legacy" if args.legacy_kinematic_peak
+        else "accel_zero_crossing" if args.accel_zero_crossing
+        else "smoothed"
+    )
 
     if args.compare:
         compare_sessions(args.compare)
@@ -471,7 +603,8 @@ def main():
             print(f"\n{'─'*50}")
             print(f"  {video_name}")
             print(f"{'─'*50}")
-            session = analyze_session(det_path, pose_path, out_path)
+            session = analyze_session(det_path, pose_path, out_path,
+                                       kinetic_peak_method=kinetic_peak_method)
             _print_session_summary(session)
             results.append(session)
 
@@ -494,7 +627,8 @@ def main():
         video_name = Path(det_path).stem.replace("_fused_v5", "").replace("_fused", "")
         out_path = os.path.join(ANALYSIS_DIR, f"{video_name}_biomech.json")
 
-    session = analyze_session(det_path, poses_path, out_path)
+    session = analyze_session(det_path, poses_path, out_path,
+                               kinetic_peak_method=kinetic_peak_method)
     _print_session_summary(session)
 
 
