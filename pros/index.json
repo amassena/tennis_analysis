@@ -1,6 +1,10 @@
 {
-  "version": 2,
-  "description": "Pro clip library for side-by-side comparison. Each clip is a 4-5s window around a stroke.",
+  "version": 3,
+  "description": "Pro clip library for side-by-side comparison. Each clip is a 4-5s window around a stroke. Per-player metadata (qid, handedness, gender, birth_year) sourced from Wikidata via scripts/fetch_pros_from_wikidata.py; backhand_style is filled manually where Wikidata is silent — the raw fetch is preserved at pros/wikidata_cache.json so a refresh can't clobber human curation.",
+  "schema_changelog": {
+    "v3": "2026-05-09 — added qid/handedness/gender/birth_year/backhand_style per player; expanded roster from 4 to 24. Replaces hardcoded PRO_HANDEDNESS dict in scripts/pro_comparison.py.",
+    "v2": "Earlier — 4-player roster (Alcaraz/Djokovic/Federer/Nadal), no per-player metadata, handedness hardcoded in code."
+  },
   "clip_spec": {
     "format": "mp4",
     "target_fps": 60,
@@ -11,212 +15,244 @@
   "players": {
     "alcaraz": {
       "name": "Carlos Alcaraz",
+      "qid": "Q85518537",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 2003,
       "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2024"
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "side",
-          "event": "Australian Open 2022"
-        },
-        {
-          "file": "forehand_003.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Australian Open 2022"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2024"
-        },
-        {
-          "file": "backhand_002.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2024"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "side",
-          "event": "Australian Open 2022"
-        }
+        {"file": "forehand_001.mp4", "type": "forehand", "contact_frame": 120, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "behind", "event": "Indian Wells 2024"},
+        {"file": "forehand_002.mp4", "type": "forehand", "contact_frame": 120, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "side", "event": "Australian Open 2022"},
+        {"file": "forehand_003.mp4", "type": "forehand", "contact_frame": 120, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "behind", "event": "Australian Open 2022"},
+        {"file": "backhand_001.mp4", "type": "backhand", "contact_frame": 120, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "behind", "event": "Indian Wells 2024"},
+        {"file": "backhand_002.mp4", "type": "backhand", "contact_frame": 120, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "behind", "event": "Indian Wells 2024"},
+        {"file": "serve_001.mp4", "type": "serve", "contact_frame": 120, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "side", "event": "Australian Open 2022"}
       ]
     },
     "djokovic": {
       "name": "Novak Djokovic",
+      "qid": "Q5812",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1987,
       "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "backhand_002.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "serve_002.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "forehand_003.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2025"
-        },
-        {
-          "file": "backhand_003.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2025"
-        }
+        {"file": "forehand_001.mp4", "type": "forehand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Cincinnati 2013"},
+        {"file": "forehand_002.mp4", "type": "forehand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Cincinnati 2013"},
+        {"file": "forehand_003.mp4", "type": "forehand", "contact_frame": 150, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "behind", "event": "Indian Wells 2025"},
+        {"file": "backhand_001.mp4", "type": "backhand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Cincinnati 2013"},
+        {"file": "backhand_002.mp4", "type": "backhand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Cincinnati 2013"},
+        {"file": "backhand_003.mp4", "type": "backhand", "contact_frame": 150, "fps": 60, "source": "youtube:SlowMoTennis", "angle": "behind", "event": "Indian Wells 2025"},
+        {"file": "serve_001.mp4", "type": "serve", "contact_frame": 180, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Cincinnati 2013"},
+        {"file": "serve_002.mp4", "type": "serve", "contact_frame": 180, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Cincinnati 2013"}
       ]
     },
     "federer": {
       "name": "Roger Federer",
+      "qid": "Q1426",
+      "handedness": "right",
+      "backhand_style": "one-handed",
+      "gender": "male",
+      "birth_year": 1981,
       "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        }
+        {"file": "forehand_001.mp4", "type": "forehand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"},
+        {"file": "backhand_001.mp4", "type": "backhand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"},
+        {"file": "serve_001.mp4", "type": "serve", "contact_frame": 180, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"}
       ]
     },
     "nadal": {
       "name": "Rafael Nadal",
+      "qid": "Q10132",
+      "handedness": "left",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1986,
       "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        }
+        {"file": "forehand_001.mp4", "type": "forehand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"},
+        {"file": "forehand_002.mp4", "type": "forehand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"},
+        {"file": "backhand_001.mp4", "type": "backhand", "contact_frame": 150, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"},
+        {"file": "serve_001.mp4", "type": "serve", "contact_frame": 180, "fps": 60, "source": "youtube:EssentialTennis", "angle": "side", "event": "Indian Wells 2013"}
       ]
+    },
+    "sinner": {
+      "name": "Jannik Sinner",
+      "qid": "Q54812588",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 2001,
+      "clips": []
+    },
+    "medvedev": {
+      "name": "Daniil Medvedev",
+      "qid": "Q21622022",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1996,
+      "clips": []
+    },
+    "zverev": {
+      "name": "Alexander Zverev",
+      "qid": "Q13990552",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1997,
+      "clips": []
+    },
+    "tsitsipas": {
+      "name": "Stefanos Tsitsipas",
+      "qid": "Q24450982",
+      "handedness": "right",
+      "backhand_style": "one-handed",
+      "gender": "male",
+      "birth_year": 1998,
+      "clips": []
+    },
+    "rublev": {
+      "name": "Andrey Rublev",
+      "qid": "Q17373391",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1997,
+      "clips": []
+    },
+    "deminaur": {
+      "name": "Alex de Minaur",
+      "qid": "Q22958938",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1999,
+      "clips": []
+    },
+    "fritz": {
+      "name": "Taylor Fritz",
+      "qid": "Q17660516",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1997,
+      "clips": []
+    },
+    "hurkacz": {
+      "name": "Hubert Hurkacz",
+      "qid": "Q18927958",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1997,
+      "clips": []
+    },
+    "rune": {
+      "name": "Holger Rune",
+      "qid": "Q48200561",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 2003,
+      "clips": []
+    },
+    "murray": {
+      "name": "Andy Murray",
+      "qid": "Q10125",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "male",
+      "birth_year": 1987,
+      "clips": []
+    },
+    "wawrinka": {
+      "name": "Stan Wawrinka",
+      "qid": "Q193661",
+      "handedness": "right",
+      "backhand_style": "one-handed",
+      "gender": "male",
+      "birth_year": 1985,
+      "clips": []
+    },
+    "sabalenka": {
+      "name": "Aryna Sabalenka",
+      "qid": "Q23448791",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1998,
+      "clips": []
+    },
+    "swiatek": {
+      "name": "Iga Swiatek",
+      "qid": "Q26840238",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 2001,
+      "clips": []
+    },
+    "gauff": {
+      "name": "Coco Gauff",
+      "qid": "Q39263365",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 2004,
+      "clips": []
+    },
+    "rybakina": {
+      "name": "Elena Rybakina",
+      "qid": "Q42055714",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1999,
+      "clips": []
+    },
+    "pegula": {
+      "name": "Jessica Pegula",
+      "qid": "Q24159",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1994,
+      "clips": []
+    },
+    "jabeur": {
+      "name": "Ons Jabeur",
+      "qid": "Q290212",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1994,
+      "clips": []
+    },
+    "serena": {
+      "name": "Serena Williams",
+      "qid": "Q11459",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1981,
+      "clips": []
+    },
+    "venus": {
+      "name": "Venus Williams",
+      "qid": "Q11578",
+      "handedness": "right",
+      "backhand_style": "two-handed",
+      "gender": "female",
+      "birth_year": 1980,
+      "clips": []
+    },
+    "henin": {
+      "name": "Justine Henin",
+      "qid": "Q11682",
+      "handedness": "right",
+      "backhand_style": "one-handed",
+      "gender": "female",
+      "birth_year": 1982,
+      "clips": []
     }
   }
 }
