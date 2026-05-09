@@ -179,33 +179,118 @@ def write_resource_to_tempfile(resource) -> Path:
     return Path(tmp_path)
 
 
+CHUNK_SIZE = 50 * 1024 * 1024  # 50 MB — under CF edge's 100 MB body cap
+
+
 def upload_to_worker(token: str, asset_id: str, filename: str,
                      created_at: str, mov_path: Path) -> dict:
+    """Upload a file. Single-shot if <CHUNK_SIZE, chunked otherwise."""
+    size = mov_path.stat().st_size
+    if size <= CHUNK_SIZE:
+        return _upload_single(token, asset_id, filename, created_at, mov_path)
+    return _upload_chunked(token, asset_id, filename, created_at, mov_path, size)
+
+
+def _upload_single(token, asset_id, filename, created_at, mov_path):
     """POST mov bytes to /api/upload/iphone; return parsed JSON response."""
+    import json
     url = f"{WORKER_BASE}/api/upload/iphone"
     with mov_path.open("rb") as f:
         body = f.read()
     req = urllib.request.Request(
-        url,
-        method="POST",
-        data=body,
+        url, method="POST", data=body,
         headers={
             "Authorization": f"Bearer {token}",
-            "X-Asset-Id": asset_id,
-            "X-Filename": filename,
+            "X-Asset-Id": asset_id, "X-Filename": filename,
             "X-Created-At": created_at,
-            "Content-Type": "video/quicktime",
-            "User-Agent": UA,
+            "Content-Type": "video/quicktime", "User-Agent": UA,
         },
     )
-    import json
-
     try:
         with urllib.request.urlopen(req, timeout=600) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
-        body_text = e.read().decode(errors="replace")[:500]
-        return {"error": f"HTTP {e.code}", "body": body_text}
+        return {"error": f"HTTP {e.code}", "body": e.read().decode(errors="replace")[:500]}
+
+
+def _upload_chunked(token, asset_id, filename, created_at, mov_path, size):
+    """Init + upload parts + complete via /api/upload/iphone/{init,part,complete}."""
+    import json
+
+    # 1. init
+    init_url = f"{WORKER_BASE}/api/upload/iphone/init"
+    init_body = json.dumps({
+        "asset_id": asset_id,
+        "filename": filename,
+        "created_at": created_at,
+    }).encode()
+    req = urllib.request.Request(
+        init_url, method="POST", data=init_body,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": UA,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            init = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            try:
+                return json.loads(e.read().decode())
+            except Exception:
+                pass
+        return {"error": f"init HTTP {e.code}", "body": e.read().decode(errors="replace")[:500]}
+
+    upload_id = init["upload_id"]
+    n_parts = (size + CHUNK_SIZE - 1) // CHUNK_SIZE
+    parts = []
+    print(f"  chunked upload: {n_parts} parts of up to {CHUNK_SIZE//(1024*1024)} MB", flush=True)
+
+    # 2. parts
+    with mov_path.open("rb") as f:
+        for i in range(n_parts):
+            chunk = f.read(CHUNK_SIZE)
+            part_url = f"{WORKER_BASE}/api/upload/iphone/{upload_id}/{i + 1}"
+            req = urllib.request.Request(
+                part_url, method="PUT", data=chunk,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/octet-stream",
+                    "User-Agent": UA,
+                    "Content-Length": str(len(chunk)),
+                },
+            )
+            t0 = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=300) as resp:
+                    part = json.loads(resp.read().decode())
+            except urllib.error.HTTPError as e:
+                return {"error": f"part {i+1} HTTP {e.code}",
+                        "body": e.read().decode(errors="replace")[:500]}
+            mb = len(chunk) / (1024 * 1024)
+            elapsed = time.time() - t0
+            print(f"    part {i+1}/{n_parts} ok ({mb:.0f} MB in {elapsed:.1f}s)", flush=True)
+            parts.append({"partNumber": part["partNumber"], "etag": part["etag"]})
+
+    # 3. complete
+    complete_url = f"{WORKER_BASE}/api/upload/iphone/{upload_id}/complete"
+    req = urllib.request.Request(
+        complete_url, method="POST",
+        data=json.dumps({"parts": parts}).encode(),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": UA,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return {"error": f"complete HTTP {e.code}",
+                "body": e.read().decode(errors="replace")[:500]}
 
 
 def iso_creation_date(asset) -> str:

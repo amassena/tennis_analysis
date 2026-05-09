@@ -14,7 +14,13 @@
  *   POST /api/upload/:id/complete  → finalize upload
  *   POST /api/upload/link          → iCloud share link
  *   POST /api/upload/iphone        → iOS Shortcut single-shot upload (Bearer auth)
+ *                                    (CF edge has a 100 MB body cap — files
+ *                                     larger than that must use the chunked
+ *                                     endpoints below)
  *   GET  /api/upload/iphone/check  → idempotency probe (?asset_id=…)
+ *   POST /api/upload/iphone/init           → start chunked R2 upload (Bearer)
+ *   PUT  /api/upload/iphone/:upid/:part    → upload one chunk
+ *   POST /api/upload/iphone/:upid/complete → finalize + write marker
  *   GET  /api/status/:id           → check processing status
  *   POST /api/status/:id/update    → update processing status (auth)
  *   GET  /api/queue                → list all uploads and their status
@@ -209,6 +215,26 @@ async function handleApi(request, env, path) {
 
     if (path === '/api/upload/iphone/check' && request.method === 'GET') {
       return await handleIphoneCheck(request, env, cors);
+    }
+
+    if (path === '/api/upload/iphone/init' && request.method === 'POST') {
+      return await handleIphoneInit(request, env, cors);
+    }
+
+    const ipPartMatch = path.match(/^\/api\/upload\/iphone\/([^/]+)\/(\d+)$/);
+    if (ipPartMatch && request.method === 'PUT') {
+      return await handleIphonePart(
+        request,
+        env,
+        cors,
+        ipPartMatch[1],
+        parseInt(ipPartMatch[2]),
+      );
+    }
+
+    const ipCompleteMatch = path.match(/^\/api\/upload\/iphone\/([^/]+)\/complete$/);
+    if (ipCompleteMatch && request.method === 'POST') {
+      return await handleIphoneComplete(request, env, cors, ipCompleteMatch[1]);
     }
 
     const completeMatch = path.match(/^\/api\/upload\/([^/]+)\/complete$/);
@@ -570,6 +596,169 @@ async function handleIphoneCheck(request, env, cors) {
   }
 
   return jsonResponse({ uploaded: false, video_id: videoId }, 200, cors);
+}
+
+// ---------------------------------------------------------------------------
+// iPhone chunked upload — for files larger than CF edge's 100 MB body cap.
+//
+// Flow:
+//   POST /api/upload/iphone/init      { asset_id, filename, ext }
+//     → { upload_id, r2_key, video_id }
+//   PUT  /api/upload/iphone/<id>/<n>  body = chunk bytes
+//     → { partNumber, etag }   (must be ≥5 MB except last; ≤100 MB always)
+//   POST /api/upload/iphone/<id>/complete   { parts: [{partNumber, etag}, …] }
+//     → { video_id, status: 'queued', r2_key }
+// ---------------------------------------------------------------------------
+
+async function handleIphoneInit(request, env, cors) {
+  const auth = request.headers.get('authorization') || '';
+  const expected = env.IPHONE_UPLOAD_TOKEN;
+  if (!expected || auth !== `Bearer ${expected}`) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+  const body = await request.json().catch(() => ({}));
+  const { asset_id: assetId, filename } = body;
+  const createdAt = body.created_at || '';
+  if (!assetId || !filename) {
+    return jsonResponse({ error: 'asset_id and filename required' }, 400, cors);
+  }
+  const ext = (filename.split('.').pop() || 'mov').toLowerCase();
+  if (!['mov', 'mp4'].includes(ext)) {
+    return jsonResponse({ error: 'Only .mov and .mp4 allowed' }, 400, cors);
+  }
+  const videoId = await iphoneVideoIdFromAssetId(assetId);
+  const r2Key = `source/${videoId}.${ext}`;
+
+  // Idempotency: if the source key already exists, no need to re-upload.
+  try {
+    const existing = await env.BUCKET.head(r2Key);
+    if (existing) {
+      return jsonResponse(
+        { video_id: videoId, status: 'duplicate', r2_key: r2Key, asset_id: assetId },
+        409, cors,
+      );
+    }
+  } catch {}
+
+  const multipart = await env.BUCKET.createMultipartUpload(r2Key, {
+    httpMetadata: {
+      contentType: ext === 'mp4' ? 'video/mp4' : 'video/quicktime',
+      contentDisposition: `attachment; filename="${filename}"`,
+    },
+    customMetadata: {
+      ios_asset_id: assetId,
+      original_filename: filename,
+      created_at: createdAt,
+      uploaded_at: new Date().toISOString(),
+      source: 'iphone_shortcut',
+    },
+  });
+
+  // Stash the in-flight upload metadata in R2 so subsequent part/complete
+  // calls can resume without client-side state.
+  const stateKey = `uploads/_inflight_${videoId}.json`;
+  await env.BUCKET.put(
+    stateKey,
+    JSON.stringify({
+      video_id: videoId,
+      asset_id: assetId,
+      filename,
+      created_at: createdAt,
+      r2_key: r2Key,
+      ext,
+      r2_upload_id: multipart.uploadId,
+      created_at_inflight: new Date().toISOString(),
+    }),
+    { httpMetadata: { contentType: 'application/json' } },
+  );
+
+  return jsonResponse(
+    {
+      video_id: videoId,
+      upload_id: videoId,  // we use videoId as upload_id for client convenience
+      r2_key: r2Key,
+      asset_id: assetId,
+    },
+    200, cors,
+  );
+}
+
+async function handleIphonePart(request, env, cors, uploadId, partNumber) {
+  const auth = request.headers.get('authorization') || '';
+  const expected = env.IPHONE_UPLOAD_TOKEN;
+  if (!expected || auth !== `Bearer ${expected}`) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  const stateKey = `uploads/_inflight_${uploadId}.json`;
+  const stateObj = await env.BUCKET.get(stateKey);
+  if (!stateObj) {
+    return jsonResponse({ error: 'Unknown or expired upload_id' }, 404, cors);
+  }
+  const state = await stateObj.json();
+
+  const upload = env.BUCKET.resumeMultipartUpload(state.r2_key, state.r2_upload_id);
+  const part = await upload.uploadPart(partNumber, request.body);
+  return jsonResponse(
+    { partNumber: part.partNumber, etag: part.etag },
+    200, cors,
+  );
+}
+
+async function handleIphoneComplete(request, env, cors, uploadId) {
+  const auth = request.headers.get('authorization') || '';
+  const expected = env.IPHONE_UPLOAD_TOKEN;
+  if (!expected || auth !== `Bearer ${expected}`) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  const stateKey = `uploads/_inflight_${uploadId}.json`;
+  const stateObj = await env.BUCKET.get(stateKey);
+  if (!stateObj) {
+    return jsonResponse({ error: 'Unknown or expired upload_id' }, 404, cors);
+  }
+  const state = await stateObj.json();
+
+  const body = await request.json();
+  const parts = body.parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return jsonResponse({ error: 'parts[] required' }, 400, cors);
+  }
+
+  const upload = env.BUCKET.resumeMultipartUpload(state.r2_key, state.r2_upload_id);
+  await upload.complete(
+    parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
+  );
+
+  // Write marker file so the Hetzner poller registers the job.
+  const markerKey = `uploads/${state.video_id}.json`;
+  await env.BUCKET.put(
+    markerKey,
+    JSON.stringify({
+      video_id: state.video_id,
+      asset_id: state.asset_id,
+      filename: state.filename,
+      created_at: state.created_at,
+      uploaded_at: new Date().toISOString(),
+      r2_source_key: state.r2_key,
+      source: 'iphone_shortcut',
+      status: 'awaiting_coordinator',
+    }),
+    { httpMetadata: { contentType: 'application/json' } },
+  );
+
+  // Clean up in-flight state.
+  try { await env.BUCKET.delete(stateKey); } catch {}
+
+  return jsonResponse(
+    {
+      video_id: state.video_id,
+      status: 'queued',
+      r2_key: state.r2_key,
+      asset_id: state.asset_id,
+    },
+    200, cors,
+  );
 }
 
 async function iphoneVideoIdFromAssetId(assetId) {
