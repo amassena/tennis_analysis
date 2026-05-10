@@ -110,6 +110,69 @@ def _peak_with_min_prominence(seq, min_prominence=0.5):
     return best_idx
 
 
+def _unwrap_angles(angles):
+    """Manual np.unwrap — remove ±π discontinuities in an angle series.
+
+    Periodic angles (atan2 outputs in [-π, π]) jump 2π between consecutive
+    frames at boundary crossings. Without this, a +π → −π transition reads
+    as a -2π/frame angular velocity spike that would dominate any peak
+    detector. Operates on a list of radians; None entries pass through.
+    """
+    if not angles:
+        return []
+    out = list(angles)
+    cumulative_offset = 0.0
+    last_real = None
+    for i, a in enumerate(out):
+        if a is None:
+            continue
+        if last_real is not None:
+            diff = a - last_real
+            if diff > math.pi:
+                cumulative_offset -= 2 * math.pi
+            elif diff < -math.pi:
+                cumulative_offset += 2 * math.pi
+        out[i] = a + cumulative_offset
+        last_real = a + cumulative_offset - cumulative_offset  # raw value pre-offset for diff
+    # We mutated out[i] above; need to redo because last_real semantics is messy. Cleanest:
+    out2 = []
+    cumulative_offset = 0.0
+    last_raw = None
+    for a in angles:
+        if a is None:
+            out2.append(None)
+            continue
+        if last_raw is not None:
+            diff = a - last_raw
+            if diff > math.pi:
+                cumulative_offset -= 2 * math.pi
+            elif diff < -math.pi:
+                cumulative_offset += 2 * math.pi
+        out2.append(a + cumulative_offset)
+        last_raw = a
+    return out2
+
+
+def _angular_velocity_series(angles, fps):
+    """|dθ/dt| in rad/s (or deg/s if angles in degrees).
+
+    Input: list of (possibly None) angles, ALREADY UNWRAPPED if periodic.
+    Output: same-length list of non-negative angular speed values; positions
+    bordering a None get 0 (no signal there).
+    """
+    n = len(angles)
+    if n == 0:
+        return []
+    out = [0.0] * n
+    for i in range(1, n):
+        a, b = angles[i], angles[i - 1]
+        if a is None or b is None:
+            out[i] = 0.0
+        else:
+            out[i] = abs(a - b) * fps
+    return out
+
+
 def _accel_zero_crossing_peak(velocities):
     """Pick a velocity peak via acceleration-sign-change (+ → −).
 
@@ -257,46 +320,76 @@ def analyze_shot(frames, center_frame, fps, dominant_hand="right",
             recovery_frames = len(velocities) - center_in_window
     recovery_time_ms = round(recovery_frames / fps * 1000)
 
-    # ── Kinetic chain timing ─────────────────────────────────────
-    # Track peak velocity time of: hip, shoulder, elbow, wrist.
-    # Correct order: proximal → distal (hip → shoulder → elbow → wrist).
-    # Per-frame velocity from world_landmarks is noise-dominated at high fps,
-    # so naïve argmax used to pick a noise spike. We now (a) smooth the
-    # velocity series and (b) require a local maximum with min prominence,
-    # which fixes the "chain reversed" flag rate (see eval/3d-lifting/REPORT.md).
+    # ── Kinetic chain timing (angular velocity) ─────────────────────
+    # Tennis kinetic chain measures ANGULAR velocity (rad/s), not linear:
+    #   hip:      pelvis rotation rate         d/dt angle(R_hip → L_hip,    xz)
+    #   shoulder: torso rotation rate          d/dt angle(R_shoulder → L_shoulder, xz)
+    #   elbow:    forearm-vs-upper-arm flex    d/dt of 3-point angle (deg)
+    #   wrist:    forearm rotation rate        d/dt angle(elbow → wrist,    xz)
+    # Critical: unwrap periodic angles (atan2 outputs) BEFORE diffing —
+    # a ±π wrap shows up as a 2π/frame velocity spike if not handled.
+    # Linear-velocity prior implementation produced 84-89% chain_reversed
+    # flag rate because hip linear velocity is dominated by body translation,
+    # not rotation. See memory/project_kinetic_chain_angular_velocity.md.
     chain_times = {}
     search_start = max(0, cf - 30)
     search_end = min(n, cf + 10)
     win_len = max(0, search_end - search_start)
 
-    for joint_name, joint_idx in [("hip", d_hip), ("shoulder", d_shoulder),
-                                   ("elbow", d_elbow), ("wrist", d_wrist)]:
-        # Build a dense per-frame velocity series over the window. Frames
-        # without a detection contribute 0 (a gap-fill that beats skipping —
-        # a missing frame between two real ones doesn't fake a peak).
-        vels = [0.0] * win_len
-        for k in range(1, win_len):
-            i = search_start + k
-            if not frames[i] or not frames[i - 1]:
-                continue
-            p_curr = get_keypoint(frames[i], joint_idx)
-            p_prev = get_keypoint(frames[i - 1], joint_idx)
-            if p_curr and p_prev:
-                vels[k] = math.sqrt(
-                    sum((a - b) ** 2 for a, b in zip(p_curr[:3], p_prev[:3]))
-                ) * fps
+    def _angle_at(frame, kind, hand):
+        """Per-frame scalar angle for a joint. None if pose missing."""
+        if not frame:
+            return None
+        if kind == "hip":
+            lh = get_keypoint(frame, LEFT_HIP)
+            rh = get_keypoint(frame, RIGHT_HIP)
+            return _line_angle_xz(lh, rh) if lh and rh else None
+        if kind == "shoulder":
+            ls = get_keypoint(frame, LEFT_SHOULDER)
+            rs = get_keypoint(frame, RIGHT_SHOULDER)
+            return _line_angle_xz(ls, rs) if ls and rs else None
+        if kind == "elbow":
+            sh = get_keypoint(frame, hand["shoulder"])
+            el = get_keypoint(frame, hand["elbow"])
+            wr = get_keypoint(frame, hand["wrist"])
+            if not (sh and el and wr):
+                return None
+            ang = compute_angle_3points(sh, el, wr)
+            # Convert degrees → radians for unit consistency with the others.
+            return math.radians(ang) if ang is not None else None
+        if kind == "wrist":
+            el = get_keypoint(frame, hand["elbow"])
+            wr = get_keypoint(frame, hand["wrist"])
+            return _line_angle_xz(el, wr) if el and wr else None
+        return None
+
+    hand_idx = {"shoulder": d_shoulder, "elbow": d_elbow, "wrist": d_wrist}
+
+    for joint_name in ("hip", "shoulder", "elbow", "wrist"):
+        # Per-frame angle, then unwrap (elbow flexion is non-periodic but
+        # unwrap is a no-op for monotonic-bounded sequences, so it's safe).
+        raw_angles = [
+            _angle_at(frames[search_start + k] if 0 <= search_start + k < n else None,
+                      joint_name, hand_idx)
+            for k in range(win_len)
+        ]
+        unwrapped = _unwrap_angles(raw_angles)
+        ang_vel = _angular_velocity_series(unwrapped, fps)
 
         if kinetic_peak_method == "legacy":
-            peak_local = int(max(range(win_len), key=lambda k: vels[k])) if win_len else 0
+            peak_local = int(max(range(win_len), key=lambda k: ang_vel[k])) if win_len else 0
         else:
-            smoothed = _smooth_window(vels, window=5)
+            smoothed = _smooth_window(ang_vel, window=5)
             if kinetic_peak_method == "accel_zero_crossing":
                 peak_local = _accel_zero_crossing_peak(smoothed)
                 if peak_local is None:
-                    # No accel crossing in window — fall back to smoothed peak.
-                    peak_local = _peak_with_min_prominence(smoothed, min_prominence=0.5)
+                    peak_local = _peak_with_min_prominence(smoothed, min_prominence=0.05)
             else:  # "smoothed" — default
-                peak_local = _peak_with_min_prominence(smoothed, min_prominence=0.5)
+                # Lower min_prominence than the linear-vel version: angular
+                # velocities are smaller in absolute value (rad/s ≈ 1-10 for
+                # peak swings) so a 0.05 rad/s prominence floor is permissive
+                # enough to find peaks but stricter than zero.
+                peak_local = _peak_with_min_prominence(smoothed, min_prominence=0.05)
             if peak_local is None:
                 peak_local = 0
 
