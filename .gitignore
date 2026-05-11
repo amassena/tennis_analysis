@@ -107,3 +107,9 @@ training/*.png
 
 # Eval outputs (device + timestamp specific, regenerable)
 eval_results/
+
+# Pro footage harvest staging — Mac-local raw downloads from yt-dlp.
+# Curated clips are uploaded to R2 at pros/<slug>/<file>.mp4 (managed
+# via pros/index.json). The _raw/ staging dir holds full highlight reels
+# pending shot-detection + manual curation.
+pros/_raw/

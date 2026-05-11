@@ -2,7 +2,7 @@
 from: design-partner
 to: main
 created: 2026-05-11T00:30:00-08:00
-status: pending
+status: in-progress
 priority: high
 topic: Scope pro footage acquisition — fill clips:[] for the 20 expanded pros
 ---
