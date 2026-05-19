@@ -1035,10 +1035,10 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
                         "Grouped (Slow-Mo)": f"{base_url}/{video_name}_grouped_slowmo.mp4",
                     }
                     stats = _get_detection_stats(video_name)
-                    _send_notification(
-                        "notify_upload_complete",
-                        video_name, video_links, stats,
-                    )
+                    # Per-success email/SMS disabled 2026-05-18: firehose was masking
+                    # real failures (every recent iPhone upload reported "ready (0 shots)").
+                    # Gallery card is the success signal; failure-only notifications retained below.
+                    _ = (video_name, video_links, stats)
                     # Mark website queue as complete
                     if job_upload_id:
                         report_queue_status(
@@ -1110,7 +1110,8 @@ def process_local_video(video_path: str, upload_id: str = None):
             "By Shot Type (Slow-Mo)": f"{base_url}/{video_name}_grouped_slowmo.mp4",
         }
         stats = _get_detection_stats(video_name)
-        _send_notification("notify_upload_complete", video_name, video_links, stats)
+        # Per-success email/SMS disabled 2026-05-18 (see worker_loop above).
+        _ = (video_name, video_links, stats)
 
         if upload_id:
             report_queue_status(
