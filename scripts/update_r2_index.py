@@ -300,14 +300,21 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .chip:hover{{border-color:#555;color:#ddd}}
 .chip.active{{background:#FF8C00;border-color:#FF8C00;color:#fff}}
 
-/* ── Processing Banner ── */
-.proc-banner{{max-width:1100px;margin:8px auto;padding:0 20px}}
+/* ── Dashboard / Processing Banner ── */
+.proc-banner{{max-width:1100px;margin:8px auto;padding:0 20px;display:flex;flex-direction:column;gap:6px}}
 .proc-bar{{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#1a1a1a;
   border-radius:8px;border:1px solid #2a2a2a;font-size:0.85em;color:#aaa;flex-wrap:wrap}}
+.proc-bar.proc-summary{{color:#bbb;font-size:0.82em}}
+.proc-bar.proc-summary b{{color:#fff;font-weight:600}}
+.proc-bar.proc-summary .sep{{color:#444;margin:0 6px}}
+.proc-bar.proc-failed-bar{{border-color:#3a1a1a;background:#1a0f0f}}
+.proc-label{{font-size:0.75em;text-transform:uppercase;letter-spacing:0.08em;color:#888;font-weight:600;flex-shrink:0}}
+.proc-bar.proc-failed-bar .proc-label{{color:#E74C3C}}
 .proc-dot{{width:8px;height:8px;border-radius:50%;background:#3498DB;animation:pulse 1.5s infinite;flex-shrink:0}}
 .proc-items{{flex:1;display:flex;gap:12px;flex-wrap:wrap}}
 .proc-item{{display:flex;align-items:center;gap:6px}}
 .proc-item .stage{{color:#666;font-size:0.85em}}
+.proc-item .err{{color:#E74C3C;font-size:0.82em;font-style:italic;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .proc-complete .proc-dot{{background:#27AE60;animation:none}}
 .proc-failed .proc-dot{{background:#E74C3C;animation:none}}
 .proc-pending .proc-dot{{background:#F1C40F;animation:none}}
@@ -1533,33 +1540,95 @@ document.getElementById('searchInput').addEventListener('input', function(e) {{
     'preprocessing':'Preprocessing','extracting_poses':'Extracting Poses',
     'detecting_shots':'Detecting Shots','exporting':'Exporting',
     'uploading_results':'Uploading','processing':'Processing',
+    'awaiting_coordinator':'Queued','coordinator_registered':'Queued',
     'complete':'Complete','failed':'Failed'
   }};
+  var DAY_MS = 24*3600*1000;
+  var FAIL_WINDOW_MS = 7*DAY_MS;
+
+  function stripName(filename) {{
+    return (filename||'').replace(/\.(MOV|mov|MP4|mp4)$/,'');
+  }}
+
+  function todaySummary() {{
+    // Computed from VIDEOS (already loaded) — local day boundaries.
+    var now = new Date();
+    var startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    var processed = 0, shots = 0;
+    VIDEOS.forEach(function(v) {{
+      var t = v.created ? new Date(v.created).getTime() : 0;
+      if(t >= startOfDay) {{ processed++; shots += (v.shots||0); }}
+    }});
+    return {{processed:processed, shots:shots}};
+  }}
+
+  function renderDashboard(queue) {{
+    var banner = document.getElementById('procBanner');
+    var now = Date.now();
+    var inflight = [], failed = [];
+    (queue||[]).forEach(function(i) {{
+      if(i.status==='failed') {{
+        var t = i.updated_at ? new Date(i.updated_at).getTime() : 0;
+        if(now - t < FAIL_WINDOW_MS) failed.push(i);
+      }} else if(i.status==='complete') {{
+        // hide; the gallery card is the success surface
+      }} else if(i.status==='not_found') {{
+        // skip
+      }} else {{
+        inflight.push(i);
+      }}
+    }});
+
+    var today = todaySummary();
+    var failedToday = failed.filter(function(i) {{
+      var t = i.updated_at ? new Date(i.updated_at).getTime() : 0;
+      var s = new Date(); s.setHours(0,0,0,0);
+      return t >= s.getTime();
+    }}).length;
+
+    var rows = [];
+    if(today.processed>0 || today.shots>0 || failedToday>0) {{
+      var sum = '<b>Today:</b> '+today.processed+' processed'+
+                '<span class="sep">·</span><b>'+today.shots+'</b> shots';
+      if(failedToday>0) sum += '<span class="sep">·</span><b style="color:#E74C3C">'+failedToday+'</b> failed';
+      rows.push('<div class="proc-bar proc-summary">'+sum+'</div>');
+    }}
+
+    if(inflight.length>0) {{
+      var inner = '';
+      inflight.forEach(function(item) {{
+        var name = stripName(item.filename);
+        var label = stageLabels[item.stage]||stageLabels[item.status]||item.status;
+        var pct = (item.progress!=null && item.progress!==0) ? ' '+item.progress+'%' : '';
+        var cls = 'proc-item';
+        if(item.status==='pending'||item.status==='coordinator_registered'||item.status==='awaiting_coordinator') cls += ' proc-pending';
+        inner += '<span class="'+cls+'"><span class="proc-dot"></span>'+name+' <span class="stage">'+label+pct+'</span></span>';
+      }});
+      rows.push('<div class="proc-bar"><span class="proc-label">Processing now ('+inflight.length+')</span><div class="proc-items">'+inner+'</div></div>');
+    }}
+
+    if(failed.length>0) {{
+      var inner = '';
+      failed.forEach(function(item) {{
+        var name = stripName(item.filename);
+        var err = item.error ? ' <span class="err">'+item.error+'</span>' : '';
+        inner += '<span class="proc-item proc-failed"><span class="proc-dot"></span>'+name+err+'</span>';
+      }});
+      rows.push('<div class="proc-bar proc-failed-bar"><span class="proc-label">Recently failed ('+failed.length+')</span><div class="proc-items">'+inner+'</div></div>');
+    }}
+
+    if(rows.length===0) {{ banner.style.display='none'; return; }}
+    banner.style.display='';
+    banner.innerHTML = rows.join('');
+  }}
 
   function loadQueue() {{
     fetch('/api/queue').then(function(r){{return r.json()}}).then(function(d) {{
-      var banner = document.getElementById('procBanner');
-      if(!d.queue) return;
-      var active = d.queue.filter(function(i) {{
-        if(i.status==='complete') return Date.now()-new Date(i.updated_at).getTime() < 3600000;
-        return i.status!=='not_found';
-      }});
-      if(active.length===0) {{ banner.style.display='none'; return; }}
-      banner.style.display='';
-      var html = '<div class="proc-bar"><div class="proc-items">';
-      active.forEach(function(item) {{
-        var name = (item.filename||'').replace('.MOV','').replace('.mov','').replace('.mp4','');
-        var label = stageLabels[item.stage||item.status]||item.status;
-        var pct = item.progress ? ' '+item.progress+'%' : '';
-        var cls = 'proc-item';
-        if(item.status==='complete') cls += ' proc-complete';
-        else if(item.status==='failed') cls += ' proc-failed';
-        else if(item.status==='pending') cls += ' proc-pending';
-        html += '<span class="'+cls+'"><span class="proc-dot"></span>'+name+' <span class="stage">'+label+pct+'</span></span>';
-      }});
-      html += '</div></div>';
-      banner.innerHTML = html;
-    }}).catch(function(){{}});
+      renderDashboard(d.queue);
+    }}).catch(function(){{
+      // Still render the today summary even if queue endpoint is down.
+      renderDashboard([]);
+    }});
   }}
   loadQueue();
   setInterval(loadQueue, 30000);
