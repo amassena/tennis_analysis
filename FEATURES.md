@@ -12,7 +12,7 @@ Use `git worktree add ../tennis_<short-name> -b feature/<category>/<name>` to st
 
 | Feature | Branch | Worktree | Files | Status |
 |---|---|---|---|---|
-| Filmstrip impact window | `feature/visual/filmstrip-impact-window` | `~/tennis_filmstrip/` | scripts/swing_composite.py | not started |
+| Filmstrip impact window | `feature/visual/filmstrip-impact-window` | `~/tennis_filmstrip/` | scripts/swing_composite.py | validated on tmassena (IMG_1120 serve/BH/FH) — ready to merge |
 | Dynamic track keep-in-frame | `feature/visual/dynamic-track-keep-in-frame` | `~/tennis_dyntrack/` | scripts/dynamic_track.py | not started |
 | Shot detection accuracy | `feature/detection/improve-shot-classification` | `~/tennis_detection/` | scripts/detect_shots_sequence.py, scripts/sequence_model.py, training/ | not started |
 
