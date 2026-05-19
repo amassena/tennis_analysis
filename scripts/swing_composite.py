@@ -34,10 +34,12 @@ POSES_DIR = PROJECT_ROOT / "poses_full_videos"
 DETECTIONS_DIR = PROJECT_ROOT / "detections"
 
 # How many frames to sample per shot
-NUM_FRAMES = 7
-# Time window: frames from before_sec before contact to after_sec after
-BEFORE_SEC = 0.5
-AFTER_SEC = 0.3
+NUM_FRAMES = 11
+# Time window: frames from before_sec before contact to after_sec after.
+# Symmetric 0.75s / 0.75s with 11 panels puts contact exactly at the middle
+# panel (index 5), capturing full backswing and follow-through.
+BEFORE_SEC = 0.75
+AFTER_SEC = 0.75
 # Output height per frame panel (width computed from aspect ratio)
 PANEL_HEIGHT = 480
 # Skeleton line colors (BGR)
@@ -226,40 +228,11 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         return None, None
 
     d = detections[shot_idx]
-    raw_contact = int(d.get("frame", 0))
+    contact_frame = int(d.get("frame", 0))
     shot_type = d.get("shot_type", "unknown")
     fps = det.get("fps", 60.0)
 
     pose_frames = poses.get("frames", [])
-
-    # Refine contact frame: combine peak wrist speed + max arm extension
-    # (actual contact happens when racket arm is most extended, which is
-    # also when wrist is moving fastest through the strike zone).
-    contact_frame = raw_contact
-    search_range = int(0.5 * fps)  # widen search to ±0.5s
-    best_score = 0
-    for fi in range(max(1, raw_contact - search_range), min(len(pose_frames) - 1, raw_contact + search_range)):
-        lms_prev = get_landmarks(pose_frames, fi - 1)
-        lms_curr = get_landmarks(pose_frames, fi)
-        if not (lms_prev and lms_curr and len(lms_curr) > 24):
-            continue
-        wx1, wy1, wv1 = lms_curr[16]  # right wrist
-        wx0, wy0, wv0 = lms_prev[16]
-        sx, sy, sv = lms_curr[12]  # right shoulder
-        hx, hy, hv = lms_curr[24]  # right hip
-        if wv1 < 0.3 or wv0 < 0.3 or sv < 0.3 or hv < 0.3:
-            continue
-        # Wrist speed
-        speed = ((wx1 - wx0)**2 + (wy1 - wy0)**2) ** 0.5
-        # Distance from wrist to body (shoulder-hip midpoint) — peaks at contact
-        body_x = (sx + hx) / 2
-        body_y = (sy + hy) / 2
-        extension = ((wx1 - body_x)**2 + (wy1 - body_y)**2) ** 0.5
-        # Combined score weights both
-        score = speed * 0.5 + extension * 0.5
-        if score > best_score:
-            best_score = score
-            contact_frame = fi
 
     # Compute frame indices to sample
     before_frames = int(BEFORE_SEC * fps)
@@ -285,21 +258,26 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     # PER-FRAME centering: each panel centered on that frame's torso.
-    # Crop SIZE is uniform across panels (max player extent + padding) so
-    # the framing looks consistent. Crop POSITION moves with the player.
-    all_xs, all_ys = [], []
+    # Crop SIZE is uniform across panels so the framing looks consistent.
+    # Crop POSITION moves with the player.
     per_frame_torso = {}  # fi -> (torso_cx, torso_cy)
+    # Size_xs/size_ys: landmarks ONLY from panels near contact, so the crop is
+    # sized to fit the SWING (arm fully extended, racket up) — NOT the run-up,
+    # which can be wide and would zoom the panel out unnecessarily.
+    size_xs, size_ys = [], []
+    size_panel_lo = max(0, contact_panel_idx - 2)
+    size_panel_hi = min(NUM_FRAMES, contact_panel_idx + 3)
+    size_frames = set(frame_indices[size_panel_lo:size_panel_hi])
 
     for fi in frame_indices:
         lms = get_landmarks(pose_frames, fi)
         if not lms:
             continue
-        # Track all landmarks for size calculation
-        for x, y, v in lms:
-            if v > 0.3:
-                all_xs.append(x * img_w)
-                all_ys.append(y * img_h)
-        # Compute torso center for this specific frame (shoulders + hips)
+        if fi in size_frames:
+            for x, y, v in lms:
+                if v > 0.3:
+                    size_xs.append(x * img_w)
+                    size_ys.append(y * img_h)
         if len(lms) >= 25:
             tx, ty = [], []
             for idx in [11, 12, 23, 24]:
@@ -310,14 +288,13 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
             if len(tx) >= 2:
                 per_frame_torso[fi] = (sum(tx) / len(tx), sum(ty) / len(ty))
 
-    if len(all_xs) < 30:
+    if len(size_xs) < 30:
         cap.release()
         return None, None
 
-    # Crop SIZE: from union of all landmarks across all frames + padding.
-    # This ensures whatever pose the player is in, they fit.
-    player_w = max(all_xs) - min(all_xs)
-    player_h = max(all_ys) - min(all_ys)
+    # Crop SIZE from landmarks at/near contact only.
+    player_w = max(size_xs) - min(size_xs)
+    player_h = max(size_ys) - min(size_ys)
 
     pad = 0.3
     crop_w = int(player_w + 2 * pad * player_w)
@@ -340,8 +317,8 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         avg_cx = sum(p[0] for p in per_frame_torso.values()) / len(per_frame_torso)
         avg_cy = sum(p[1] for p in per_frame_torso.values()) / len(per_frame_torso)
     else:
-        avg_cx = (min(all_xs) + max(all_xs)) / 2
-        avg_cy = (min(all_ys) + max(all_ys)) / 2
+        avg_cx = (min(size_xs) + max(size_xs)) / 2
+        avg_cy = (min(size_ys) + max(size_ys)) / 2
 
     # Compute per-frame crop positions
     per_frame_crop = {}
