@@ -39,7 +39,8 @@ class SQLiteStateBackend(StateBackend):
                 stage_message TEXT,
                 stage_updated_at TEXT,
                 pod_id TEXT,
-                pod_status TEXT
+                pod_status TEXT,
+                upload_id TEXT
             )
         """)
 
@@ -76,6 +77,10 @@ class SQLiteStateBackend(StateBackend):
             await self._db.execute("ALTER TABLE jobs ADD COLUMN pod_status TEXT")
         except:
             pass
+        try:
+            await self._db.execute("ALTER TABLE jobs ADD COLUMN upload_id TEXT")
+        except:
+            pass
 
         await self._db.commit()
 
@@ -107,6 +112,7 @@ class SQLiteStateBackend(StateBackend):
             stage_updated_at=datetime.fromisoformat(row_dict["stage_updated_at"]) if row_dict.get("stage_updated_at") else None,
             pod_id=row_dict.get("pod_id"),
             pod_status=row_dict.get("pod_status"),
+            upload_id=row_dict.get("upload_id"),
         )
 
     async def add_job(self, job: VideoJob) -> None:
@@ -114,10 +120,11 @@ class SQLiteStateBackend(StateBackend):
         now = datetime.now(timezone.utc).isoformat()
         await self._db.execute(
             """
-            INSERT INTO jobs (video_id, icloud_asset_id, filename, status, album_name, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO jobs (video_id, icloud_asset_id, filename, status, album_name, created_at, upload_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (job.video_id, job.icloud_asset_id, job.filename, job.status.value, job.album_name, now),
+            (job.video_id, job.icloud_asset_id, job.filename, job.status.value,
+             job.album_name, now, job.upload_id),
         )
         await self._db.commit()
 

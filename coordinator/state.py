@@ -43,6 +43,11 @@ class VideoJob:
     icloud_asset_id: str
     filename: str
     status: VideoStatus
+    # Website upload queue id. For iPhone Shortcut / PhotoKit uploads this
+    # equals video_id (iphone_<hash>); for legacy iCloud-album jobs it stays
+    # None. Worker uses it to call /api/status/{upload_id}/update so the
+    # gallery dashboard can show real-time queue progress.
+    upload_id: Optional[str] = None
     claimed_by: Optional[str] = None  # hostname of GPU machine
     claimed_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

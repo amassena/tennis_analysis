@@ -194,6 +194,7 @@ async def claim_job(video_id: str, worker_id: str):
             "filename": job.filename,
             "icloud_asset_id": job.icloud_asset_id,
             "album_name": job.album_name,
+            "upload_id": job.upload_id,
         },
     )
 

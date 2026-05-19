@@ -113,6 +113,10 @@ async def _scan_once(state: SQLiteStateBackend, r2) -> int:
                     filename=filename,
                     status=VideoStatus.PENDING,
                     album_name=marker.get("source", "iphone_shortcut"),
+                    # For iPhone uploads, the website-queue marker key is
+                    # uploads/{video_id}.json — so upload_id == video_id.
+                    # GPU worker uses this to drive /api/status/{upload_id}/update.
+                    upload_id=video_id,
                 )
                 await state.add_job(job)
                 new_jobs += 1
