@@ -61,7 +61,10 @@ PREFERRED_CHANNELS = [
 MIN_UPLOAD_YEAR = 2022       # last ~3 years of style
 CANDIDATES_PER_QUERY = 12    # how many ytsearch results to inspect
 RESULTS_PER_PRO = 2          # download this many highlight reels per pro
-SLEEP_BETWEEN_PROS_S = 4     # be polite to YouTube
+SLEEP_BETWEEN_PROS_S = 15    # be polite to YouTube — 4s was too aggressive
+                             # in the original bulk run and triggered a bot
+                             # check after ~38 reels.
+YT_DLP_SLEEP_REQUESTS_S = 1.5  # passed to yt-dlp --sleep-requests for the same reason
 
 # Per-style query suffix + duration window. Slow-motion content is typically
 # shorter (technique edits, single-shot focus) and biases toward single-player
@@ -75,6 +78,15 @@ QUERY_STYLES = {
     "slow-motion": {
         "suffix": "slow motion",
         "min_duration_s": 60,
+        "max_duration_s": 15 * 60,
+    },
+    # Targeted serve harvest — the slow-motion pass under-represented serves
+    # because most "<name> slow motion" hits are forehand/backhand technique
+    # videos. Adding "serve" to the query biases toward serve-focused content.
+    # Short min duration accepts highlight-style serve clips (~30s ace reels).
+    "serve": {
+        "suffix": "serve slow motion",
+        "min_duration_s": 30,
         "max_duration_s": 15 * 60,
     },
 }
@@ -94,7 +106,9 @@ def empty_clip_pros(index: dict) -> list[tuple[str, dict]]:
     ]
 
 
-def query_candidates(pro_name: str, style: str, n: int = CANDIDATES_PER_QUERY) -> list[dict]:
+def query_candidates(pro_name: str, style: str, n: int | None = None) -> list[dict]:
+    if n is None:
+        n = CANDIDATES_PER_QUERY
     """Run yt-dlp ytsearch and return parsed JSON for n candidates."""
     suffix = QUERY_STYLES[style]["suffix"]
     query = f"ytsearch{n}:{pro_name} {suffix}"
@@ -106,6 +120,7 @@ def query_candidates(pro_name: str, style: str, n: int = CANDIDATES_PER_QUERY) -
         "--no-warnings",
         "--quiet",
         "--ignore-errors",
+        "--sleep-requests", str(YT_DLP_SLEEP_REQUESTS_S),
     ]
     try:
         result = subprocess.run(
@@ -178,11 +193,17 @@ def download_one(video_url: str, slug_dir: Path) -> Path | None:
         YT_DLP,
         video_url,
         "-o", str(slug_dir / "%(id)s.%(ext)s"),
-        "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+        # Don't pin ext=mp4 on input streams — most modern YouTube uploads serve
+        # 1080p only as vp9/av1, and the mp4-only constraint silently fell back
+        # to 360p for several reels in the first harvest pass. Let yt-dlp pick
+        # best ≤1080p regardless of codec; --merge-output-format mp4 below
+        # handles the container.
+        "-f", "bv*[height<=1080]+ba/b[height<=1080]/b",
         "--merge-output-format", "mp4",
         "--no-warnings",
         "--quiet",
         "--no-overwrites",
+        "--sleep-requests", str(YT_DLP_SLEEP_REQUESTS_S),
     ]
     try:
         subprocess.run(cmd, check=True, timeout=900)
@@ -213,14 +234,16 @@ def update_manifest(slug_dir: Path, entry: dict) -> None:
             json.dump(data, f, indent=2)
 
 
-def fetch_for_pro(slug: str, player_data: dict, style: str, dry_run: bool) -> None:
+def fetch_for_pro(slug: str, player_data: dict, style: str, results_per_pro: int, dry_run: bool) -> None:
     name = player_data["name"]
     print(f"\n=== {slug} ({name})  [style={style}] ===")
-    candidates = query_candidates(name, style)
+    # Search more candidates than we'll keep so the picker has options after
+    # already-have filtering. CANDIDATES_PER_QUERY is the upper search cap.
+    candidates = query_candidates(name, style, n=max(CANDIDATES_PER_QUERY, results_per_pro * 4))
     if not candidates:
         print(f"  [skip] no search results")
         return
-    picks = pick_top(candidates, style, name, RESULTS_PER_PRO)
+    picks = pick_top(candidates, style, name, results_per_pro)
     if not picks:
         print(f"  [skip] no candidates after filtering")
         return
@@ -269,7 +292,10 @@ def main() -> int:
     ap.add_argument("--all-empty", action="store_true", help="Fetch for all pros with empty clips:[] in index.json")
     ap.add_argument("--exclude", default="", help="Comma-separated slugs to skip (useful with --all-empty)")
     ap.add_argument("--query-style", choices=list(QUERY_STYLES), default="highlights",
-                    help="Search query bias. 'highlights' = match reels (default); 'slow-motion' = single-player technique edits")
+                    help="Search query bias. 'highlights' = match reels (default); 'slow-motion' = single-player technique edits; 'serve' = serve-targeted")
+    ap.add_argument("--results", type=int, default=RESULTS_PER_PRO,
+                    help=f"Picks to download per pro (default {RESULTS_PER_PRO}). Higher values + the already_have skip "
+                         "let you supplement existing reels with next-best picks without re-downloading.")
     ap.add_argument("--dry-run", action="store_true", help="Show candidates but don't download")
     args = ap.parse_args()
 
@@ -304,7 +330,7 @@ def main() -> int:
         print("(dry-run — no downloads will occur)")
 
     for i, (slug, data) in enumerate(targets):
-        fetch_for_pro(slug, data, args.query_style, args.dry_run)
+        fetch_for_pro(slug, data, args.query_style, args.results, args.dry_run)
         if i < len(targets) - 1 and not args.dry_run:
             time.sleep(SLEEP_BETWEEN_PROS_S)
 
