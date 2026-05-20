@@ -113,3 +113,6 @@ eval_results/
 # via pros/index.json). The _raw/ staging dir holds full highlight reels
 # pending shot-detection + manual curation.
 pros/_raw/
+# Curated pro clips live in R2, not git. Local copies are regenerable via
+# scripts/curate_pro_clips.py from pros/_raw/ + index.json picks.
+pros/*/*.mp4
