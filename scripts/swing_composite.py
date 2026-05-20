@@ -32,6 +32,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 PREPROCESSED_DIR = PROJECT_ROOT / "preprocessed"
 POSES_DIR = PROJECT_ROOT / "poses_full_videos"
 DETECTIONS_DIR = PROJECT_ROOT / "detections"
+AUDIO_HITS_DIR = PROJECT_ROOT / "audio_hits"
 
 # Time offsets (seconds) of each panel relative to raw_contact.
 # Non-uniform on purpose: dense sampling around the contact moment so the
@@ -59,6 +60,107 @@ SKELETON_PAIRS = [
     (11, 23), (12, 24), (23, 24),                        # torso
     (23, 25), (25, 27), (24, 26), (26, 28),              # legs
 ]
+
+
+def extract_audio_peaks(video_path, sample_rate=16000, window_ms=10,
+                        threshold_pct=95, min_gap_ms=200):
+    """Find strike-like audio peaks in a video. Returns dict with peaks list.
+
+    Each peak is {"frame": int, "amp": float, "rel_amp": float} where rel_amp
+    is amplitude relative to the percentile threshold (>= 1.0 by definition,
+    >> 1.0 means clearly louder than background).
+    """
+    import os
+    import subprocess
+    import tempfile
+    import wave
+    import numpy as np
+
+    # Extract mono PCM via ffmpeg
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", video_path, "-vn", "-ac", "1",
+             "-ar", str(sample_rate), "-f", "wav", tmp.name],
+            capture_output=True, check=True,
+        )
+        with wave.open(tmp.name, "rb") as w:
+            audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+            audio = audio.astype(np.float32) / 32768.0
+    finally:
+        os.unlink(tmp.name)
+
+    # Source video fps (audio peaks are emitted in source-frame coords)
+    out = subprocess.run(
+        ["ffprobe", "-v", "0", "-of", "csv=p=0", "-select_streams", "v:0",
+         "-show_entries", "stream=r_frame_rate", video_path],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    num, den = out.split("/")
+    fps = float(num) / float(den)
+
+    # RMS envelope
+    ws = int(sample_rate * window_ms / 1000)
+    hop = ws // 2
+    n_win = (len(audio) - ws) // hop
+    envelope = np.empty(n_win, dtype=np.float32)
+    for i in range(n_win):
+        chunk = audio[i * hop:i * hop + ws]
+        envelope[i] = float(np.sqrt(np.mean(chunk * chunk)))
+
+    threshold = float(np.percentile(envelope, threshold_pct))
+    if threshold <= 0:
+        return {"fps": fps, "threshold": 0.0, "peaks": []}
+
+    min_gap_windows = int(min_gap_ms / 1000 / (hop / sample_rate))
+    peaks = []
+    last_peak_i = -10**9
+    for i in range(1, len(envelope) - 1):
+        v = float(envelope[i])
+        if (v > threshold and v > float(envelope[i - 1]) and v >= float(envelope[i + 1])
+                and i - last_peak_i >= min_gap_windows):
+            t_sec = (i * hop + ws / 2) / sample_rate
+            frame = int(round(t_sec * fps))
+            peaks.append({"frame": frame, "amp": v, "rel_amp": v / threshold})
+            last_peak_i = i
+
+    return {"fps": float(fps), "threshold": float(threshold), "peaks": peaks}
+
+
+def load_or_compute_audio_peaks(vid, video_path):
+    """Return cached audio peaks for video, computing + caching if missing."""
+    cache = AUDIO_HITS_DIR / f"{vid}.json"
+    if cache.exists():
+        with open(cache) as f:
+            return json.load(f)
+    print(f"Extracting audio peaks for {vid} (one-time, ~5-10s)...", flush=True)
+    data = extract_audio_peaks(video_path)
+    AUDIO_HITS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(cache, "w") as f:
+        json.dump(data, f)
+    print(f"  -> {len(data['peaks'])} peaks (threshold={data['threshold']:.4f})", flush=True)
+    return data
+
+
+def snap_to_audio_peak(raw_contact, fps, peaks_data, search_sec=0.3,
+                       min_rel_amp=1.5):
+    """Snap raw_contact to the loudest audio peak within ±search_sec.
+
+    min_rel_amp gates against ambient noise: a peak must be at least this
+    multiple of the per-video amplitude threshold to count as a strike-like
+    transient. Returns (frame, snapped: bool).
+    """
+    if not peaks_data or not peaks_data.get("peaks"):
+        return raw_contact, False
+    search = int(search_sec * fps)
+    lo, hi = raw_contact - search, raw_contact + search
+    in_window = [p for p in peaks_data["peaks"]
+                 if lo <= p["frame"] <= hi and p["rel_amp"] >= min_rel_amp]
+    if not in_window:
+        return raw_contact, False
+    best = max(in_window, key=lambda p: p["amp"])
+    return int(best["frame"]), True
 
 
 def load_data(vid):
@@ -222,15 +324,16 @@ def remove_racket_from_crop(crop, racket_bbox, bx, by, bx2, by2, panel_w, panel_
 
 
 def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
-                       racket_data=None):
+                       racket_data=None, audio_peaks=None):
     """Generate a filmstrip composite for one shot.
 
-    Sampling is non-uniform: dense ~37ms-step panels around raw_contact
-    guarantee the strike appears in at least one panel even when the
-    detector's contact frame is off by ±100ms; wide outer panels keep
-    full swing context.
+    Sampling is non-uniform: dense ~37ms-step panels around contact_frame
+    plus wide outer panels for swing context. When audio_peaks is provided,
+    the detector's raw_contact gets snapped to the nearest loud audio peak
+    within ±300ms — fixes shots where the detector is off by 200-500ms.
 
     racket_data: optional racket detection dict with 'frames' list.
+    audio_peaks: optional dict from load_or_compute_audio_peaks().
     Returns (composite_image, shot_info_dict) or (None, None).
     """
     detections = det.get("detections", [])
@@ -238,9 +341,12 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         return None, None
 
     d = detections[shot_idx]
-    contact_frame = int(d.get("frame", 0))
+    raw_contact = int(d.get("frame", 0))
     shot_type = d.get("shot_type", "unknown")
     fps = det.get("fps", 60.0)
+
+    contact_frame, snapped = snap_to_audio_peak(raw_contact, fps, audio_peaks)
+    contact_method = "audio" if snapped else "raw"
 
     pose_frames = poses.get("frames", [])
 
@@ -440,6 +546,9 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
         "shot_idx": shot_idx,
         "shot_type": shot_type,
         "contact_frame": contact_frame,
+        "raw_contact": raw_contact,
+        "contact_method": contact_method,
+        "snap_shift_ms": round((contact_frame - raw_contact) * 1000 / fps, 0),
         "timestamp": contact_frame / fps,
         "num_panels": len(panels),
     }
@@ -453,6 +562,8 @@ def main():
     parser.add_argument("--no-skeleton", action="store_true")
     parser.add_argument("--racket-removal", action="store_true",
                         help="Remove racket from composites via inpainting")
+    parser.add_argument("--no-audio-snap", action="store_true",
+                        help="Skip audio-peak contact-frame snap (use raw detector frame)")
     parser.add_argument("--upload", action="store_true", help="Upload to R2")
     parser.add_argument("--max-shots", type=int, default=0, help="Limit number of shots")
     args = parser.parse_args()
@@ -471,6 +582,14 @@ def main():
             print(f"Loaded racket detections: {racket_data.get('frames_with_racket', 0)} frames")
         else:
             print(f"[WARN] No racket detections at {racket_path}, generating without removal")
+
+    # Audio peaks for contact-frame snap (one-time per video, cached)
+    audio_peaks = None
+    if not args.no_audio_snap:
+        try:
+            audio_peaks = load_or_compute_audio_peaks(args.video, video_path)
+        except Exception as e:
+            print(f"[WARN] Audio-peak extraction failed: {e}. Using raw detector frame.")
 
     detections = det.get("detections", [])
     out_dir = PROJECT_ROOT / "exports" / args.video / "sequences"
@@ -495,7 +614,7 @@ def main():
         # Generate clean version (no skeleton) — always
         comp_clean, info = generate_composite(
             video_path, det, poses, idx, draw_skel=False,
-            racket_data=racket_data
+            racket_data=racket_data, audio_peaks=audio_peaks
         )
         if comp_clean is None:
             continue
@@ -510,7 +629,7 @@ def main():
         if not args.no_skeleton:
             comp_skel, _ = generate_composite(
                 video_path, det, poses, idx, draw_skel=True,
-                racket_data=racket_data
+                racket_data=racket_data, audio_peaks=audio_peaks
             )
             if comp_skel is not None:
                 fname_skel = f"shot_{idx:03d}_{st}{suffix}_skel.jpg"
@@ -518,7 +637,9 @@ def main():
                 cv2.imwrite(str(out_skel), comp_skel, [cv2.IMWRITE_JPEG_QUALITY, 92])
                 generated.append((str(out_skel), info))
 
-        print(f"  [{idx + 1}/{len(detections)}] {st}: {fname_clean}", flush=True)
+        tag = f"[{info['contact_method']:>5}]"
+        shift = f"snap {info['snap_shift_ms']:+.0f}ms" if info['contact_method'] == 'audio' else ""
+        print(f"  [{idx + 1}/{len(detections)}] {st}: {fname_clean}  {tag} {shift}", flush=True)
 
     print(f"\nGenerated {len(generated)} composites in {out_dir}")
 
