@@ -116,3 +116,5 @@ pros/_raw/
 # Curated pro clips live in R2, not git. Local copies are regenerable via
 # scripts/curate_pro_clips.py from pros/_raw/ + index.json picks.
 pros/*/*.mp4
+# Per-clip pose JSON (regenerable via extract_pro_clip_poses.py on GPU)
+pros/*/*.pose.json
