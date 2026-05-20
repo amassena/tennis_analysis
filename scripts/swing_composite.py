@@ -33,13 +33,18 @@ PREPROCESSED_DIR = PROJECT_ROOT / "preprocessed"
 POSES_DIR = PROJECT_ROOT / "poses_full_videos"
 DETECTIONS_DIR = PROJECT_ROOT / "detections"
 
-# How many frames to sample per shot
-NUM_FRAMES = 11
-# Time window: frames from before_sec before contact to after_sec after.
-# Symmetric 0.75s / 0.75s with 11 panels puts contact exactly at the middle
-# panel (index 5), capturing full backswing and follow-through.
-BEFORE_SEC = 0.75
-AFTER_SEC = 0.75
+# Time offsets (seconds) of each panel relative to raw_contact.
+# Non-uniform on purpose: dense sampling around the contact moment so the
+# strike is always captured in at least one panel even when the detector's
+# raw_contact is off by ±100ms; wide outer panels keep full swing context.
+# Center panel (index 5) is raw_contact and gets the orange border.
+PANEL_OFFSETS_SEC = [
+    -0.700, -0.350, -0.150,           # backswing (wide)
+    -0.075, -0.037,  0.000,  0.037, 0.075,   # contact zone (dense, ~37ms step)
+     0.150,  0.350,  0.700,           # follow-through (wide)
+]
+NUM_FRAMES = len(PANEL_OFFSETS_SEC)
+CONTACT_PANEL_IDX = PANEL_OFFSETS_SEC.index(0.0)
 # Output height per frame panel (width computed from aspect ratio)
 PANEL_HEIGHT = 480
 # Skeleton line colors (BGR)
@@ -220,6 +225,11 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
                        racket_data=None):
     """Generate a filmstrip composite for one shot.
 
+    Sampling is non-uniform: dense ~37ms-step panels around raw_contact
+    guarantee the strike appears in at least one panel even when the
+    detector's contact frame is off by ±100ms; wide outer panels keep
+    full swing context.
+
     racket_data: optional racket detection dict with 'frames' list.
     Returns (composite_image, shot_info_dict) or (None, None).
     """
@@ -234,28 +244,17 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
 
     pose_frames = poses.get("frames", [])
 
-    # Compute frame indices to sample
-    before_frames = int(BEFORE_SEC * fps)
-    after_frames = int(AFTER_SEC * fps)
-    total_window = before_frames + after_frames
-    step = max(1, total_window // (NUM_FRAMES - 1))
-
-    frame_indices = []
-    for i in range(NUM_FRAMES):
-        fi = contact_frame - before_frames + i * step
-        frame_indices.append(max(0, fi))
-    # Ensure contact frame is included
-    contact_panel_idx = None
-    closest = min(range(len(frame_indices)), key=lambda i: abs(frame_indices[i] - contact_frame))
-    frame_indices[closest] = contact_frame
-    contact_panel_idx = closest
-
-    # Open video
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return None, None
     img_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    frame_indices = [
+        max(0, contact_frame + int(round(off * fps)))
+        for off in PANEL_OFFSETS_SEC
+    ]
+    contact_panel_idx = CONTACT_PANEL_IDX
 
     # PER-FRAME centering: each panel centered on that frame's torso.
     # Crop SIZE is uniform across panels so the framing looks consistent.
