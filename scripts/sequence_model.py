@@ -76,9 +76,10 @@ class ShotClassifierCNN(_BaseClass):
     """
 
     def __init__(self, num_classes=4, input_features=99, seq_length=90, dropout=0.3,
-                 with_regression=False):
+                 with_regression=False, class_conditional_regression=False):
         super().__init__()
         self.with_regression = with_regression
+        self.class_conditional_regression = class_conditional_regression and with_regression
 
         self.conv1 = nn.Conv1d(input_features, 64, kernel_size=5, padding=2)
         self.bn1 = nn.BatchNorm1d(64)
@@ -98,9 +99,12 @@ class ShotClassifierCNN(_BaseClass):
 
         if with_regression:
             # Predicts frames offset from window center to true contact.
-            # Linear is sufficient — the conv stack already extracted the
-            # spatiotemporal features; this is just a projection.
-            self.fc_delta = nn.Linear(64, 1)
+            # Single head: one delta per window (class-agnostic). The
+            # class-conditional variant outputs num_classes deltas, one per
+            # class — fixes per-class bias asymmetry (e.g. backhand
+            # over-correction) when classes have unequal training support.
+            out_dim = num_classes if self.class_conditional_regression else 1
+            self.fc_delta = nn.Linear(64, out_dim)
 
     def forward(self, x):
         """Forward pass.
@@ -109,7 +113,8 @@ class ShotClassifierCNN(_BaseClass):
             x: (batch, seq_length, features) — note: time-first input
         Returns:
             classification-only mode: logits (batch, num_classes)
-            regression mode: (logits, delta_pred) where delta_pred is (batch,)
+            regression mode (class-agnostic): (logits, delta_pred (B,))
+            regression mode (class-conditional): (logits, delta_pred (B, num_classes))
         """
         # Conv1d expects (batch, channels, length)
         x = x.transpose(1, 2)
@@ -124,7 +129,9 @@ class ShotClassifierCNN(_BaseClass):
         logits = self.fc(x)
 
         if self.with_regression:
-            delta_pred = self.fc_delta(x).squeeze(-1)  # (batch,)
+            delta_pred = self.fc_delta(x)
+            if not self.class_conditional_regression:
+                delta_pred = delta_pred.squeeze(-1)  # (batch,)
             return logits, delta_pred
         return logits
 
@@ -330,7 +337,15 @@ def load_model(model_path=None, device=None):
     if "fc.weight" in state:
         num_classes = state["fc.weight"].shape[0]
 
-    model = ShotClassifierCNN(num_classes=num_classes, with_regression=has_regression)
+    # Auto-detect class-conditional regression: fc_delta.weight is
+    # (1, 64) for class-agnostic, (num_classes, 64) for class-conditional.
+    class_conditional = False
+    if has_regression and "fc_delta.weight" in state:
+        class_conditional = state["fc_delta.weight"].shape[0] > 1
+
+    model = ShotClassifierCNN(num_classes=num_classes,
+                               with_regression=has_regression,
+                               class_conditional_regression=class_conditional)
     model.load_state_dict(state)
     model.to(device)
     model.eval()

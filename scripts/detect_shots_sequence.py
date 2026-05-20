@@ -174,6 +174,9 @@ def sliding_window_inference(model, device, frames, fps, step_sec=0.1, batch_siz
     probs = np.concatenate(all_probs, axis=0)
     if return_deltas:
         if has_regr and all_deltas:
+            # Shape is (N,) for class-agnostic, (N, num_classes) for
+            # class-conditional. find_shots() handles both — gathers by
+            # selected class for the latter.
             deltas = np.concatenate(all_deltas, axis=0)
         else:
             deltas = np.zeros(len(timestamps), dtype=np.float32)
@@ -186,7 +189,8 @@ SHOT_CLASS_NAMES = ("backhand", "forehand", "serve")
 
 def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
                per_class_thresholds=None, min_class_conf=0.0,
-               demote_below_class_conf=None, deltas=None, fps=None):
+               demote_below_class_conf=None, deltas=None, fps=None,
+               smooth_window=0):
     """Find shot detections from probability curves.
 
     Default mode: peak-find on P(shot) = 1 - P(not_shot), then assign type
@@ -211,33 +215,85 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
 
     Returns list of dicts with timestamp, shot_type, confidence, p_shot, probabilities.
     """
-    from scipy.signal import find_peaks
+    from scipy.signal import find_peaks, savgol_filter
 
     not_shot_idx = CLASS_TO_IDX["not_shot"]
     p_shot = 1.0 - probs[:, not_shot_idx]
+
+    # Optional Savitzky-Golay smoothing of probability curves. Helps reduce
+    # peak-position jitter that comes from MediaPipe frame-level noise
+    # propagating through the conv stack. Quadratic polynomial preserves
+    # peak height; window must be odd and >= 3.
+    if smooth_window and smooth_window >= 3:
+        w = smooth_window if smooth_window % 2 == 1 else smooth_window + 1
+        polyorder = min(2, w - 1)
+        if len(p_shot) > w:
+            p_shot = savgol_filter(p_shot, w, polyorder)
+            smoothed_class_probs = np.zeros_like(probs)
+            for c in range(probs.shape[1]):
+                smoothed_class_probs[:, c] = savgol_filter(probs[:, c], w, polyorder)
+            probs = smoothed_class_probs
 
     raw_detections = []
 
     # Helper: compute corrected timestamp from peak index using regression head.
     # delta is in frames; corrected_t = window_center_t + delta / fps.
+    # Class-conditional regression: deltas shape is (N, num_classes); gather
+    # by the predicted class. Class-agnostic: (N,) — use directly.
     apply_delta = deltas is not None and fps and fps > 0
+    class_conditional_deltas = apply_delta and deltas.ndim == 2
 
-    def _peak_record(peak_idx, cname, conf):
+    def _subpixel_offset(curve, idx):
+        """Parabolic fit of three samples around `idx`. Returns the offset
+        in fractional samples from idx to the analytic peak (clamped to ±0.5
+        so we never escape the three-sample neighborhood). Removes the
+        step-grid quantization in `timestamps[idx]`.
+
+        For three samples at x = {-1, 0, +1} with values {a, b, c}, the
+        parabola y = αx² + βx + γ has vertex at x = (a - c) / (2(a - 2b + c)).
+        """
+        if idx <= 0 or idx >= len(curve) - 1:
+            return 0.0
+        a, b, c = float(curve[idx - 1]), float(curve[idx]), float(curve[idx + 1])
+        denom = 2.0 * (a - 2.0 * b + c)
+        if abs(denom) < 1e-9:
+            return 0.0
+        delta = (a - c) / denom
+        if delta > 0.5: delta = 0.5
+        elif delta < -0.5: delta = -0.5
+        return delta
+
+    def _peak_record(peak_idx, cname, conf, curve_for_subpixel=None):
         shot_probs = probs[peak_idx]
         raw_t = float(timestamps[peak_idx])
+        # Step size in seconds between consecutive inference windows (assumes
+        # uniform spacing, which sliding_window_inference guarantees).
+        if len(timestamps) >= 2:
+            step_sec = float(timestamps[1] - timestamps[0])
+        else:
+            step_sec = 0.0
+        sub_offset_samples = (_subpixel_offset(curve_for_subpixel, peak_idx)
+                              if curve_for_subpixel is not None else 0.0)
+        sub_offset_sec = sub_offset_samples * step_sec
         rec = {
-            "timestamp": round(raw_t, 3),
+            "timestamp": round(raw_t + sub_offset_sec, 3),
             "p_shot": float(p_shot[peak_idx]),
             "shot_type": cname,
             "confidence": float(conf),
             "probabilities": {CLASSES[c]: round(float(shot_probs[c]), 4)
                               for c in range(len(CLASSES))},
         }
+        if sub_offset_samples:
+            rec["subpixel_offset_samples"] = round(sub_offset_samples, 3)
         if apply_delta:
-            d_frames = float(deltas[peak_idx])
+            if class_conditional_deltas:
+                cidx = CLASS_TO_IDX[cname]
+                d_frames = float(deltas[peak_idx, cidx])
+            else:
+                d_frames = float(deltas[peak_idx])
             rec["delta_frames"] = round(d_frames, 2)
             rec["raw_timestamp"] = round(raw_t, 3)
-            rec["timestamp"] = round(raw_t + d_frames / fps, 3)
+            rec["timestamp"] = round(raw_t + sub_offset_sec + d_frames / fps, 3)
         return rec
 
     if per_class_thresholds:
@@ -247,10 +303,12 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
             if t_c is None:
                 continue
             cidx = CLASS_TO_IDX[cname]
-            peaks, _ = find_peaks(probs[:, cidx], height=t_c, prominence=prominence)
+            class_curve = probs[:, cidx]
+            peaks, _ = find_peaks(class_curve, height=t_c, prominence=prominence)
             for peak_idx in peaks:
                 raw_detections.append(_peak_record(
-                    peak_idx, cname, probs[peak_idx, cidx]))
+                    peak_idx, cname, probs[peak_idx, cidx],
+                    curve_for_subpixel=class_curve))
     else:
         # Original mode: peak on P(shot), classify via argmax
         peaks, _ = find_peaks(p_shot, height=threshold, prominence=prominence)
@@ -261,7 +319,8 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
             shot_probs = probs[peak_idx]
             best_class = max(shot_class_idxs, key=lambda c: shot_probs[c])
             raw_detections.append(_peak_record(
-                peak_idx, CLASSES[best_class], shot_probs[best_class]))
+                peak_idx, CLASSES[best_class], shot_probs[best_class],
+                curve_for_subpixel=p_shot))
 
     if not raw_detections:
         return []
@@ -294,7 +353,8 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
 
 def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
                  step_sec=0.1, batch_size=256, per_class_thresholds=None,
-                 min_class_conf=0.0, demote_below_class_conf=None):
+                 min_class_conf=0.0, demote_below_class_conf=None,
+                 smooth_window=0):
     """Run full detection pipeline on a video.
 
     Returns result dict in fused_detect.py format.
@@ -361,6 +421,7 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
         demote_below_class_conf=demote_below_class_conf,
         deltas=deltas if has_regr else None,
         fps=fps,
+        smooth_window=smooth_window,
     )
 
     # Build output detections in fused_detect format

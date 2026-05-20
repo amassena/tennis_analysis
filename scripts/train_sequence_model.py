@@ -227,9 +227,22 @@ def _unpack(batch, device):
     return x.to(device), y.to(device), None
 
 
+def _gather_delta(delta_pred, labels):
+    """For class-conditional delta_pred (B, num_classes), gather the
+    per-class scalar according to labels (B,). For class-agnostic (B,),
+    return as-is."""
+    if delta_pred.dim() == 1:
+        return delta_pred
+    return delta_pred.gather(1, labels.long().unsqueeze(1)).squeeze(1)
+
+
 def train_epoch(model, loader, optimizer, criterion, device,
                 lambda_regr=0.0, not_shot_idx=None, regr_loss_fn=None):
-    """Train for one epoch. Returns (avg_loss, accuracy, regr_mae_frames or None)."""
+    """Train for one epoch. Returns (avg_loss, accuracy, regr_mae_frames or None).
+
+    For class-conditional regression, the per-class delta is gathered using
+    the TRUE label during training. At inference, the predicted class is used.
+    """
     model.train()
     total_loss = 0.0
     total_regr_loss = 0.0
@@ -259,7 +272,8 @@ def train_epoch(model, loader, optimizer, criterion, device,
             else:
                 mask = batch_y != not_shot_idx
             if mask.any():
-                reg = regr_loss_fn(delta_pred[mask], batch_delta[mask]).mean()
+                delta_scalar = _gather_delta(delta_pred, batch_y)
+                reg = regr_loss_fn(delta_scalar[mask], batch_delta[mask]).mean()
                 loss = loss + lambda_regr * reg
                 total_regr_loss += reg.item() * mask.sum().item()
                 n_regr_samples += int(mask.sum().item())
@@ -312,7 +326,8 @@ def evaluate(model, loader, device, not_shot_idx=None):
                 else:
                     mask = batch_y != not_shot_idx
                 if mask.any():
-                    abs_err = (delta_pred[mask] - batch_delta[mask]).abs()
+                    delta_scalar = _gather_delta(delta_pred, batch_y)
+                    abs_err = (delta_scalar[mask] - batch_delta[mask]).abs()
                     abs_regr_err_total += abs_err.sum().item()
                     n_regr_samples += int(mask.sum().item())
 
@@ -412,8 +427,11 @@ def leave_one_video_out_cv(X, y, videos, args, device, deltas=None):
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size,
                                 shuffle=False, num_workers=0)
 
-        model = ShotClassifierCNN(num_classes=len(CLASSES),
-                                   with_regression=use_regr).to(device)
+        model = ShotClassifierCNN(
+            num_classes=len(CLASSES),
+            with_regression=use_regr,
+            class_conditional_regression=args.class_conditional_regression,
+        ).to(device)
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
         criterion = make_criterion(train_y, device, label_smoothing=0.05)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
@@ -467,9 +485,10 @@ def leave_one_video_out_cv(X, y, videos, args, device, deltas=None):
     print(f"LOOCV AGGREGATE: accuracy={overall_acc:.3f} ({sum(all_preds == all_labels)}/{len(all_labels)})")
     if fold_regr_maes:
         mean_mae = float(np.mean(fold_regr_maes))
+        # ASCII-safe: Windows cp1252 console can't encode em-dash or >= signs
         print(f"LOOCV REGR MAE:  {mean_mae:.2f} frames "
-              f"(~{mean_mae * 1000 / 60:.0f}ms @60fps) — "
-              f"target: <2 frames (~33ms) for event F1 ≥ 0.95")
+              f"(~{mean_mae * 1000 / 60:.0f}ms @60fps) -- "
+              f"target: <2 frames (~33ms) for event F1 >= 0.95")
     print(f"{'='*50}")
 
     # Confusion matrix
@@ -522,6 +541,11 @@ def main():
                              "(default: 0 = classification-only, original behavior). "
                              "Requires NPZ with 'delta' field (jittered training "
                              "samples). Try 0.2 (light) to 0.5 (balanced).")
+    parser.add_argument("--class-conditional-regression", action="store_true",
+                        help="Per-class regression head: predicts a separate delta "
+                             "for each class. Use when classes have asymmetric "
+                             "training support (e.g. backhand bias in single-head "
+                             "regression). Requires --lambda-regr > 0.")
     args = parser.parse_args()
 
     # Select device
@@ -615,8 +639,11 @@ def main():
                                   not_shot_idx=not_shot_idx)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-    model = ShotClassifierCNN(num_classes=len(CLASSES),
-                               with_regression=use_regr).to(device)
+    model = ShotClassifierCNN(
+        num_classes=len(CLASSES),
+        with_regression=use_regr,
+        class_conditional_regression=args.class_conditional_regression,
+    ).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
     criterion = make_criterion(y, device, label_smoothing=args.label_smoothing)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)

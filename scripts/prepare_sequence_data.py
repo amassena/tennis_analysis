@@ -187,11 +187,30 @@ def main():
                              "for the regression head to learn from (default: 0).")
     parser.add_argument("--jitter-range", type=int, default=15,
                         help="Max frames from contact for jittered windows. "
-                             "±range is uniform-sampled (default: 15 = ±250ms @60fps).")
+                             "+/- range is uniform-sampled (default: 15 = ~250ms @60fps).")
+    parser.add_argument("--holdout-manifest",
+                        default=os.path.join(PROJECT_ROOT, "eval", "holdout", "manifest.json"),
+                        help="Path to holdout manifest JSON. Videos listed there are "
+                             "excluded from training data so eval_holdout.py reports "
+                             "honest generalization. Pass empty string to disable.")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
+
+    # Load holdout video IDs and merge into EXCLUDE_VIDEOS so they never enter
+    # the training NPZ.
+    holdout_ids = set()
+    if args.holdout_manifest and os.path.exists(args.holdout_manifest):
+        with open(args.holdout_manifest) as f:
+            manifest = json.load(f)
+        holdout_ids = {v["video_id"] for v in manifest.get("videos", [])}
+        if holdout_ids:
+            print(f"Holdout manifest excludes: {sorted(holdout_ids)}")
+    elif args.holdout_manifest:
+        print(f"NOTE: holdout manifest not found at {args.holdout_manifest}; "
+              f"no videos auto-excluded.")
+    EXCLUDE_VIDEOS_FULL = set(EXCLUDE_VIDEOS) | holdout_ids
 
     # Discover GT files
     gt_files = sorted(
@@ -216,7 +235,7 @@ def main():
     for gt_file in gt_files:
         video_name = gt_file.replace("_fused.json", "")
 
-        if video_name in EXCLUDE_VIDEOS:
+        if video_name in EXCLUDE_VIDEOS_FULL:
             print(f"  SKIP {video_name} (excluded)")
             continue
 
