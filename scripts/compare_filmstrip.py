@@ -75,17 +75,27 @@ def find_user_shot_idx(det: dict, shot_n: int, shot_type: str | None = None) -> 
     return matching[shot_n]
 
 
+DEFAULT_PREFERRED_PROS = ("murray",)  # see feedback_preferred_comparison_pros.md
+
+
 def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
                    user_backhand_style: str = "two-handed") -> tuple[str, str]:
     """Return (slug, filename) of a pro clip of the right type.
 
-    Picks first matching from preferred_slug if specified, else first
-    on-disk clip from any pro. For shot_type == 'backhand', hard-filters
-    on backhand_style match (1HBH vs 2HBH is meaningless to compare).
+    Picks first matching from preferred_slug if specified, else tries
+    DEFAULT_PREFERRED_PROS first, then falls back to iteration of the
+    rest. For shot_type == 'backhand', hard-filters on backhand_style
+    match (1HBH vs 2HBH is meaningless to compare).
     """
     with INDEX_PATH.open() as f:
         index = json.load(f)
-    slugs = [preferred_slug] if preferred_slug else list(index["players"].keys())
+    if preferred_slug:
+        slugs = [preferred_slug]
+    else:
+        all_slugs = list(index["players"].keys())
+        ordered = [s for s in DEFAULT_PREFERRED_PROS if s in all_slugs]
+        ordered += [s for s in all_slugs if s not in ordered]
+        slugs = ordered
     user_bh_style = (user_backhand_style or "").lower()
     for slug in slugs:
         player = index["players"].get(slug, {})

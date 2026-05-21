@@ -139,6 +139,12 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
                 # Preference for preferred player
                 if preferred_player and player_id == preferred_player:
                     score += 2.0
+                # Default preference for Murray when no explicit player
+                # (see feedback_preferred_comparison_pros.md). Lower weight
+                # than the explicit --player flag so the user can still
+                # override.
+                if not preferred_player and player_id == "murray":
+                    score += 1.0
                 # Avoid clips already used
                 clip_key = f"{player_id}/{clip['file']}"
                 if clip_key in used_files:
