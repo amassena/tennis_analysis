@@ -158,6 +158,13 @@ Endpoints:
 
 Files at `detections/{vid}_fused.json` (user-edited ground truth) — distinct from `{vid}_fused_detections.json` (auto output). Must back up before model retraining; `models/` is gitignored so there's no safety net.
 
+## Pro clip library (`pros/`)
+
+- **`pros/index.json`** — committed catalog: 23 players, per-player metadata (handedness, gender, backhand_style), and `clips: []` arrays. Schema v3 (see file header).
+- **Curated clips live in R2** at `pros/<slug>/<file>.mp4`, downloaded on demand by `scripts/pro_comparison.py`. Not in the repo.
+- **`pros/_raw/<slug>/`** — Mac-local harvest staging from `scripts/fetch_pro_highlights.py`. Full YouTube highlight reels pending Phase 2 shot-detection + Phase 3 manual curation. **Gitignored** — large, regenerable.
+- **License framing**: yt-dlp harvest of public ATP/WTA highlights is single-user personal/research use. Preferred sources are official tour channels (Tennis TV, ATP Tour, WTA, Wimbledon, etc.) and slow-motion analysis channels. Document in commit messages if a clip's provenance is questioned.
+
 ## Common Pitfalls
 
 - **Windows cp1252 encoding**: Avoid Unicode arrows / box-drawing chars in `print` statements. For Windows Python: `PYTHONIOENCODING=utf-8 && chcp 65001`.

@@ -83,7 +83,7 @@ def load_detections(video_name):
 
 def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None,
                    used_files=None, user_hand=None, user_gender=None,
-                   cross_gender=False):
+                   user_backhand_style=None, cross_gender=False):
     """Find the best matching pro clip for a given shot type.
 
     Rotates through available clips to avoid repeating the same one.
@@ -95,6 +95,10 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
     - If user_gender is provided ('M' or 'F') and ``cross_gender`` is
       False (default), only same-gender pros are kept. Pros without a
       ``gender`` field are kept (legacy entries pre-v3 schema).
+    - If shot_type == 'backhand' and user_backhand_style is provided
+      ('one-handed' or 'two-handed'), only pros whose ``backhand_style``
+      matches are kept — the mechanics differ enough that cross-style
+      comparison teaches nothing.
 
     Returns (player_name, clip_info, clip_key) or (None, None, None).
     """
@@ -104,6 +108,7 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
         used_files = set()
     user_hand = (user_hand or "").upper().strip()[:1] or None
     user_gender = (user_gender or "").upper().strip()[:1] or None
+    user_bh_style = (user_backhand_style or "").lower().strip() or None
 
     for player_id, player_data in players.items():
         # Hard filter on handedness — mirror-reversed pros teach the wrong side
@@ -118,6 +123,12 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
             pro_gender = _GENDER_TO_CODE.get(pro_gender_word)
             if pro_gender and pro_gender != user_gender:
                 continue
+        # Hard filter on backhand_style for backhand comparisons — 1HBH and 2HBH
+        # have fundamentally different mechanics, comparing them teaches nothing
+        if shot_type == "backhand" and user_bh_style:
+            pro_bh_style = (player_data.get("backhand_style") or "").lower()
+            if pro_bh_style and pro_bh_style != user_bh_style:
+                continue
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
             if clip.get("type") == shot_type:
@@ -128,6 +139,12 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
                 # Preference for preferred player
                 if preferred_player and player_id == preferred_player:
                     score += 2.0
+                # Default preference for Murray when no explicit player
+                # (see feedback_preferred_comparison_pros.md). Lower weight
+                # than the explicit --player flag so the user can still
+                # override.
+                if not preferred_player and player_id == "murray":
+                    score += 1.0
                 # Avoid clips already used
                 clip_key = f"{player_id}/{clip['file']}"
                 if clip_key in used_files:
@@ -432,6 +449,14 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     user_gender = (det_data.get("gender")
                    or det_data.get("metadata", {}).get("gender"))
 
+    # User's backhand style — must match for backhand comparisons (1HBH vs 2HBH
+    # is meaningless to compare, mechanics differ). Default 'two-handed' since
+    # current user corpus is 100% two-handed (memory: user GT corpus is right-
+    # handed two-hander). Override via det JSON or caller.
+    user_backhand_style = (det_data.get("backhand_style")
+                           or det_data.get("metadata", {}).get("backhand_style")
+                           or "two-handed")
+
     detections = det_data.get("detections", [])
     eligible = [
         d for d in detections
@@ -452,6 +477,7 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     if user_gender:
         gender_mode = "cross-gender allowed" if cross_gender else "same-gender only"
         print(f"  User gender: {user_gender} ({gender_mode})")
+    print(f"  User backhand style: {user_backhand_style} (filtering pros on backhand matches)")
 
     generated = []
     tmpdir = tempfile.mkdtemp(prefix="tennis_procomp_")
@@ -470,6 +496,7 @@ def generate_comparisons(video_path, output_dir=None, player=None,
             pro_name, pro_clip, clip_key = match_pro_clip(
                 shot_type, library, player, user_angle, used_files,
                 user_hand=user_hand, user_gender=user_gender,
+                user_backhand_style=user_backhand_style,
                 cross_gender=cross_gender)
             if not pro_clip:
                 print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s -- no pro clip available "
