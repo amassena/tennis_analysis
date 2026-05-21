@@ -71,7 +71,8 @@
           "source_timestamp": 385.47,
           "confidence": 0.999,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_003.mp4",
@@ -83,7 +84,8 @@
           "source_timestamp": 476.48,
           "confidence": 0.999,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -95,7 +97,8 @@
           "source_timestamp": 280.45,
           "confidence": 0.998,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -107,7 +110,8 @@
           "source_timestamp": 24.9,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -119,7 +123,8 @@
           "source_timestamp": 10.25,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_004.mp4",
@@ -131,7 +136,8 @@
           "source_timestamp": 5.84,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_005.mp4",
@@ -143,7 +149,8 @@
           "source_timestamp": 8.18,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -155,7 +162,8 @@
           "source_timestamp": 80.58,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_007.mp4",
@@ -167,7 +175,8 @@
           "source_timestamp": 94.43,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -179,7 +188,8 @@
           "source_timestamp": 3.59,
           "confidence": 0.992,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -191,7 +201,8 @@
           "source_timestamp": 42.8,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -203,7 +214,8 @@
           "source_timestamp": 456.35,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -215,7 +227,8 @@
           "source_timestamp": 25.35,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_005.mp4",
@@ -227,7 +240,8 @@
           "source_timestamp": 12.75,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -239,7 +253,8 @@
           "source_timestamp": 415.35,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -251,7 +266,8 @@
           "source_timestamp": 464.15,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -273,7 +289,8 @@
           "source_timestamp": 248.41,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_005.mp4",
@@ -285,7 +302,8 @@
           "source_timestamp": 107.94,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_006.mp4",
@@ -297,7 +315,8 @@
           "source_timestamp": 146.4,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_007.mp4",
@@ -309,7 +328,8 @@
           "source_timestamp": 124.21,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -321,7 +341,8 @@
           "source_timestamp": 243.41,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -333,7 +354,8 @@
           "source_timestamp": 17.68,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_002.mp4",
@@ -345,7 +367,8 @@
           "source_timestamp": 7.92,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_003.mp4",
@@ -357,7 +380,8 @@
           "source_timestamp": 20.69,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_004.mp4",
@@ -369,7 +393,8 @@
           "source_timestamp": 24.02,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_005.mp4",
@@ -381,7 +406,8 @@
           "source_timestamp": 92.09,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_006.mp4",
@@ -393,7 +419,8 @@
           "source_timestamp": 97.26,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_007.mp4",
@@ -405,7 +432,8 @@
           "source_timestamp": 32.37,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_008.mp4",
@@ -417,7 +445,8 @@
           "source_timestamp": 100.02,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_001.mp4",
@@ -429,7 +458,8 @@
           "source_timestamp": 560.98,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -441,7 +471,8 @@
           "source_timestamp": 518.6,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -453,7 +484,8 @@
           "source_timestamp": 572.57,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_004.mp4",
@@ -465,7 +497,8 @@
           "source_timestamp": 602.94,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_005.mp4",
@@ -477,7 +510,8 @@
           "source_timestamp": 553.64,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -489,7 +523,8 @@
           "source_timestamp": 608.61,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -501,7 +536,8 @@
           "source_timestamp": 612.86,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_008.mp4",
@@ -513,7 +549,8 @@
           "source_timestamp": 619.79,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -535,7 +572,8 @@
           "source_timestamp": 118.65,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_002.mp4",
@@ -547,7 +585,8 @@
           "source_timestamp": 158.65,
           "confidence": 0.983,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_003.mp4",
@@ -559,7 +598,8 @@
           "source_timestamp": 33.55,
           "confidence": 0.981,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -571,7 +611,8 @@
           "source_timestamp": 226.35,
           "confidence": 0.978,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_005.mp4",
@@ -583,7 +624,8 @@
           "source_timestamp": 124.25,
           "confidence": 0.97,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_008.mp4",
@@ -595,7 +637,8 @@
           "source_timestamp": 150.75,
           "confidence": 0.958,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -607,7 +650,8 @@
           "source_timestamp": 185.25,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -619,7 +663,8 @@
           "source_timestamp": 176.65,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -631,7 +676,8 @@
           "source_timestamp": 86.55,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -643,7 +689,8 @@
           "source_timestamp": 209.55,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -655,7 +702,8 @@
           "source_timestamp": 27.95,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_001.mp4",
@@ -667,7 +715,8 @@
           "source_timestamp": 289.75,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -679,7 +728,8 @@
           "source_timestamp": 295.95,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_003.mp4",
@@ -691,7 +741,8 @@
           "source_timestamp": 302.55,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_004.mp4",
@@ -703,7 +754,8 @@
           "source_timestamp": 321.65,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_005.mp4",
@@ -715,7 +767,8 @@
           "source_timestamp": 273.15,
           "confidence": 0.986,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -727,7 +780,8 @@
           "source_timestamp": 284.45,
           "confidence": 0.981,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -739,7 +793,8 @@
           "source_timestamp": 264.65,
           "confidence": 0.967,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_008.mp4",
@@ -751,7 +806,8 @@
           "source_timestamp": 327.15,
           "confidence": 0.967,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -773,7 +829,8 @@
           "source_timestamp": 413.65,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -785,7 +842,8 @@
           "source_timestamp": 514.75,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -797,7 +855,8 @@
           "source_timestamp": 495.55,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -809,7 +868,8 @@
           "source_timestamp": 442.05,
           "confidence": 0.985,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -821,7 +881,8 @@
           "source_timestamp": 364.35,
           "confidence": 0.982,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_005.mp4",
@@ -833,7 +894,8 @@
           "source_timestamp": 207.05,
           "confidence": 0.98,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -845,7 +907,8 @@
           "source_timestamp": 463.45,
           "confidence": 0.974,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_007.mp4",
@@ -857,7 +920,8 @@
           "source_timestamp": 376.05,
           "confidence": 0.972,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_008.mp4",
@@ -869,7 +933,8 @@
           "source_timestamp": 23.88,
           "confidence": 0.967,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "serve_001.mp4",
@@ -881,7 +946,8 @@
           "source_timestamp": 25.35,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -893,7 +959,8 @@
           "source_timestamp": 196.05,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -905,7 +972,8 @@
           "source_timestamp": 158.15,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_004.mp4",
@@ -917,7 +985,8 @@
           "source_timestamp": 406.55,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_005.mp4",
@@ -929,7 +998,8 @@
           "source_timestamp": 432.15,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -941,7 +1011,8 @@
           "source_timestamp": 83.05,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -953,7 +1024,8 @@
           "source_timestamp": 142.45,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_008.mp4",
@@ -965,7 +1037,8 @@
           "source_timestamp": 61.75,
           "confidence": 0.978,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -987,7 +1060,8 @@
           "source_timestamp": 233.45,
           "confidence": 0.996,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_002.mp4",
@@ -999,7 +1073,8 @@
           "source_timestamp": 202.05,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_003.mp4",
@@ -1011,7 +1086,8 @@
           "source_timestamp": 220.65,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_004.mp4",
@@ -1023,7 +1099,8 @@
           "source_timestamp": 223.05,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_005.mp4",
@@ -1035,7 +1112,8 @@
           "source_timestamp": 155.05,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_006.mp4",
@@ -1047,7 +1125,8 @@
           "source_timestamp": 556.35,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_007.mp4",
@@ -1059,7 +1138,8 @@
           "source_timestamp": 254.15,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -1071,7 +1151,8 @@
           "source_timestamp": 390.05,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "backhand_001.mp4",
@@ -1083,7 +1164,8 @@
           "source_timestamp": 141.35,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_002.mp4",
@@ -1095,7 +1177,8 @@
           "source_timestamp": 459.55,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -1107,7 +1190,8 @@
           "source_timestamp": 499.35,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_004.mp4",
@@ -1119,7 +1203,8 @@
           "source_timestamp": 435.15,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -1131,7 +1216,8 @@
           "source_timestamp": 553.25,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_006.mp4",
@@ -1143,7 +1229,8 @@
           "source_timestamp": 66.35,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_007.mp4",
@@ -1155,7 +1242,8 @@
           "source_timestamp": 76.65,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -1167,7 +1255,8 @@
           "source_timestamp": 487.35,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_001.mp4",
@@ -1179,7 +1268,8 @@
           "source_timestamp": 566.55,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -1191,7 +1281,8 @@
           "source_timestamp": 610.75,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_003.mp4",
@@ -1203,7 +1294,8 @@
           "source_timestamp": 536.25,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_004.mp4",
@@ -1215,7 +1307,8 @@
           "source_timestamp": 661.15,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_005.mp4",
@@ -1227,7 +1320,8 @@
           "source_timestamp": 749.95,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -1239,7 +1333,8 @@
           "source_timestamp": 649.45,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_007.mp4",
@@ -1251,7 +1346,8 @@
           "source_timestamp": 643.85,
           "confidence": 0.986,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_008.mp4",
@@ -1263,7 +1359,8 @@
           "source_timestamp": 758.75,
           "confidence": 0.983,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -1285,7 +1382,8 @@
           "source_timestamp": 135.95,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_002.mp4",
@@ -1297,7 +1395,8 @@
           "source_timestamp": 74.68,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_003.mp4",
@@ -1309,7 +1408,8 @@
           "source_timestamp": 96.65,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -1321,7 +1421,8 @@
           "source_timestamp": 174.36,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_005.mp4",
@@ -1333,7 +1434,8 @@
           "source_timestamp": 205.56,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -1345,7 +1447,8 @@
           "source_timestamp": 71.65,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_007.mp4",
@@ -1357,7 +1460,8 @@
           "source_timestamp": 144.95,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -1369,7 +1473,8 @@
           "source_timestamp": 93.95,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -1381,7 +1486,8 @@
           "source_timestamp": 28.95,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_002.mp4",
@@ -1393,7 +1499,8 @@
           "source_timestamp": 287.35,
           "confidence": 0.996,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -1405,7 +1512,8 @@
           "source_timestamp": 3.85,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -1417,7 +1525,8 @@
           "source_timestamp": 113.95,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_005.mp4",
@@ -1429,7 +1538,8 @@
           "source_timestamp": 109.15,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -1441,7 +1551,8 @@
           "source_timestamp": 154.05,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_007.mp4",
@@ -1453,7 +1564,8 @@
           "source_timestamp": 302.25,
           "confidence": 0.994,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_008.mp4",
@@ -1465,7 +1577,8 @@
           "source_timestamp": 354.05,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -1477,7 +1590,8 @@
           "source_timestamp": 20.35,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -1489,7 +1603,8 @@
           "source_timestamp": 64.15,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_003.mp4",
@@ -1501,7 +1616,8 @@
           "source_timestamp": 85.85,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_004.mp4",
@@ -1513,7 +1629,8 @@
           "source_timestamp": 544.05,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_005.mp4",
@@ -1525,7 +1642,8 @@
           "source_timestamp": 549.65,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_006.mp4",
@@ -1537,7 +1655,8 @@
           "source_timestamp": 106.55,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_007.mp4",
@@ -1549,7 +1668,8 @@
           "source_timestamp": 74.15,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_008.mp4",
@@ -1561,7 +1681,8 @@
           "source_timestamp": 489.35,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         }
       ]
     },
@@ -1583,7 +1704,8 @@
           "source_timestamp": 140.65,
           "confidence": 0.994,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_002.mp4",
@@ -1595,7 +1717,8 @@
           "source_timestamp": 352.35,
           "confidence": 0.994,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_003.mp4",
@@ -1607,7 +1730,8 @@
           "source_timestamp": 148.75,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_004.mp4",
@@ -1619,7 +1743,8 @@
           "source_timestamp": 274.15,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_005.mp4",
@@ -1631,7 +1756,8 @@
           "source_timestamp": 307.45,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_006.mp4",
@@ -1643,7 +1769,8 @@
           "source_timestamp": 323.75,
           "confidence": 0.993,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_007.mp4",
@@ -1655,7 +1782,8 @@
           "source_timestamp": 261.65,
           "confidence": 0.992,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -1667,7 +1795,8 @@
           "source_timestamp": 264.25,
           "confidence": 0.992,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -1679,7 +1808,8 @@
           "source_timestamp": 566.65,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_002.mp4",
@@ -1691,7 +1821,8 @@
           "source_timestamp": 41.95,
           "confidence": 0.991,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_003.mp4",
@@ -1703,7 +1834,8 @@
           "source_timestamp": 385.95,
           "confidence": 0.991,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_004.mp4",
@@ -1715,7 +1847,8 @@
           "source_timestamp": 20.75,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_005.mp4",
@@ -1727,7 +1860,8 @@
           "source_timestamp": 547.95,
           "confidence": 0.987,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_006.mp4",
@@ -1739,7 +1873,8 @@
           "source_timestamp": 420.15,
           "confidence": 0.985,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_007.mp4",
@@ -1751,7 +1886,8 @@
           "source_timestamp": 66.65,
           "confidence": 0.984,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_008.mp4",
@@ -1763,7 +1899,8 @@
           "source_timestamp": 321.45,
           "confidence": 0.979,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_001.mp4",
@@ -1775,7 +1912,8 @@
           "source_timestamp": 129.5,
           "confidence": 0.983,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -1787,7 +1925,8 @@
           "source_timestamp": 179.8,
           "confidence": 0.98,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -1799,7 +1938,8 @@
           "source_timestamp": 93.6,
           "confidence": 0.975,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_004.mp4",
@@ -1811,7 +1951,8 @@
           "source_timestamp": 17.8,
           "confidence": 0.965,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_005.mp4",
@@ -1823,7 +1964,8 @@
           "source_timestamp": 6.3,
           "confidence": 0.958,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -1835,7 +1977,8 @@
           "source_timestamp": 47.3,
           "confidence": 0.949,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_007.mp4",
@@ -1847,7 +1990,8 @@
           "source_timestamp": 169.0,
           "confidence": 0.926,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_008.mp4",
@@ -1859,7 +2003,8 @@
           "source_timestamp": 11.7,
           "confidence": 0.891,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -1881,7 +2026,8 @@
           "source_timestamp": 276.45,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_002.mp4",
@@ -1893,7 +2039,8 @@
           "source_timestamp": 418.45,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_003.mp4",
@@ -1905,7 +2052,8 @@
           "source_timestamp": 129.35,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -1917,7 +2065,8 @@
           "source_timestamp": 162.85,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -1929,7 +2078,8 @@
           "source_timestamp": 200.45,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -1941,7 +2091,8 @@
           "source_timestamp": 382.45,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -1953,7 +2104,8 @@
           "source_timestamp": 77.75,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_008.mp4",
@@ -1965,7 +2117,8 @@
           "source_timestamp": 126.45,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -1977,7 +2130,8 @@
           "source_timestamp": 41.15,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -1989,7 +2143,8 @@
           "source_timestamp": 78.85,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -2001,7 +2156,8 @@
           "source_timestamp": 83.65,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_004.mp4",
@@ -2013,7 +2169,8 @@
           "source_timestamp": 89.05,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -2025,7 +2182,8 @@
           "source_timestamp": 285.65,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -2037,7 +2195,8 @@
           "source_timestamp": 371.85,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -2049,7 +2208,8 @@
           "source_timestamp": 65.95,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_008.mp4",
@@ -2061,7 +2221,8 @@
           "source_timestamp": 240.25,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_001.mp4",
@@ -2073,7 +2234,8 @@
           "source_timestamp": 173.13,
           "confidence": 0.952,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "serve_002.mp4",
@@ -2085,7 +2247,8 @@
           "source_timestamp": 329.7,
           "confidence": 0.95,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "serve_003.mp4",
@@ -2097,7 +2260,8 @@
           "source_timestamp": 207.67,
           "confidence": 0.945,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_004.mp4",
@@ -2109,7 +2273,8 @@
           "source_timestamp": 311.85,
           "confidence": 0.945,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "serve_005.mp4",
@@ -2121,7 +2286,8 @@
           "source_timestamp": 317.69,
           "confidence": 0.943,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -2133,7 +2299,8 @@
           "source_timestamp": 185.14,
           "confidence": 0.942,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -2145,7 +2312,8 @@
           "source_timestamp": 324.28,
           "confidence": 0.941,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "serve_008.mp4",
@@ -2157,7 +2325,8 @@
           "source_timestamp": 34.99,
           "confidence": 0.93,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         }
       ]
     },
@@ -2179,7 +2348,8 @@
           "source_timestamp": 142.6,
           "confidence": 0.997,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_002.mp4",
@@ -2191,7 +2361,8 @@
           "source_timestamp": 189.4,
           "confidence": 0.996,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_003.mp4",
@@ -2203,7 +2374,8 @@
           "source_timestamp": 382.9,
           "confidence": 0.996,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -2215,7 +2387,8 @@
           "source_timestamp": 125.4,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -2227,7 +2400,8 @@
           "source_timestamp": 174.2,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -2239,7 +2413,8 @@
           "source_timestamp": 236.5,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -2251,7 +2426,8 @@
           "source_timestamp": 255.2,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_008.mp4",
@@ -2263,7 +2439,8 @@
           "source_timestamp": 289.0,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -2275,7 +2452,8 @@
           "source_timestamp": 6.01,
           "confidence": 0.988,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_002.mp4",
@@ -2287,7 +2465,8 @@
           "source_timestamp": 221.56,
           "confidence": 0.982,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_003.mp4",
@@ -2299,7 +2478,8 @@
           "source_timestamp": 79.25,
           "confidence": 0.981,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_004.mp4",
@@ -2311,7 +2491,8 @@
           "source_timestamp": 97.48,
           "confidence": 0.979,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -2323,7 +2504,8 @@
           "source_timestamp": 313.56,
           "confidence": 0.978,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_006.mp4",
@@ -2335,7 +2517,8 @@
           "source_timestamp": 133.96,
           "confidence": 0.977,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_007.mp4",
@@ -2347,7 +2530,8 @@
           "source_timestamp": 22.77,
           "confidence": 0.976,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_008.mp4",
@@ -2359,7 +2543,8 @@
           "source_timestamp": 2.75,
           "confidence": 0.975,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_001.mp4",
@@ -2371,7 +2556,8 @@
           "source_timestamp": 85.5,
           "confidence": 0.666,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -2383,7 +2569,8 @@
           "source_timestamp": 88.75,
           "confidence": 0.601,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -2405,7 +2592,8 @@
           "source_timestamp": 460.36,
           "confidence": 0.998,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "forehand_002.mp4",
@@ -2417,7 +2605,8 @@
           "source_timestamp": 477.98,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_003.mp4",
@@ -2429,7 +2618,8 @@
           "source_timestamp": 484.12,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_004.mp4",
@@ -2441,7 +2631,8 @@
           "source_timestamp": 309.48,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -2453,7 +2644,8 @@
           "source_timestamp": 126.84,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -2465,7 +2657,8 @@
           "source_timestamp": 343.24,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -2477,7 +2670,8 @@
           "source_timestamp": 528.96,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "forehand_008.mp4",
@@ -2489,7 +2683,8 @@
           "source_timestamp": 96.36,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -2501,7 +2696,8 @@
           "source_timestamp": 214.12,
           "confidence": 0.965,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_002.mp4",
@@ -2513,7 +2709,8 @@
           "source_timestamp": 367.48,
           "confidence": 0.955,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_003.mp4",
@@ -2525,7 +2722,8 @@
           "source_timestamp": 197.64,
           "confidence": 0.951,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -2537,7 +2735,8 @@
           "source_timestamp": 367.4,
           "confidence": 0.948,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -2549,7 +2748,8 @@
           "source_timestamp": 589.3,
           "confidence": 0.945,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_006.mp4",
@@ -2561,7 +2761,8 @@
           "source_timestamp": 245.2,
           "confidence": 0.944,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -2573,7 +2774,8 @@
           "source_timestamp": 112.32,
           "confidence": 0.943,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -2585,7 +2787,8 @@
           "source_timestamp": 142.52,
           "confidence": 0.939,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_001.mp4",
@@ -2597,7 +2800,8 @@
           "source_timestamp": 145.27,
           "confidence": 0.877,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_002.mp4",
@@ -2609,7 +2813,8 @@
           "source_timestamp": 104.15,
           "confidence": 0.82,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "ambiguous"
         }
       ]
     },
@@ -2631,7 +2836,8 @@
           "source_timestamp": 265.64,
           "confidence": 0.997,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_002.mp4",
@@ -2643,7 +2849,8 @@
           "source_timestamp": 624.76,
           "confidence": 0.994,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         },
         {
           "file": "forehand_003.mp4",
@@ -2655,7 +2862,8 @@
           "source_timestamp": 35.95,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_004.mp4",
@@ -2667,7 +2875,8 @@
           "source_timestamp": 77.15,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "ambiguous"
         },
         {
           "file": "forehand_005.mp4",
@@ -2679,7 +2888,8 @@
           "source_timestamp": 196.35,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_006.mp4",
@@ -2691,7 +2901,8 @@
           "source_timestamp": 206.65,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_007.mp4",
@@ -2703,7 +2914,8 @@
           "source_timestamp": 373.95,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -2715,7 +2927,8 @@
           "source_timestamp": 175.65,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -2727,7 +2940,8 @@
           "source_timestamp": 116.7,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -2739,7 +2953,8 @@
           "source_timestamp": 396.05,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_003.mp4",
@@ -2751,7 +2966,8 @@
           "source_timestamp": 465.45,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -2763,7 +2979,8 @@
           "source_timestamp": 209.45,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_005.mp4",
@@ -2775,7 +2992,8 @@
           "source_timestamp": 413.05,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "ambiguous"
         },
         {
           "file": "backhand_006.mp4",
@@ -2787,7 +3005,8 @@
           "source_timestamp": 432.05,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         },
         {
           "file": "backhand_007.mp4",
@@ -2799,7 +3018,8 @@
           "source_timestamp": 95.25,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -2811,7 +3031,8 @@
           "source_timestamp": 423.55,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_001.mp4",
@@ -2823,7 +3044,8 @@
           "source_timestamp": 212.4,
           "confidence": 0.921,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -2835,7 +3057,8 @@
           "source_timestamp": 63.1,
           "confidence": 0.897,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -2847,7 +3070,8 @@
           "source_timestamp": 510.76,
           "confidence": 0.737,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         },
         {
           "file": "serve_004.mp4",
@@ -2859,7 +3083,8 @@
           "source_timestamp": 351.88,
           "confidence": 0.683,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_005.mp4",
@@ -2871,7 +3096,8 @@
           "source_timestamp": 140.3,
           "confidence": 0.665,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         },
         {
           "file": "serve_006.mp4",
@@ -2883,7 +3109,8 @@
           "source_timestamp": 552.12,
           "confidence": 0.622,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         },
         {
           "file": "serve_007.mp4",
@@ -2895,7 +3122,8 @@
           "source_timestamp": 267.7,
           "confidence": 0.561,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_008.mp4",
@@ -2907,7 +3135,8 @@
           "source_timestamp": 7.0,
           "confidence": 0.538,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -2929,7 +3158,8 @@
           "source_timestamp": 31.15,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_002.mp4",
@@ -2941,7 +3171,8 @@
           "source_timestamp": 39.04,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_003.mp4",
@@ -2953,7 +3184,8 @@
           "source_timestamp": 92.34,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -2965,7 +3197,8 @@
           "source_timestamp": 82.08,
           "confidence": 0.981,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "forehand_005.mp4",
@@ -2977,7 +3210,8 @@
           "source_timestamp": 76.49,
           "confidence": 0.977,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -2989,7 +3223,8 @@
           "source_timestamp": 136.89,
           "confidence": 0.974,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -3001,7 +3236,8 @@
           "source_timestamp": 74.41,
           "confidence": 0.967,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_008.mp4",
@@ -3013,7 +3249,8 @@
           "source_timestamp": 118.35,
           "confidence": 0.965,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -3025,7 +3262,8 @@
           "source_timestamp": 57.47,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_002.mp4",
@@ -3037,7 +3275,8 @@
           "source_timestamp": 239.55,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_003.mp4",
@@ -3049,7 +3288,8 @@
           "source_timestamp": 159.33,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -3061,7 +3301,8 @@
           "source_timestamp": 109.78,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_005.mp4",
@@ -3073,7 +3314,8 @@
           "source_timestamp": 73.15,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_006.mp4",
@@ -3085,7 +3327,8 @@
           "source_timestamp": 223.55,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_007.mp4",
@@ -3097,7 +3340,8 @@
           "source_timestamp": 6.26,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -3109,7 +3353,8 @@
           "source_timestamp": 114.78,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_001.mp4",
@@ -3121,7 +3366,8 @@
           "source_timestamp": 175.84,
           "confidence": 0.944,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -3133,7 +3379,8 @@
           "source_timestamp": 257.26,
           "confidence": 0.894,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_003.mp4",
@@ -3145,7 +3392,8 @@
           "source_timestamp": 178.51,
           "confidence": 0.874,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_004.mp4",
@@ -3157,7 +3405,8 @@
           "source_timestamp": 232.23,
           "confidence": 0.847,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_005.mp4",
@@ -3169,7 +3418,8 @@
           "source_timestamp": 221.39,
           "confidence": 0.833,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_006.mp4",
@@ -3181,7 +3431,8 @@
           "source_timestamp": 39.15,
           "confidence": 0.8,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -3193,7 +3444,8 @@
           "source_timestamp": 206.12,
           "confidence": 0.758,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         }
       ]
     },
@@ -3215,7 +3467,8 @@
           "source_timestamp": 122.4,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_002.mp4",
@@ -3227,7 +3480,8 @@
           "source_timestamp": 62.15,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_003.mp4",
@@ -3239,7 +3493,8 @@
           "source_timestamp": 404.85,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -3251,7 +3506,8 @@
           "source_timestamp": 425.95,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -3263,7 +3519,8 @@
           "source_timestamp": 408.65,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -3275,7 +3532,8 @@
           "source_timestamp": 417.95,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -3287,7 +3545,8 @@
           "source_timestamp": 459.75,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_008.mp4",
@@ -3299,7 +3558,8 @@
           "source_timestamp": 97.2,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -3311,7 +3571,8 @@
           "source_timestamp": 170.15,
           "confidence": 0.999,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -3323,7 +3584,8 @@
           "source_timestamp": 319.35,
           "confidence": 0.998,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -3335,7 +3597,8 @@
           "source_timestamp": 206.15,
           "confidence": 0.997,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_004.mp4",
@@ -3347,7 +3610,8 @@
           "source_timestamp": 164.65,
           "confidence": 0.997,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -3359,7 +3623,8 @@
           "source_timestamp": 288.65,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_006.mp4",
@@ -3371,7 +3636,8 @@
           "source_timestamp": 362.85,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -3383,7 +3649,8 @@
           "source_timestamp": 311.05,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_008.mp4",
@@ -3395,7 +3662,8 @@
           "source_timestamp": 484.75,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -3407,7 +3675,8 @@
           "source_timestamp": 566.65,
           "confidence": 0.927,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -3419,7 +3688,8 @@
           "source_timestamp": 425.75,
           "confidence": 0.727,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -3431,7 +3701,8 @@
           "source_timestamp": 432.05,
           "confidence": 0.591,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_004.mp4",
@@ -3443,7 +3714,8 @@
           "source_timestamp": 428.95,
           "confidence": 0.514,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -3465,7 +3737,8 @@
           "source_timestamp": 59.9,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_002.mp4",
@@ -3477,7 +3750,8 @@
           "source_timestamp": 33.95,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_003.mp4",
@@ -3489,7 +3763,8 @@
           "source_timestamp": 4.45,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -3501,7 +3776,8 @@
           "source_timestamp": 49.55,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_005.mp4",
@@ -3513,7 +3789,8 @@
           "source_timestamp": 7.55,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_006.mp4",
@@ -3525,7 +3802,8 @@
           "source_timestamp": 52.75,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_007.mp4",
@@ -3537,7 +3815,8 @@
           "source_timestamp": 48.7,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -3549,7 +3828,8 @@
           "source_timestamp": 109.15,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -3561,7 +3841,8 @@
           "source_timestamp": 80.45,
           "confidence": 0.999,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_002.mp4",
@@ -3573,7 +3854,8 @@
           "source_timestamp": 117.95,
           "confidence": 0.998,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -3585,7 +3867,8 @@
           "source_timestamp": 77.55,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -3597,7 +3880,8 @@
           "source_timestamp": 137.65,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -3609,7 +3893,8 @@
           "source_timestamp": 159.35,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_006.mp4",
@@ -3621,7 +3906,8 @@
           "source_timestamp": 161.95,
           "confidence": 0.997,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -3633,7 +3919,8 @@
           "source_timestamp": 82.85,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_008.mp4",
@@ -3645,7 +3932,8 @@
           "source_timestamp": 97.25,
           "confidence": 0.996,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -3657,7 +3945,8 @@
           "source_timestamp": 90.12,
           "confidence": 0.934,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_002.mp4",
@@ -3669,7 +3958,8 @@
           "source_timestamp": 39.9,
           "confidence": 0.912,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "serve_003.mp4",
@@ -3681,7 +3971,8 @@
           "source_timestamp": 8.7,
           "confidence": 0.89,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_004.mp4",
@@ -3693,7 +3984,8 @@
           "source_timestamp": 35.7,
           "confidence": 0.483,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -3715,7 +4007,8 @@
           "source_timestamp": 404.85,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_002.mp4",
@@ -3727,7 +4020,8 @@
           "source_timestamp": 425.95,
           "confidence": 0.99,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_003.mp4",
@@ -3739,7 +4033,8 @@
           "source_timestamp": 408.65,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -3751,7 +4046,8 @@
           "source_timestamp": 417.95,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -3763,7 +4059,8 @@
           "source_timestamp": 459.75,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -3775,7 +4072,8 @@
           "source_timestamp": 29.95,
           "confidence": 0.988,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -3787,7 +4085,8 @@
           "source_timestamp": 432.25,
           "confidence": 0.988,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_008.mp4",
@@ -3799,7 +4098,8 @@
           "source_timestamp": 547.45,
           "confidence": 0.988,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -3811,7 +4111,8 @@
           "source_timestamp": 170.15,
           "confidence": 0.999,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -3823,7 +4124,8 @@
           "source_timestamp": 319.35,
           "confidence": 0.998,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_003.mp4",
@@ -3835,7 +4137,8 @@
           "source_timestamp": 164.65,
           "confidence": 0.997,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_004.mp4",
@@ -3847,7 +4150,8 @@
           "source_timestamp": 311.05,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -3859,7 +4163,8 @@
           "source_timestamp": 484.75,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -3871,7 +4176,8 @@
           "source_timestamp": 610.95,
           "confidence": 0.995,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -3883,7 +4189,8 @@
           "source_timestamp": 49.97,
           "confidence": 0.994,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -3895,7 +4202,8 @@
           "source_timestamp": 557.25,
           "confidence": 0.992,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_001.mp4",
@@ -3907,7 +4215,8 @@
           "source_timestamp": 566.65,
           "confidence": 0.927,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -3919,7 +4228,8 @@
           "source_timestamp": 59.32,
           "confidence": 0.45,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         }
       ]
     },
@@ -3941,7 +4251,8 @@
           "source_timestamp": 379.45,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_002.mp4",
@@ -3953,7 +4264,8 @@
           "source_timestamp": 325.85,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_003.mp4",
@@ -3965,7 +4277,8 @@
           "source_timestamp": 246.55,
           "confidence": 0.991,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "ambiguous"
         },
         {
           "file": "forehand_004.mp4",
@@ -3977,7 +4290,8 @@
           "source_timestamp": 281.56,
           "confidence": 0.991,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_005.mp4",
@@ -3989,7 +4303,8 @@
           "source_timestamp": 236.55,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_006.mp4",
@@ -4001,7 +4316,8 @@
           "source_timestamp": 92.25,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_007.mp4",
@@ -4013,7 +4329,8 @@
           "source_timestamp": 210.75,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -4025,7 +4342,8 @@
           "source_timestamp": 285.45,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -4037,7 +4355,8 @@
           "source_timestamp": 399.64,
           "confidence": 0.989,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         },
         {
           "file": "backhand_002.mp4",
@@ -4049,7 +4368,8 @@
           "source_timestamp": 151.65,
           "confidence": 0.963,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_003.mp4",
@@ -4061,7 +4381,8 @@
           "source_timestamp": 353.25,
           "confidence": 0.958,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_004.mp4",
@@ -4073,7 +4394,8 @@
           "source_timestamp": 347.45,
           "confidence": 0.957,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_005.mp4",
@@ -4085,7 +4407,8 @@
           "source_timestamp": 272.15,
           "confidence": 0.936,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_006.mp4",
@@ -4097,7 +4420,8 @@
           "source_timestamp": 266.25,
           "confidence": 0.934,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_007.mp4",
@@ -4109,7 +4433,8 @@
           "source_timestamp": 401.55,
           "confidence": 0.899,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "behind-player"
         },
         {
           "file": "backhand_008.mp4",
@@ -4121,7 +4446,8 @@
           "source_timestamp": 227.45,
           "confidence": 0.891,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_001.mp4",
@@ -4133,7 +4459,8 @@
           "source_timestamp": 81.55,
           "confidence": 0.988,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -4145,7 +4472,8 @@
           "source_timestamp": 241.65,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -4157,7 +4485,8 @@
           "source_timestamp": 24.95,
           "confidence": 0.986,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_004.mp4",
@@ -4169,7 +4498,8 @@
           "source_timestamp": 300.85,
           "confidence": 0.985,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_005.mp4",
@@ -4181,7 +4511,8 @@
           "source_timestamp": 396.05,
           "confidence": 0.985,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_006.mp4",
@@ -4193,7 +4524,8 @@
           "source_timestamp": 119.25,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_007.mp4",
@@ -4205,7 +4537,8 @@
           "source_timestamp": 99.15,
           "confidence": 0.981,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_008.mp4",
@@ -4217,7 +4550,8 @@
           "source_timestamp": 362.65,
           "confidence": 0.98,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -4239,7 +4573,8 @@
           "source_timestamp": 71.5,
           "confidence": 0.983,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_002.mp4",
@@ -4251,7 +4586,8 @@
           "source_timestamp": 79.6,
           "confidence": 0.979,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_003.mp4",
@@ -4263,7 +4599,8 @@
           "source_timestamp": 43.7,
           "confidence": 0.97,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_004.mp4",
@@ -4275,7 +4612,8 @@
           "source_timestamp": 130.0,
           "confidence": 0.969,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -4287,7 +4625,8 @@
           "source_timestamp": 214.85,
           "confidence": 0.968,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_006.mp4",
@@ -4299,7 +4638,8 @@
           "source_timestamp": 222.39,
           "confidence": 0.963,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_007.mp4",
@@ -4311,7 +4651,8 @@
           "source_timestamp": 25.1,
           "confidence": 0.95,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -4323,7 +4664,8 @@
           "source_timestamp": 93.3,
           "confidence": 0.942,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_001.mp4",
@@ -4335,7 +4677,8 @@
           "source_timestamp": 113.88,
           "confidence": 0.998,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_002.mp4",
@@ -4347,7 +4690,8 @@
           "source_timestamp": 98.47,
           "confidence": 0.99,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_003.mp4",
@@ -4359,7 +4703,8 @@
           "source_timestamp": 122.66,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_004.mp4",
@@ -4371,7 +4716,8 @@
           "source_timestamp": 67.03,
           "confidence": 0.969,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_005.mp4",
@@ -4383,7 +4729,8 @@
           "source_timestamp": 29.4,
           "confidence": 0.966,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -4395,7 +4742,8 @@
           "source_timestamp": 76.51,
           "confidence": 0.955,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_007.mp4",
@@ -4407,7 +4755,8 @@
           "source_timestamp": 69.44,
           "confidence": 0.947,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_008.mp4",
@@ -4419,7 +4768,8 @@
           "source_timestamp": 82.05,
           "confidence": 0.932,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -4431,7 +4781,8 @@
           "source_timestamp": 245.95,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_002.mp4",
@@ -4443,7 +4794,8 @@
           "source_timestamp": 266.77,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_003.mp4",
@@ -4455,7 +4807,8 @@
           "source_timestamp": 99.73,
           "confidence": 0.968,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_004.mp4",
@@ -4467,7 +4820,8 @@
           "source_timestamp": 117.42,
           "confidence": 0.953,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_005.mp4",
@@ -4479,7 +4833,8 @@
           "source_timestamp": 73.51,
           "confidence": 0.945,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_006.mp4",
@@ -4491,7 +4846,8 @@
           "source_timestamp": 95.72,
           "confidence": 0.915,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_007.mp4",
@@ -4503,7 +4859,8 @@
           "source_timestamp": 230.6,
           "confidence": 0.911,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_008.mp4",
@@ -4515,7 +4872,8 @@
           "source_timestamp": 60.56,
           "confidence": 0.588,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         }
       ]
     },
@@ -4537,7 +4895,8 @@
           "source_timestamp": 594.64,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_002.mp4",
@@ -4549,7 +4908,8 @@
           "source_timestamp": 272.81,
           "confidence": 0.986,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_003.mp4",
@@ -4561,7 +4921,8 @@
           "source_timestamp": 291.5,
           "confidence": 0.98,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_004.mp4",
@@ -4573,7 +4934,8 @@
           "source_timestamp": 150.53,
           "confidence": 0.964,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -4585,7 +4947,8 @@
           "source_timestamp": 599.81,
           "confidence": 0.958,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_006.mp4",
@@ -4597,7 +4960,8 @@
           "source_timestamp": 532.66,
           "confidence": 0.955,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_007.mp4",
@@ -4609,7 +4973,8 @@
           "source_timestamp": 121.16,
           "confidence": 0.951,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_008.mp4",
@@ -4621,7 +4986,8 @@
           "source_timestamp": 233.19,
           "confidence": 0.945,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "backhand_001.mp4",
@@ -4633,7 +4999,8 @@
           "source_timestamp": 456.58,
           "confidence": 0.994,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_002.mp4",
@@ -4645,7 +5012,8 @@
           "source_timestamp": 434.56,
           "confidence": 0.992,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_003.mp4",
@@ -4657,7 +5025,8 @@
           "source_timestamp": 82.9,
           "confidence": 0.987,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -4669,7 +5038,8 @@
           "source_timestamp": 547.42,
           "confidence": 0.986,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_005.mp4",
@@ -4681,7 +5051,8 @@
           "source_timestamp": 418.13,
           "confidence": 0.985,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -4693,7 +5064,8 @@
           "source_timestamp": 525.65,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_007.mp4",
@@ -4705,7 +5077,8 @@
           "source_timestamp": 71.65,
           "confidence": 0.984,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_008.mp4",
@@ -4717,7 +5090,8 @@
           "source_timestamp": 32.3,
           "confidence": 0.984,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -4729,7 +5103,8 @@
           "source_timestamp": 709.92,
           "confidence": 0.936,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_002.mp4",
@@ -4741,7 +5116,8 @@
           "source_timestamp": 742.7,
           "confidence": 0.934,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_003.mp4",
@@ -4753,7 +5129,8 @@
           "source_timestamp": 725.35,
           "confidence": 0.923,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_004.mp4",
@@ -4765,7 +5142,8 @@
           "source_timestamp": 734.44,
           "confidence": 0.906,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_005.mp4",
@@ -4777,7 +5155,8 @@
           "source_timestamp": 693.99,
           "confidence": 0.888,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "serve_006.mp4",
@@ -4789,7 +5168,8 @@
           "source_timestamp": 584.21,
           "confidence": 0.884,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_007.mp4",
@@ -4801,7 +5181,8 @@
           "source_timestamp": 671.63,
           "confidence": 0.765,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "serve_008.mp4",
@@ -4813,7 +5194,8 @@
           "source_timestamp": 648.94,
           "confidence": 0.708,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         }
       ]
     },
@@ -4835,7 +5217,8 @@
           "source_timestamp": 11.9,
           "confidence": 0.995,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_002.mp4",
@@ -4847,7 +5230,8 @@
           "source_timestamp": 64.0,
           "confidence": 0.993,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-ad"
         },
         {
           "file": "forehand_003.mp4",
@@ -4859,7 +5243,8 @@
           "source_timestamp": 174.74,
           "confidence": 0.989,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_004.mp4",
@@ -4871,7 +5256,8 @@
           "source_timestamp": 190.69,
           "confidence": 0.98,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "forehand_005.mp4",
@@ -4883,7 +5269,8 @@
           "source_timestamp": 86.6,
           "confidence": 0.946,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_006.mp4",
@@ -4895,7 +5282,8 @@
           "source_timestamp": 17.3,
           "confidence": 0.936,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_007.mp4",
@@ -4907,7 +5295,8 @@
           "source_timestamp": 81.1,
           "confidence": 0.932,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "forehand_008.mp4",
@@ -4919,7 +5308,8 @@
           "source_timestamp": 90.7,
           "confidence": 0.916,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_001.mp4",
@@ -4931,7 +5321,8 @@
           "source_timestamp": 57.82,
           "confidence": 0.981,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "front-broadcast"
         },
         {
           "file": "backhand_002.mp4",
@@ -4943,7 +5334,8 @@
           "source_timestamp": 119.49,
           "confidence": 0.976,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_003.mp4",
@@ -4955,7 +5347,8 @@
           "source_timestamp": 146.91,
           "confidence": 0.972,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_004.mp4",
@@ -4967,7 +5360,8 @@
           "source_timestamp": 111.8,
           "confidence": 0.971,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_005.mp4",
@@ -4979,7 +5373,8 @@
           "source_timestamp": 128.5,
           "confidence": 0.968,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_006.mp4",
@@ -4991,7 +5386,8 @@
           "source_timestamp": 157.86,
           "confidence": 0.958,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_007.mp4",
@@ -5003,7 +5399,8 @@
           "source_timestamp": 12.71,
           "confidence": 0.949,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "backhand_008.mp4",
@@ -5015,7 +5412,8 @@
           "source_timestamp": 25.52,
           "confidence": 0.946,
           "angle": "side",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "side-deuce"
         },
         {
           "file": "serve_001.mp4",
@@ -5027,7 +5425,8 @@
           "source_timestamp": 27.7,
           "confidence": 0.581,
           "angle": "behind",
-          "mirrored": false
+          "mirrored": false,
+          "detected_angle": "unknown"
         }
       ]
     }
@@ -5040,5 +5439,15 @@
       "federer",
       "nadal"
     ]
+  },
+  "angle_taxonomy_v2": {
+    "values": [
+      "behind-player",
+      "side-deuce",
+      "side-ad",
+      "front-broadcast"
+    ],
+    "auto_detected_at": "2026-05-21T00:30:00-08:00",
+    "verification_status": "pending"
   }
 }

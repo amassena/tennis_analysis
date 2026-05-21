@@ -113,7 +113,11 @@ def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
                 if clip.get("type") != shot_type:
                     continue
                 if require_angle and target_angle:
-                    if (clip.get("angle") or "").lower() != target_angle.lower():
+                    # Prefer auto-detected angle (4-value taxonomy from
+                    # 2026-05-21 classifier); fall back to legacy 'angle' tag.
+                    clip_angle = (clip.get("detected_angle")
+                                  or clip.get("angle") or "").lower()
+                    if clip_angle != target_angle.lower():
                         continue
                 local = PROS_DIR / slug / clip["file"]
                 if local.exists():
@@ -185,8 +189,12 @@ def main() -> int:
     ap.add_argument("--user-backhand-style", default="two-handed",
                     choices=("one-handed", "two-handed"),
                     help="User's backhand style (default two-handed). Hard-filter for backhand matches.")
-    ap.add_argument("--user-angle", choices=("side", "behind"),
-                    help="Override user camera angle (default: read from det JSON, fall back to 'behind' since 90%% of user footage is behind)")
+    ap.add_argument("--user-angle",
+                    choices=("behind-player", "side-deuce", "side-ad",
+                             "front-broadcast", "side", "behind"),
+                    help="Override user camera angle. Prefer the 4-value taxonomy "
+                         "(behind-player / side-deuce / side-ad / front-broadcast); "
+                         "legacy values 'side' / 'behind' kept for compatibility.")
     ap.add_argument("--output", help="Output PNG path (default: /tmp/<user>_<shot>_vs_<pro>.png)")
     ap.add_argument("--no-skeleton", action="store_true")
     ap.add_argument("--mirror-pro", action="store_true",
