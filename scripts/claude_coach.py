@@ -176,9 +176,12 @@ def format_user_message(metrics: dict) -> str:
     if per_type:
         lines.append("## Per-shot-type biomechanics")
         lines.append("")
-        lines.append("| Shot | Count | Peak Swing Speed | Knee Bend | Trunk Rotation | Arm Extension | Recovery ms | Kinetic Chain % |")
+        lines.append("| Shot | Count | Peak Swing Speed | Knee Bend | Trunk Rotation | Arm Extension | Recovery ms | Wrist @ Contact |")
         lines.append("|---|---|---|---|---|---|---|---|")
         for st, s in per_type.items():
+            wco = s.get('avg_wrist_contact_offset_cm')
+            wco_str = (f"{wco:+.1f}cm" if isinstance(wco, (int, float))
+                       else "?")
             lines.append(
                 f"| {st} | {s.get('count','?')} | "
                 f"{s.get('avg_peak_swing_speed','?')} | "
@@ -186,14 +189,17 @@ def format_user_message(metrics: dict) -> str:
                 f"{s.get('avg_trunk_rotation','?')}° | "
                 f"{s.get('avg_arm_extension','?')}° | "
                 f"{s.get('avg_recovery_time_ms','?')} | "
-                f"{s.get('kinetic_chain_correct_pct','?')}% |"
+                f"{wco_str} |"
             )
         lines.append("")
         lines.append("### Reference ranges (recreational → advanced)")
         lines.append("- Knee bend at contact: 110-130° (deeper = more power transfer)")
         lines.append("- Trunk rotation: 30-60° (more = more racket head speed)")
         lines.append("- Arm extension at contact: 155-175° (straighter = better)")
-        lines.append("- Kinetic chain correct: >80% is solid")
+        lines.append("- Wrist @ Contact: signed forward distance of wrist from hip-center in body-relative cm.")
+        lines.append("  - Positive = wrist ahead of body (forward contact, racket out in front). Typical solid groundstroke: +10 to +25 cm.")
+        lines.append("  - Negative = wrist behind body (late contact, weak shot, often blocked/sliced).")
+        lines.append("  - Serves: this metric is most informative for groundstrokes; serve contact is overhead so the forward-back interpretation is noisier.")
     else:
         lines.append("(No per-shot biomechanical data — analyze from shot breakdown only)")
 

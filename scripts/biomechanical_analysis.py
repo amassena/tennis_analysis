@@ -168,41 +168,29 @@ def analyze_shot(frames, center_frame, fps, dominant_hand="right"):
             recovery_frames = len(velocities) - center_in_window
     recovery_time_ms = round(recovery_frames / fps * 1000)
 
-    # ── Kinetic chain timing ─────────────────────────────────────
-    # Track peak velocity time of: hip, shoulder, elbow, wrist
-    # Correct order: proximal → distal (hip → shoulder → elbow → wrist)
-    chain_times = {}
-    search_start = max(0, cf - 30)
-    search_end = min(n, cf + 10)
-
-    for joint_name, joint_idx in [("hip", d_hip), ("shoulder", d_shoulder),
-                                   ("elbow", d_elbow), ("wrist", d_wrist)]:
-        max_vel = 0
-        max_frame = cf
-        for i in range(search_start + 1, search_end):
-            if not frames[i] or not frames[i - 1]:
-                continue
-            p_curr = get_keypoint(frames[i], joint_idx)
-            p_prev = get_keypoint(frames[i - 1], joint_idx)
-            if p_curr and p_prev:
-                vel = math.sqrt(sum((a - b) ** 2 for a, b in zip(p_curr[:3], p_prev[:3]))) * fps
-                if vel > max_vel:
-                    max_vel = vel
-                    max_frame = i
-        chain_times[joint_name] = max_frame
-
-    # Check if ordering is correct (proximal → distal)
-    chain_order = ["hip", "shoulder", "elbow", "wrist"]
-    chain_frames = [chain_times.get(j, 0) for j in chain_order]
-    kinetic_chain_correct = all(
-        chain_frames[i] <= chain_frames[i + 1]
-        for i in range(len(chain_frames) - 1)
-    )
-
-    chain_timing_ms = {
-        joint: round((chain_times[joint] - chain_times.get("hip", cf)) / fps * 1000)
-        for joint in chain_order
-    }
+    # ── Wrist contact offset ─────────────────────────────────────
+    # Signed forward distance from hip-center to dominant wrist at contact,
+    # in body-relative cm. Positive = wrist ahead of body (good contact
+    # point — racket out in front for power). Negative = wrist behind body
+    # (late contact — weak shot, slice/block pattern).
+    #
+    # Uses MediaPipe world_landmarks z-axis (body-frame depth, origin at
+    # hips). MediaPipe convention: negative z = in front of body. We flip
+    # sign so positive cm = forward of body — matches coaching intuition.
+    #
+    # Replaces the (removed) kinetic-chain cascade metric, which was a
+    # textbook hypothesis that didn't fit rally-condition data — see
+    # ~/.claude/projects/-Users-andrewhome-tennis-analysis/memory/
+    # project_kinetic_chain_hypothesis_invalid.md.
+    wrist_contact_offset_cm = None
+    if frames[cf]:
+        lh = get_keypoint(frames[cf], LEFT_HIP)
+        rh = get_keypoint(frames[cf], RIGHT_HIP)
+        dw = get_keypoint(frames[cf], d_wrist)
+        if (lh and rh and dw
+                and len(lh) >= 3 and len(rh) >= 3 and len(dw) >= 3):
+            hip_cz = (lh[2] + rh[2]) / 2
+            wrist_contact_offset_cm = round(-(dw[2] - hip_cz) * 100, 1)
 
     # ── Phase durations ──────────────────────────────────────────
     backswing_dur_frames = compute_backswing_duration(frames, cf, fps, d_wrist)
@@ -230,8 +218,7 @@ def analyze_shot(frames, center_frame, fps, dominant_hand="right"):
         "arm_extension_at_contact": _safe(arm_ext, 1),
         "followthrough_angle": _safe(ft_angle, 1),
         "recovery_time_ms": recovery_time_ms,
-        "kinetic_chain_timing_ms": chain_timing_ms,
-        "kinetic_chain_correct": kinetic_chain_correct,
+        "wrist_contact_offset_cm": wrist_contact_offset_cm,
         "phase_durations": {
             "backswing_ms": backswing_ms,
             "forward_swing_ms": forward_swing_ms,
@@ -288,7 +275,10 @@ def analyze_session(detections_path, poses_path, output_path=None):
         avg_trunk_rot = sum(abs(s["trunk_rotation_at_contact"]) for s in shots) / n
         avg_arm_ext = sum(s["arm_extension_at_contact"] for s in shots) / n
         avg_recovery = sum(s["recovery_time_ms"] for s in shots) / n
-        chain_correct_pct = sum(1 for s in shots if s["kinetic_chain_correct"]) / n
+        wrist_offsets = [s["wrist_contact_offset_cm"] for s in shots
+                         if s.get("wrist_contact_offset_cm") is not None]
+        avg_wrist_offset = (sum(wrist_offsets) / len(wrist_offsets)
+                            if wrist_offsets else None)
 
         type_summaries[shot_type] = {
             "count": n,
@@ -297,7 +287,10 @@ def analyze_session(detections_path, poses_path, output_path=None):
             "avg_trunk_rotation": _safe(avg_trunk_rot, 1),
             "avg_arm_extension": _safe(avg_arm_ext, 1),
             "avg_recovery_time_ms": round(avg_recovery),
-            "kinetic_chain_correct_pct": _safe(chain_correct_pct * 100, 1),
+            "avg_wrist_contact_offset_cm": (
+                _safe(avg_wrist_offset, 1) if avg_wrist_offset is not None
+                else None
+            ),
         }
 
     # ── Fatigue indicator ────────────────────────────────────────
@@ -374,9 +367,9 @@ def compare_sessions(paths):
         print(f"\n  {shot_type.upper()}:")
         metrics = ["avg_peak_swing_speed", "avg_knee_bend_depth",
                     "avg_trunk_rotation", "avg_arm_extension",
-                    "avg_recovery_time_ms", "kinetic_chain_correct_pct"]
+                    "avg_recovery_time_ms", "avg_wrist_contact_offset_cm"]
         metric_labels = ["Peak speed", "Knee bend", "Trunk rot",
-                         "Arm ext", "Recovery ms", "Chain %"]
+                         "Arm ext", "Recovery ms", "Wrist contact cm"]
 
         for metric, label in zip(metrics, metric_labels):
             values = []
@@ -419,7 +412,10 @@ def _print_session_summary(session):
         print(f"    Avg trunk rotation:       {summary['avg_trunk_rotation']:.1f}°")
         print(f"    Avg arm extension:        {summary['avg_arm_extension']:.1f}°")
         print(f"    Avg recovery time:        {summary['avg_recovery_time_ms']} ms")
-        print(f"    Kinetic chain correct:    {summary['kinetic_chain_correct_pct']:.0f}%")
+        wco = summary.get('avg_wrist_contact_offset_cm')
+        if wco is not None:
+            print(f"    Avg wrist @ contact:      {wco:+.1f} cm "
+                  f"({'ahead of' if wco > 0 else 'behind'} hip)")
 
     fi = session.get("fatigue_indicator", {})
     decline = fi.get("speed_decline_pct", 0)
