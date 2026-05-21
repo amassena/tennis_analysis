@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "description": "Pro clip library for side-by-side comparison. Each clip is a 4-5s window around a stroke. Per-player metadata (qid, handedness, gender, birth_year) sourced from Wikidata via scripts/fetch_pros_from_wikidata.py; backhand_style is filled manually where Wikidata is silent \u2014 the raw fetch is preserved at pros/wikidata_cache.json so a refresh can't clobber human curation.",
   "schema_changelog": {
     "v3": "2026-05-09 \u2014 added qid/handedness/gender/birth_year/backhand_style per player; expanded roster from 4 to 24. Replaces hardcoded PRO_HANDEDNESS dict in scripts/pro_comparison.py.",
@@ -20,62 +20,8 @@
       "backhand_style": "two-handed",
       "gender": "male",
       "birth_year": 2003,
-      "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2024"
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "side",
-          "event": "Australian Open 2022"
-        },
-        {
-          "file": "forehand_003.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Australian Open 2022"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2024"
-        },
-        {
-          "file": "backhand_002.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2024"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "side",
-          "event": "Australian Open 2022"
-        }
-      ]
+      "clips": [],
+      "_status": "needs_recuration_2026_05_20"
     },
     "djokovic": {
       "name": "Novak Djokovic",
@@ -84,80 +30,8 @@
       "backhand_style": "two-handed",
       "gender": "male",
       "birth_year": 1987,
-      "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "forehand_003.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2025"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "backhand_002.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "backhand_003.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:SlowMoTennis",
-          "angle": "behind",
-          "event": "Indian Wells 2025"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        },
-        {
-          "file": "serve_002.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Cincinnati 2013"
-        }
-      ]
+      "clips": [],
+      "_status": "needs_recuration_2026_05_20"
     },
     "federer": {
       "name": "Roger Federer",
@@ -166,35 +40,8 @@
       "backhand_style": "one-handed",
       "gender": "male",
       "birth_year": 1981,
-      "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        }
-      ]
+      "clips": [],
+      "_status": "needs_recuration_2026_05_20"
     },
     "nadal": {
       "name": "Rafael Nadal",
@@ -203,44 +50,8 @@
       "backhand_style": "two-handed",
       "gender": "male",
       "birth_year": 1986,
-      "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 150,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        },
-        {
-          "file": "serve_001.mp4",
-          "type": "serve",
-          "contact_frame": 180,
-          "fps": 60,
-          "source": "youtube:EssentialTennis",
-          "angle": "side",
-          "event": "Indian Wells 2013"
-        }
-      ]
+      "clips": [],
+      "_status": "needs_recuration_2026_05_20"
     },
     "sinner": {
       "name": "Jannik Sinner",
@@ -263,18 +74,6 @@
           "mirrored": false
         },
         {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:COURT LEVEL TENNIS - Liam Apilado",
-          "source_video_id": "Roc4Yao6iqE",
-          "source_timestamp": 459.79,
-          "confidence": 0.999,
-          "angle": "behind",
-          "mirrored": false
-        },
-        {
           "file": "forehand_003.mp4",
           "type": "forehand",
           "contact_frame": 120,
@@ -284,18 +83,6 @@
           "source_timestamp": 476.48,
           "confidence": 0.999,
           "angle": "behind",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_004.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Top Tennis Training - Pro Tennis Lessons",
-          "source_video_id": "AWgTZBADqoo",
-          "source_timestamp": 173.7,
-          "confidence": 0.998,
-          "angle": "side",
           "mirrored": false
         },
         {
@@ -311,18 +98,6 @@
           "mirrored": false
         },
         {
-          "file": "forehand_006.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Top Tennis Training - Pro Tennis Lessons",
-          "source_video_id": "AWgTZBADqoo",
-          "source_timestamp": 113.9,
-          "confidence": 0.997,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
           "file": "forehand_007.mp4",
           "type": "forehand",
           "contact_frame": 120,
@@ -335,30 +110,6 @@
           "mirrored": false
         },
         {
-          "file": "forehand_008.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Top Tennis Training - Pro Tennis Lessons",
-          "source_video_id": "AWgTZBADqoo",
-          "source_timestamp": 326.0,
-          "confidence": 0.996,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "_wut0HlifLQ",
-          "source_timestamp": 304.45,
-          "confidence": 0.998,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
           "file": "backhand_002.mp4",
           "type": "backhand",
           "contact_frame": 120,
@@ -367,18 +118,6 @@
           "source_video_id": "_wut0HlifLQ",
           "source_timestamp": 10.25,
           "confidence": 0.997,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "backhand_003.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "_wut0HlifLQ",
-          "source_timestamp": 392.65,
-          "confidence": 0.994,
           "angle": "side",
           "mirrored": false
         },
@@ -479,18 +218,6 @@
           "mirrored": false
         },
         {
-          "file": "serve_004.mp4",
-          "type": "serve",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "fhn2ANDE4kA",
-          "source_timestamp": 196.05,
-          "confidence": 0.992,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
           "file": "serve_005.mp4",
           "type": "serve",
           "contact_frame": 120,
@@ -525,18 +252,6 @@
           "confidence": 0.991,
           "angle": "side",
           "mirrored": false
-        },
-        {
-          "file": "serve_008.mp4",
-          "type": "serve",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "fhn2ANDE4kA",
-          "source_timestamp": 158.15,
-          "confidence": 0.991,
-          "angle": "side",
-          "mirrored": false
         }
       ]
     },
@@ -548,42 +263,6 @@
       "gender": "male",
       "birth_year": 1997,
       "clips": [
-        {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Ascended Athletics (Tennisthetics)",
-          "source_video_id": "IhjO2ac9gfo",
-          "source_timestamp": 577.45,
-          "confidence": 0.998,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Ascended Athletics (Tennisthetics)",
-          "source_video_id": "IhjO2ac9gfo",
-          "source_timestamp": 687.95,
-          "confidence": 0.997,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_003.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Ascended Athletics (Tennisthetics)",
-          "source_video_id": "IhjO2ac9gfo",
-          "source_timestamp": 756.05,
-          "confidence": 0.997,
-          "angle": "side",
-          "mirrored": false
-        },
         {
           "file": "forehand_004.mp4",
           "type": "forehand",
@@ -907,30 +586,6 @@
           "mirrored": false
         },
         {
-          "file": "forehand_006.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Intuitive Tennis",
-          "source_video_id": "aEodOp29ZiA",
-          "source_timestamp": 314.6,
-          "confidence": 0.962,
-          "angle": "behind",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_007.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "XdGt3c81RbI",
-          "source_timestamp": 76.25,
-          "confidence": 0.96,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
           "file": "forehand_008.mp4",
           "type": "forehand",
           "contact_frame": 120,
@@ -939,30 +594,6 @@
           "source_video_id": "XdGt3c81RbI",
           "source_timestamp": 150.75,
           "confidence": 0.958,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "backhand_001.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "XdGt3c81RbI",
-          "source_timestamp": 136.65,
-          "confidence": 0.998,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "backhand_002.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "XdGt3c81RbI",
-          "source_timestamp": 192.05,
-          "confidence": 0.998,
           "angle": "side",
           "mirrored": false
         },
@@ -1022,18 +653,6 @@
           "source": "youtube:Slow-Mo Tennis",
           "source_video_id": "XdGt3c81RbI",
           "source_timestamp": 27.95,
-          "confidence": 0.993,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "backhand_008.mp4",
-          "type": "backhand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "XdGt3c81RbI",
-          "source_timestamp": 94.25,
           "confidence": 0.993,
           "angle": "side",
           "mirrored": false
@@ -1145,54 +764,6 @@
       "birth_year": 1997,
       "clips": [
         {
-          "file": "forehand_001.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 119.05,
-          "confidence": 0.997,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_002.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 139.95,
-          "confidence": 0.997,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_003.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 480.95,
-          "confidence": 0.996,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_004.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 397.75,
-          "confidence": 0.995,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
           "file": "forehand_005.mp4",
           "type": "forehand",
           "contact_frame": 120,
@@ -1201,42 +772,6 @@
           "source_video_id": "CxttdybdLLI",
           "source_timestamp": 413.65,
           "confidence": 0.994,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_006.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 434.05,
-          "confidence": 0.993,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_007.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 455.85,
-          "confidence": 0.993,
-          "angle": "side",
-          "mirrored": false
-        },
-        {
-          "file": "forehand_008.mp4",
-          "type": "forehand",
-          "contact_frame": 120,
-          "fps": 60,
-          "source": "youtube:Slow-Mo Tennis",
-          "source_video_id": "CxttdybdLLI",
-          "source_timestamp": 35.85,
-          "confidence": 0.991,
           "angle": "side",
           "mirrored": false
         },
@@ -5496,5 +5031,14 @@
         }
       ]
     }
+  },
+  "curation_pass_2026_05_20": {
+    "rejected_count": 23,
+    "original_4_dropped": [
+      "alcaraz",
+      "djokovic",
+      "federer",
+      "nadal"
+    ]
   }
 }
