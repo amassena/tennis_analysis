@@ -189,6 +189,12 @@ def main() -> int:
                     help="Override user camera angle (default: read from det JSON, fall back to 'behind' since 90%% of user footage is behind)")
     ap.add_argument("--output", help="Output PNG path (default: /tmp/<user>_<shot>_vs_<pro>.png)")
     ap.add_argument("--no-skeleton", action="store_true")
+    ap.add_argument("--mirror-pro", action="store_true",
+                    help="Horizontally flip the pro filmstrip. ONLY useful for "
+                         "lefty-vs-righty handedness conversion (e.g., comparing a "
+                         "right-handed user to a Nadal clip). Does NOT compensate "
+                         "for camera-angle differences — that's a 3D problem "
+                         "image-flipping cannot solve.")
     args = ap.parse_args()
 
     print(f"Loading user data for {args.user}…")
@@ -235,6 +241,12 @@ def main() -> int:
     if pro_strip is None:
         print("[ERROR] pro filmstrip generation failed")
         return 1
+
+    if args.mirror_pro:
+        # Only legitimate use is handedness conversion (lefty-vs-righty).
+        # Horizontal flip does NOT correct camera-angle differences.
+        pro_strip = cv2.flip(pro_strip, 1)
+        print(f"  Mirrored pro filmstrip horizontally (handedness conversion)")
 
     # Resize to same width (the panel heights are the same; widths can differ
     # if aspect ratios differ).
