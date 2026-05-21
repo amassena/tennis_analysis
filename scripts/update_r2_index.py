@@ -513,6 +513,15 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .shot-chip.backhand .ty{{color:#5DADE2}}
 .shot-chip.forehand_volley .ty,.shot-chip.backhand_volley .ty{{color:#9B59B6}}
 .shot-chip.overhead .ty,.shot-chip.unknown_shot .ty{{color:#aaa}}
+.shot-chip .vs{{font-size:.6em;color:#FF8C00;margin-top:3px;padding:0 5px;border:1px solid rgba(255,140,0,0.5);border-radius:6px;cursor:pointer;font-weight:600;letter-spacing:.04em;}}
+.shot-chip .vs:hover{{background:rgba(255,140,0,0.2);color:#fff;}}
+.compare-modal-overlay{{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:1000;justify-content:center;align-items:center;padding:20px;}}
+.compare-modal-overlay.open{{display:flex;}}
+.compare-modal{{background:#0f0f0f;border:1px solid #2a2a2a;border-radius:8px;max-width:96vw;max-height:96vh;padding:18px;overflow:auto;position:relative;}}
+.compare-modal h2{{color:#ddd;font-size:1.05em;margin:0 0 12px 0;font-weight:600;}}
+.compare-modal img{{display:block;max-width:100%;max-height:78vh;border-radius:4px;}}
+.compare-modal .close{{position:absolute;top:6px;right:14px;background:none;border:none;color:#aaa;font-size:1.5em;cursor:pointer;}}
+.compare-modal .err{{color:#E74C3C;padding:30px;text-align:center;font-size:.9em;}}
 .shot-strip-hdr{{font-size:.7em;color:#666;text-transform:uppercase;letter-spacing:.08em;
   padding:4px 0 0;display:none}}
 .shot-strip-hdr.show{{display:block}}
@@ -602,6 +611,16 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
   <div class="seq-modal">
     <h2><span id="seqTitle">Swing Sequences</span><button class="close" onclick="closeSeqModal()">&times;</button></h2>
     <div class="seq-grid" id="seqGrid"></div>
+  </div>
+</div>
+
+<!-- Compare Modal -->
+<div class="compare-modal-overlay" id="compareModal" onclick="if(event.target===this)closeCompareModal()">
+  <div class="compare-modal">
+    <button class="close" onclick="closeCompareModal()">&times;</button>
+    <h2 id="compareTitle">Pro Comparison</h2>
+    <img id="compareImg" alt="Compare to pro" onload="document.getElementById('compareErr').style.display='none';this.style.display='block';" onerror="this.style.display='none';document.getElementById('compareErr').style.display='block';">
+    <div class="err" id="compareErr" style="display:none">No pro comparison available for this shot yet. Comparisons are pre-generated for some videos; coverage will expand.</div>
   </div>
 </div>
 
@@ -725,9 +744,10 @@ function renderShotStrip() {{
   shots.forEach(function(s, i) {{
     var pos = s.positions[currentVariant];
     var label = ({{'serve':'S','forehand':'FH','backhand':'BH','forehand_volley':'FV','backhand_volley':'BV','overhead':'OH','unknown_shot':'?'}})[s.type] || '?';
-    html += '<div class="shot-chip ' + s.type + '" data-action="jumpshot" data-t="' + pos + '" data-idx="' + i + '">'
+    html += '<div class="shot-chip ' + s.type + '" data-t="' + pos + '" data-idx="' + i + '">'
       + '<span class="t">' + fmtShotTime(pos) + '</span>'
-      + '<span class="ty">' + label + '</span></div>';
+      + '<span class="ty">' + label + '</span>'
+      + '<span class="vs" title="Compare to pro">vs pro</span></div>';
   }});
   strip.innerHTML = html;
   strip.classList.add('show');
@@ -764,6 +784,15 @@ function updateActiveShotChip() {{
 vid.addEventListener('timeupdate', updateActiveShotChip);
 
 document.getElementById('shotStrip').addEventListener('click', function(e) {{
+  // Compare button — small "vs pro" pill inside the chip
+  if (e.target.classList.contains('vs')) {{
+    var chip = e.target.closest('.shot-chip');
+    if (chip && currentShots) {{
+      openCompareModal(currentShots.video, parseInt(chip.dataset.idx));
+    }}
+    e.stopPropagation();
+    return;
+  }}
   var chip = e.target.closest('.shot-chip');
   if (!chip) return;
   var t = parseFloat(chip.dataset.t);
@@ -772,6 +801,20 @@ document.getElementById('shotStrip').addEventListener('click', function(e) {{
     vid.play().catch(function(){{}});
   }}
 }});
+
+function openCompareModal(videoId, shotIdx) {{
+  var img = document.getElementById('compareImg');
+  var err = document.getElementById('compareErr');
+  document.getElementById('compareTitle').textContent =
+    'Pro Comparison — ' + videoId + ' shot ' + shotIdx;
+  // Reset visibility before load attempt
+  img.style.display = 'none'; err.style.display = 'none';
+  img.src = '/compare/' + videoId + '/shot_' + shotIdx + '.png';
+  document.getElementById('compareModal').classList.add('open');
+}}
+function closeCompareModal() {{
+  document.getElementById('compareModal').classList.remove('open');
+}}
 
 function closePlayer() {{
   vid.pause(); vid.removeAttribute('src'); vid.load();
