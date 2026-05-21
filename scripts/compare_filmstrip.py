@@ -79,13 +79,17 @@ DEFAULT_PREFERRED_PROS = ("murray",)  # see feedback_preferred_comparison_pros.m
 
 
 def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
-                   user_backhand_style: str = "two-handed") -> tuple[str, str]:
+                   user_backhand_style: str = "two-handed",
+                   target_angle: str | None = None) -> tuple[str, str]:
     """Return (slug, filename) of a pro clip of the right type.
 
     Picks first matching from preferred_slug if specified, else tries
     DEFAULT_PREFERRED_PROS first, then falls back to iteration of the
-    rest. For shot_type == 'backhand', hard-filters on backhand_style
-    match (1HBH vs 2HBH is meaningless to compare).
+    rest. Filters applied:
+      - shot_type (forehand/backhand/serve)
+      - For backhand: hard-filter on backhand_style match
+      - If target_angle is set, hard-filter on matching angle
+    Falls back to no-angle-filter if nothing matches with the strict angle.
     """
     with INDEX_PATH.open() as f:
         index = json.load(f)
@@ -97,22 +101,35 @@ def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
         ordered += [s for s in all_slugs if s not in ordered]
         slugs = ordered
     user_bh_style = (user_backhand_style or "").lower()
-    for slug in slugs:
-        player = index["players"].get(slug, {})
-        # Hard filter on backhand_style for backhand comparisons
-        if shot_type == "backhand" and user_bh_style:
-            pro_bh_style = (player.get("backhand_style") or "").lower()
-            if pro_bh_style and pro_bh_style != user_bh_style:
-                continue
-        for clip in player.get("clips", []):
-            if clip.get("type") != shot_type:
-                continue
-            local = PROS_DIR / slug / clip["file"]
-            if local.exists():
-                return slug, clip["file"]
+
+    def _scan(require_angle: bool) -> tuple[str, str] | None:
+        for slug in slugs:
+            player = index["players"].get(slug, {})
+            if shot_type == "backhand" and user_bh_style:
+                pro_bh_style = (player.get("backhand_style") or "").lower()
+                if pro_bh_style and pro_bh_style != user_bh_style:
+                    continue
+            for clip in player.get("clips", []):
+                if clip.get("type") != shot_type:
+                    continue
+                if require_angle and target_angle:
+                    if (clip.get("angle") or "").lower() != target_angle.lower():
+                        continue
+                local = PROS_DIR / slug / clip["file"]
+                if local.exists():
+                    return slug, clip["file"]
+        return None
+
+    # First try with strict angle match, then relax if nothing found
+    hit = _scan(require_angle=True)
+    if hit:
+        return hit
+    hit = _scan(require_angle=False)
+    if hit:
+        return hit
     raise FileNotFoundError(
         f"No on-disk pro clip of type {shot_type!r} "
-        f"(backhand_style filter: {user_bh_style!r})"
+        f"(backhand_style={user_bh_style!r}, target_angle={target_angle!r})"
     )
 
 
@@ -164,9 +181,12 @@ def main() -> int:
     ap.add_argument("--shot-type", choices=("forehand", "backhand", "serve"),
                     help="Shot type (default: pick any shot at index --shot)")
     ap.add_argument("--pro", help="Preferred pro slug (default: auto)")
+    ap.add_argument("--pro-clip", help="Specific clip filename (e.g. backhand_005.mp4) — bypasses matcher")
     ap.add_argument("--user-backhand-style", default="two-handed",
                     choices=("one-handed", "two-handed"),
                     help="User's backhand style (default two-handed). Hard-filter for backhand matches.")
+    ap.add_argument("--user-angle", choices=("side", "behind"),
+                    help="Override user camera angle (default: read from det JSON, fall back to 'behind' since 90%% of user footage is behind)")
     ap.add_argument("--output", help="Output PNG path (default: /tmp/<user>_<shot>_vs_<pro>.png)")
     ap.add_argument("--no-skeleton", action="store_true")
     args = ap.parse_args()
@@ -187,9 +207,24 @@ def main() -> int:
         print("[ERROR] user filmstrip generation failed")
         return 1
 
-    print(f"Matching pro clip of type {shot_type!r}…")
-    slug, filename = match_pro_clip(shot_type, args.pro, args.user_backhand_style)
-    print(f"  -> {slug}/{filename}")
+    if args.pro_clip:
+        if not args.pro:
+            print("[ERROR] --pro-clip requires --pro")
+            return 1
+        slug, filename = args.pro, args.pro_clip
+        print(f"Using explicit pro clip: {slug}/{filename}")
+    else:
+        # Resolve user's camera angle for matching
+        target_angle = args.user_angle
+        if not target_angle:
+            target_angle = (user_det.get("camera_angle")
+                            or user_det.get("metadata", {}).get("camera_angle")
+                            or "behind")  # default: 90% of user footage is behind
+            target_angle = target_angle.lower() if isinstance(target_angle, str) else "behind"
+        print(f"Matching pro clip of type {shot_type!r} (angle={target_angle})…")
+        slug, filename = match_pro_clip(shot_type, args.pro, args.user_backhand_style,
+                                        target_angle=target_angle)
+        print(f"  -> {slug}/{filename}")
     pro_video, pro_det, pro_poses = load_pro_data(slug, filename)
 
     print(f"Generating pro filmstrip…")

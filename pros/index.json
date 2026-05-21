@@ -259,7 +259,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 385.47,
           "confidence": 0.999,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -271,7 +271,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 459.79,
           "confidence": 0.999,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -283,7 +283,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 476.48,
           "confidence": 0.999,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -307,7 +307,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 280.45,
           "confidence": 0.998,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -391,7 +391,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 5.84,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -403,7 +403,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 8.18,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -415,7 +415,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 80.58,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -427,7 +427,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 94.43,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -439,7 +439,7 @@
           "source_video_id": "Roc4Yao6iqE",
           "source_timestamp": 3.59,
           "confidence": 0.992,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -915,7 +915,7 @@
           "source_video_id": "aEodOp29ZiA",
           "source_timestamp": 314.6,
           "confidence": 0.962,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1333,7 +1333,7 @@
           "source_video_id": "4SSkTPYqxpk",
           "source_timestamp": 23.88,
           "confidence": 0.967,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1451,7 +1451,7 @@
           "source_video_id": "Wgb_Lh8Z8dM",
           "source_timestamp": 233.45,
           "confidence": 0.996,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1749,7 +1749,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 135.95,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1809,7 +1809,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 71.65,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1857,7 +1857,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 287.35,
           "confidence": 0.996,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1917,7 +1917,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 302.25,
           "confidence": 0.994,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1929,7 +1929,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 354.05,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1977,7 +1977,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 544.05,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -1989,7 +1989,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 549.65,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2025,7 +2025,7 @@
           "source_video_id": "oK5E1Imk6HM",
           "source_timestamp": 489.35,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         }
       ]
@@ -2047,7 +2047,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 140.65,
           "confidence": 0.994,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2059,7 +2059,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 352.35,
           "confidence": 0.994,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2071,7 +2071,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 148.75,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2083,7 +2083,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 274.15,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2095,7 +2095,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 307.45,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2107,7 +2107,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 323.75,
           "confidence": 0.993,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2119,7 +2119,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 261.65,
           "confidence": 0.992,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2131,7 +2131,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 264.25,
           "confidence": 0.992,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2143,7 +2143,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 566.65,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2155,7 +2155,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 41.95,
           "confidence": 0.991,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2167,7 +2167,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 385.95,
           "confidence": 0.991,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2179,7 +2179,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 20.75,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2191,7 +2191,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 547.95,
           "confidence": 0.987,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2203,7 +2203,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 420.15,
           "confidence": 0.985,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2215,7 +2215,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 66.65,
           "confidence": 0.984,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2227,7 +2227,7 @@
           "source_video_id": "qkQmT4fXKD8",
           "source_timestamp": 321.45,
           "confidence": 0.979,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2537,7 +2537,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 173.13,
           "confidence": 0.952,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2549,7 +2549,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 329.7,
           "confidence": 0.95,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2561,7 +2561,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 207.67,
           "confidence": 0.945,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2573,7 +2573,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 311.85,
           "confidence": 0.945,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2585,7 +2585,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 317.69,
           "confidence": 0.943,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2597,7 +2597,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 185.14,
           "confidence": 0.942,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2609,7 +2609,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 324.28,
           "confidence": 0.941,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2621,7 +2621,7 @@
           "source_video_id": "u3Uf-J6gKd0",
           "source_timestamp": 34.99,
           "confidence": 0.93,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         }
       ]
@@ -2643,7 +2643,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 142.6,
           "confidence": 0.997,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2655,7 +2655,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 189.4,
           "confidence": 0.996,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2667,7 +2667,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 382.9,
           "confidence": 0.996,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2679,7 +2679,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 125.4,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2691,7 +2691,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 174.2,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2703,7 +2703,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 236.5,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2715,7 +2715,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 255.2,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2727,7 +2727,7 @@
           "source_video_id": "1uPetW4Uuig",
           "source_timestamp": 289.0,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2739,7 +2739,7 @@
           "source_video_id": "5H_kb2abbvc",
           "source_timestamp": 6.01,
           "confidence": 0.988,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2763,7 +2763,7 @@
           "source_video_id": "5H_kb2abbvc",
           "source_timestamp": 79.25,
           "confidence": 0.981,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2811,7 +2811,7 @@
           "source_video_id": "5H_kb2abbvc",
           "source_timestamp": 22.77,
           "confidence": 0.976,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2823,7 +2823,7 @@
           "source_video_id": "5H_kb2abbvc",
           "source_timestamp": 2.75,
           "confidence": 0.975,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2835,7 +2835,7 @@
           "source_video_id": "5H_kb2abbvc",
           "source_timestamp": 85.5,
           "confidence": 0.666,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -2847,7 +2847,7 @@
           "source_video_id": "5H_kb2abbvc",
           "source_timestamp": 88.75,
           "confidence": 0.601,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         }
       ]
@@ -3095,7 +3095,7 @@
           "source_video_id": "H52VQbqUIF0",
           "source_timestamp": 265.64,
           "confidence": 0.997,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3107,7 +3107,7 @@
           "source_video_id": "H52VQbqUIF0",
           "source_timestamp": 624.76,
           "confidence": 0.994,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3311,7 +3311,7 @@
           "source_video_id": "wDSk5zYeys4",
           "source_timestamp": 510.76,
           "confidence": 0.737,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3323,7 +3323,7 @@
           "source_video_id": "H52VQbqUIF0",
           "source_timestamp": 351.88,
           "confidence": 0.683,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3347,7 +3347,7 @@
           "source_video_id": "H52VQbqUIF0",
           "source_timestamp": 552.12,
           "confidence": 0.622,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3691,7 +3691,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 62.15,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3703,7 +3703,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 404.85,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3715,7 +3715,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 425.95,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3727,7 +3727,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 408.65,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3739,7 +3739,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 417.95,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3751,7 +3751,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 459.75,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3775,7 +3775,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 170.15,
           "confidence": 0.999,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3787,7 +3787,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 319.35,
           "confidence": 0.998,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3799,7 +3799,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 206.15,
           "confidence": 0.997,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3811,7 +3811,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 164.65,
           "confidence": 0.997,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3823,7 +3823,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 288.65,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3835,7 +3835,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 362.85,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3847,7 +3847,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 311.05,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3859,7 +3859,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 484.75,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3871,7 +3871,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 566.65,
           "confidence": 0.927,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3883,7 +3883,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 425.75,
           "confidence": 0.727,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3895,7 +3895,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 432.05,
           "confidence": 0.591,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -3907,7 +3907,7 @@
           "source_video_id": "0bP6ulUv6oc",
           "source_timestamp": 428.95,
           "confidence": 0.514,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         }
       ]
@@ -4121,7 +4121,7 @@
           "source_video_id": "IBL2jPkZuow",
           "source_timestamp": 90.12,
           "confidence": 0.934,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4179,7 +4179,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 404.85,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4191,7 +4191,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 425.95,
           "confidence": 0.99,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4203,7 +4203,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 408.65,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4215,7 +4215,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 417.95,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4227,7 +4227,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 459.75,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4239,7 +4239,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 29.95,
           "confidence": 0.988,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4251,7 +4251,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 432.25,
           "confidence": 0.988,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4263,7 +4263,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 547.45,
           "confidence": 0.988,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4275,7 +4275,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 170.15,
           "confidence": 0.999,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4287,7 +4287,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 319.35,
           "confidence": 0.998,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4299,7 +4299,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 164.65,
           "confidence": 0.997,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4311,7 +4311,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 311.05,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4323,7 +4323,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 484.75,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4335,7 +4335,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 610.95,
           "confidence": 0.995,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4347,7 +4347,7 @@
           "source_video_id": "wcmemO2-nhg",
           "source_timestamp": 49.97,
           "confidence": 0.994,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4359,7 +4359,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 557.25,
           "confidence": 0.992,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4371,7 +4371,7 @@
           "source_video_id": "tr-ztoxmc2I",
           "source_timestamp": 566.65,
           "confidence": 0.927,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4383,7 +4383,7 @@
           "source_video_id": "0xT0G31GUo4",
           "source_timestamp": 59.32,
           "confidence": 0.45,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         }
       ]
@@ -4441,7 +4441,7 @@
           "source_video_id": "o14zEDsIQG8",
           "source_timestamp": 281.56,
           "confidence": 0.991,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -4501,7 +4501,7 @@
           "source_video_id": "o14zEDsIQG8",
           "source_timestamp": 399.64,
           "confidence": 0.989,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -5169,7 +5169,7 @@
           "source_video_id": "IDuHO20EiQM",
           "source_timestamp": 71.65,
           "confidence": 0.984,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -5347,7 +5347,7 @@
           "source_video_id": "CSeFN7oHzYs",
           "source_timestamp": 86.6,
           "confidence": 0.946,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -5359,7 +5359,7 @@
           "source_video_id": "CSeFN7oHzYs",
           "source_timestamp": 17.3,
           "confidence": 0.936,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -5371,7 +5371,7 @@
           "source_video_id": "CSeFN7oHzYs",
           "source_timestamp": 81.1,
           "confidence": 0.932,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         },
         {
@@ -5491,7 +5491,7 @@
           "source_video_id": "CSeFN7oHzYs",
           "source_timestamp": 27.7,
           "confidence": 0.581,
-          "angle": "side",
+          "angle": "behind",
           "mirrored": false
         }
       ]
