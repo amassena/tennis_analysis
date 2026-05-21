@@ -75,24 +75,35 @@ def find_user_shot_idx(det: dict, shot_n: int, shot_type: str | None = None) -> 
     return matching[shot_n]
 
 
-def match_pro_clip(shot_type: str, preferred_slug: str | None = None) -> tuple[str, str]:
+def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
+                   user_backhand_style: str = "two-handed") -> tuple[str, str]:
     """Return (slug, filename) of a pro clip of the right type.
 
     Picks first matching from preferred_slug if specified, else first
-    on-disk clip from any pro.
+    on-disk clip from any pro. For shot_type == 'backhand', hard-filters
+    on backhand_style match (1HBH vs 2HBH is meaningless to compare).
     """
     with INDEX_PATH.open() as f:
         index = json.load(f)
     slugs = [preferred_slug] if preferred_slug else list(index["players"].keys())
+    user_bh_style = (user_backhand_style or "").lower()
     for slug in slugs:
         player = index["players"].get(slug, {})
+        # Hard filter on backhand_style for backhand comparisons
+        if shot_type == "backhand" and user_bh_style:
+            pro_bh_style = (player.get("backhand_style") or "").lower()
+            if pro_bh_style and pro_bh_style != user_bh_style:
+                continue
         for clip in player.get("clips", []):
             if clip.get("type") != shot_type:
                 continue
             local = PROS_DIR / slug / clip["file"]
             if local.exists():
                 return slug, clip["file"]
-    raise FileNotFoundError(f"No on-disk pro clip of type {shot_type!r}")
+    raise FileNotFoundError(
+        f"No on-disk pro clip of type {shot_type!r} "
+        f"(backhand_style filter: {user_bh_style!r})"
+    )
 
 
 def load_pro_data(slug: str, filename: str):
@@ -143,6 +154,9 @@ def main() -> int:
     ap.add_argument("--shot-type", choices=("forehand", "backhand", "serve"),
                     help="Shot type (default: pick any shot at index --shot)")
     ap.add_argument("--pro", help="Preferred pro slug (default: auto)")
+    ap.add_argument("--user-backhand-style", default="two-handed",
+                    choices=("one-handed", "two-handed"),
+                    help="User's backhand style (default two-handed). Hard-filter for backhand matches.")
     ap.add_argument("--output", help="Output PNG path (default: /tmp/<user>_<shot>_vs_<pro>.png)")
     ap.add_argument("--no-skeleton", action="store_true")
     args = ap.parse_args()
@@ -164,7 +178,7 @@ def main() -> int:
         return 1
 
     print(f"Matching pro clip of type {shot_type!r}…")
-    slug, filename = match_pro_clip(shot_type, args.pro)
+    slug, filename = match_pro_clip(shot_type, args.pro, args.user_backhand_style)
     print(f"  -> {slug}/{filename}")
     pro_video, pro_det, pro_poses = load_pro_data(slug, filename)
 
