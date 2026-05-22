@@ -6,6 +6,7 @@ struct UploadTabView: View {
     @EnvironmentObject var auth: AuthCoordinator
     @EnvironmentObject var nav: AppNavigation
     @State private var showingComposer = false
+    @State private var showingSettings = false
 
     var body: some View {
         NavigationView {
@@ -28,10 +29,8 @@ struct UploadTabView: View {
             .navigationTitle("Upload")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Menu {
-                        Button("Sign out", role: .destructive) { auth.signOut() }
-                    } label: {
-                        Image(systemName: "person.crop.circle")
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape")
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -44,6 +43,9 @@ struct UploadTabView: View {
         }
         .sheet(isPresented: $showingComposer) {
             UploadComposerSheet(userHash: userHash, isPresented: $showingComposer)
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(userHash: userHash, isPresented: $showingSettings)
         }
     }
 }

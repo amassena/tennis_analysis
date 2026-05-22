@@ -50,6 +50,17 @@ struct APIClient {
         return try await execute(req)
     }
 
+    /// DELETE JSON.
+    static func delete<ResponseBody: Decodable>(
+        path: String,
+        requireAuth: Bool = true
+    ) async throws -> ResponseBody {
+        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        req.httpMethod = "DELETE"
+        try attachAuth(&req, required: requireAuth)
+        return try await execute(req)
+    }
+
     // MARK: - Internals
 
     private static func attachAuth(_ req: inout URLRequest, required: Bool) throws {

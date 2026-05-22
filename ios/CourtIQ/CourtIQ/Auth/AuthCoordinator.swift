@@ -67,6 +67,26 @@ final class AuthCoordinator: NSObject, ObservableObject {
         lastError = nil
     }
 
+    /// Apple App Review requires this. Calls DELETE /api/account, then
+    /// clears the local token. On failure we leave the user signed in
+    /// so they can try again.
+    func deleteAccount() async -> DeleteAccountResult {
+        do {
+            let response: DeleteAccountResponse = try await APIClient.delete(path: "api/account")
+            TokenStore.clear()
+            state = .signedOut
+            return .success(videosRemoved: response.videos_removed)
+        } catch {
+            lastError = error.localizedDescription
+            return .failure(error.localizedDescription)
+        }
+    }
+
+    enum DeleteAccountResult {
+        case success(videosRemoved: Int)
+        case failure(String)
+    }
+
     // MARK: - Private
 
     private func exchangeAppleCredential(_ auth: ASAuthorization) async {
@@ -116,4 +136,9 @@ private struct MeResponse: Decodable {
     let video_count: Int
     let gallery_url: String
     let created_at: String
+}
+
+private struct DeleteAccountResponse: Decodable {
+    let deleted: Bool
+    let videos_removed: Int
 }

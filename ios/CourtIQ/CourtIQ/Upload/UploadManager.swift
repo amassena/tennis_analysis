@@ -16,7 +16,31 @@ final class UploadManager: ObservableObject {
     private let chunkSize: Int64 = 50 * 1024 * 1024  // 50 MB
     private let maxConcurrentParts = 3
 
+    /// User-controlled toggle, persisted via UserDefaults.
+    /// Enforced by `currentSession.configuration.allowsCellularAccess`.
+    @Published var wifiOnly: Bool {
+        didSet {
+            UserDefaults.standard.set(wifiOnly, forKey: "quickUpload_wifiOnly")
+            sessionCache = nil   // force rebuild on next request
+        }
+    }
+
+    /// Lazy-built URLSession; rebuilt when the WiFi-only toggle flips.
+    private var sessionCache: URLSession?
+
+    var currentSession: URLSession {
+        if let s = sessionCache { return s }
+        let cfg = URLSessionConfiguration.default
+        cfg.allowsCellularAccess = !wifiOnly
+        cfg.timeoutIntervalForRequest = 60
+        cfg.timeoutIntervalForResource = 60 * 60  // 1 hour per resource (large uploads)
+        let s = URLSession(configuration: cfg)
+        sessionCache = s
+        return s
+    }
+
     private init() {
+        self.wifiOnly = UserDefaults.standard.object(forKey: "quickUpload_wifiOnly") as? Bool ?? true
         uploads = UploadStore.loadAll()
     }
 
@@ -253,7 +277,7 @@ final class UploadManager: ObservableObject {
         var lastError: Error?
         for attempt in 0..<3 {
             do {
-                let (data, response) = try await URLSession.shared.upload(for: req, from: chunk)
+                let (data, response) = try await self.currentSession.upload(for: req, from: chunk)
                 guard let http = response as? HTTPURLResponse else {
                     throw UploadError.badResponse
                 }
@@ -293,7 +317,7 @@ final class UploadManager: ObservableObject {
             req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         }
         req.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await self.currentSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw UploadError.badResponse }
         // 200 = new upload, 409 = duplicate (treated as success by caller)
         if http.statusCode == 409 {
@@ -319,7 +343,7 @@ final class UploadManager: ObservableObject {
             req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         }
         req.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await self.currentSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw UploadError.badResponse }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? ""

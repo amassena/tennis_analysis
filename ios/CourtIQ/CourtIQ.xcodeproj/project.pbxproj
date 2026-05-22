@@ -21,6 +21,7 @@
 		E0E1E2E3E4E5E6E7E8E9EAE1 /* UploadResumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E1E2E3E4E5E6E7E8E9EAE2 /* UploadResumer.swift */; };
 		E0E1E2E3E4E5E6E7E8E9EAF1 /* StatusPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E1E2E3E4E5E6E7E8E9EAF2 /* StatusPoller.swift */; };
 		F0F1F2F3F4F5F6F7F8F9FA01 /* AppNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F1F2F3F4F5F6F7F8F9FA02 /* AppNavigation.swift */; };
+		F0F1F2F3F4F5F6F7F8F9FB01 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F1F2F3F4F5F6F7F8F9FB02 /* SettingsView.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAC1 /* PickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAC2 /* PickerView.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAD1 /* UploadComposerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAD2 /* UploadComposerSheet.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAE1 /* UploadRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */; };
@@ -48,6 +49,7 @@
 		E0E1E2E3E4E5E6E7E8E9EAE2 /* UploadResumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadResumer.swift; sourceTree = "<group>"; };
 		E0E1E2E3E4E5E6E7E8E9EAF2 /* StatusPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPoller.swift; sourceTree = "<group>"; };
 		F0F1F2F3F4F5F6F7F8F9FA02 /* AppNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigation.swift; sourceTree = "<group>"; };
+		F0F1F2F3F4F5F6F7F8F9FB02 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAC2 /* PickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerView.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAD2 /* UploadComposerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadComposerSheet.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadRowView.swift; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 				C0C1C2C3C4C5C6C7C8C9CAC2 /* PickerView.swift */,
 				C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */,
 				D1D2D3D4D5D6D7D8D9DAD0E2 /* RecordView.swift */,
+				F0F1F2F3F4F5F6F7F8F9FB02 /* SettingsView.swift */,
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
 				5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */,
 				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
@@ -251,6 +254,7 @@
 				E0E1E2E3E4E5E6E7E8E9EAE1 /* UploadResumer.swift in Sources */,
 				E0E1E2E3E4E5E6E7E8E9EAF1 /* StatusPoller.swift in Sources */,
 				F0F1F2F3F4F5F6F7F8F9FA01 /* AppNavigation.swift in Sources */,
+				F0F1F2F3F4F5F6F7F8F9FB01 /* SettingsView.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAC1 /* PickerView.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAD1 /* UploadComposerSheet.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAE1 /* UploadRowView.swift in Sources */,

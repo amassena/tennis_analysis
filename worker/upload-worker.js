@@ -27,6 +27,9 @@
  *
  *   POST /api/auth/apple           → exchange Apple identity token → our JWT (PR 1)
  *   GET  /api/me                   → current user's profile (Bearer JWT)
+ *   DELETE /api/account            → tombstone + delete user's videos (PR 6)
+ *
+ *   GET  /privacy                  → static privacy policy (PR 6)
  *
  *   playfullife.com/*              → redirect to tennis.playfullife.com
  *   media.playfullife.com/*        → redirect to tennis.playfullife.com
@@ -74,6 +77,8 @@ async function handleAsset(request, env, path) {
   let key;
   if (path === '/' || path === '/index.html') {
     key = 'highlights/index.html';
+  } else if (path === '/privacy' || path === '/privacy.html') {
+    key = 'static/privacy.html';
   } else {
     key = path.slice(1); // strip leading /
   }
@@ -184,7 +189,7 @@ async function handleHead(env, key) {
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
@@ -200,6 +205,10 @@ async function handleApi(request, env, path) {
 
     if (path === '/api/me' && request.method === 'GET') {
       return await handleMe(request, env, cors);
+    }
+
+    if (path === '/api/account' && request.method === 'DELETE') {
+      return await handleDeleteAccount(request, env, cors);
     }
 
     if (path === '/api/upload/init' && request.method === 'POST') {
@@ -1250,6 +1259,34 @@ async function handleAuthApple(request, env, cors) {
   const appleSub = applePayload.sub;
   const userHash = await userHashFromAppleSub(appleSub);
 
+  // Allowlist check.
+  //   - If users/_allowlist.json is absent → app is open (default).
+  //   - If present and { open: true } → still open.
+  //   - If present and { open: false } → only subs in `subs` array
+  //     (or already-existing users) can sign in.
+  //   - Before the App Store wider release, flip `open: false` and
+  //     add invited Apple subs to keep randos out.
+  try {
+    const allowlistObj = await env.BUCKET.get('users/_allowlist.json');
+    if (allowlistObj) {
+      const allowlist = await allowlistObj.json();
+      if (allowlist.open === false) {
+        const subs = Array.isArray(allowlist.subs) ? allowlist.subs : [];
+        const isAllowedSub = subs.includes(appleSub);
+        const alreadyKnown = await env.BUCKET.head(`users/${appleSub}.json`);
+        if (!isAllowedSub && !alreadyKnown) {
+          return jsonResponse(
+            { error: 'Not approved', detail: 'Your account is not on the invite list. Ask the administrator to add you.' },
+            403, cors,
+          );
+        }
+      }
+    }
+  } catch {
+    // Allowlist read failed — fail open (don't lock out legitimate users
+    // because of an R2 hiccup). Log if you wire structured logging later.
+  }
+
   const userKey = `users/${appleSub}.json`;
   const existingObj = await env.BUCKET.get(userKey);
   const nowIso = new Date().toISOString();
@@ -1258,6 +1295,12 @@ async function handleAuthApple(request, env, cors) {
     userRecord = await existingObj.json();
     userRecord.last_seen = nowIso;
     userRecord.user_hash = userHash; // keep in sync if the hash impl changes
+    // If they previously deleted their account, treat sign-in as a clean re-join.
+    if (userRecord.deleted_at) {
+      delete userRecord.deleted_at;
+      userRecord.status = 'active';
+      userRecord.rejoined_at = nowIso;
+    }
   } else {
     userRecord = {
       apple_sub: appleSub,
@@ -1297,6 +1340,76 @@ async function handleAuthApple(request, env, cors) {
   );
 }
 
+// DELETE /api/account — Apple App Review requires in-app account deletion.
+// Tombstones the users/<sub>.json record and deletes ALL videos that
+// were uploaded with that user_hash. Gallery regen happens on the next
+// pipeline run (deleted videos drop out then); cached index.html may
+// briefly still show them.
+async function handleDeleteAccount(request, env, cors) {
+  const authResult = await authenticateUser(request, env);
+  if (authResult.kind !== 'user') {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  const appleSub = authResult.claims.apple_sub;
+  const userHash = authResult.claims.sub;
+  const userKey = `users/${appleSub}.json`;
+  const userObj = await env.BUCKET.get(userKey);
+  if (!userObj) {
+    return jsonResponse({ error: 'User not found' }, 404, cors);
+  }
+  const user = await userObj.json();
+
+  // Find every marker tagged with this user_hash and delete its file family.
+  const deletedVideos = [];
+  let cursor;
+  do {
+    const listed = await env.BUCKET.list({ prefix: 'uploads/', cursor });
+    for (const obj of listed.objects) {
+      if (!obj.key.endsWith('.json') || obj.key.includes('_inflight_')) continue;
+      try {
+        const m = await env.BUCKET.get(obj.key);
+        if (!m) continue;
+        const marker = await m.json();
+        if (marker.uploaded_by !== userHash) continue;
+        const vid = marker.video_id;
+        // Source file (either .mov or .mp4)
+        for (const ext of ['mov', 'mp4']) {
+          await env.BUCKET.delete(`source/${vid}.${ext}`).catch(() => {});
+        }
+        // Processed outputs
+        let pCursor;
+        do {
+          const pList = await env.BUCKET.list({ prefix: `processed/${vid}/`, cursor: pCursor });
+          for (const p of pList.objects) {
+            await env.BUCKET.delete(p.key).catch(() => {});
+          }
+          pCursor = pList.truncated ? pList.cursor : undefined;
+        } while (pCursor);
+        // Thumbnail
+        await env.BUCKET.delete(`highlights/thumbs/${vid}.jpg`).catch(() => {});
+        // Marker itself
+        await env.BUCKET.delete(obj.key).catch(() => {});
+        deletedVideos.push(vid);
+      } catch {}
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+
+  // Tombstone the user record so audit history remains. Sign-in re-uses
+  // the same record (deleted_at cleared) if they come back later.
+  user.deleted_at = new Date().toISOString();
+  user.status = 'deleted';
+  await env.BUCKET.put(userKey, JSON.stringify(user), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return jsonResponse(
+    { deleted: true, videos_removed: deletedVideos.length, video_ids: deletedVideos },
+    200, cors,
+  );
+}
+
 // GET /api/me — current user's profile (Bearer JWT required).
 async function handleMe(request, env, cors) {
   const authResult = await authenticateUser(request, env);
@@ -1310,6 +1423,10 @@ async function handleMe(request, env, cors) {
     return jsonResponse({ error: 'User not found' }, 404, cors);
   }
   const user = await userObj.json();
+  // Treat tombstoned users as "not found" so the app routes back to sign-in.
+  if (user.deleted_at) {
+    return jsonResponse({ error: 'Account deleted' }, 401, cors);
+  }
   return jsonResponse(
     {
       user_hash: user.user_hash,
