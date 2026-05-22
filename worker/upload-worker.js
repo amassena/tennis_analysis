@@ -25,6 +25,9 @@
  *   POST /api/status/:id/update    → update processing status (auth)
  *   GET  /api/queue                → list all uploads and their status
  *
+ *   POST /api/auth/apple           → exchange Apple identity token → our JWT (PR 1)
+ *   GET  /api/me                   → current user's profile (Bearer JWT)
+ *
  *   playfullife.com/*              → redirect to tennis.playfullife.com
  *   media.playfullife.com/*        → redirect to tennis.playfullife.com
  */
@@ -182,7 +185,7 @@ function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
 
@@ -190,6 +193,15 @@ async function handleApi(request, env, path) {
   const cors = corsHeaders();
 
   try {
+    // Auth — Sign in with Apple (PR 1)
+    if (path === '/api/auth/apple' && request.method === 'POST') {
+      return await handleAuthApple(request, env, cors);
+    }
+
+    if (path === '/api/me' && request.method === 'GET') {
+      return await handleMe(request, env, cors);
+    }
+
     if (path === '/api/upload/init' && request.method === 'POST') {
       return await handleInit(request, env, cors);
     }
@@ -961,4 +973,303 @@ function jsonResponse(data, status = 200, headers = {}) {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Auth — Sign in with Apple (PR 1)
+//
+// Flow:
+//   1. iOS app obtains an Apple identity token via ASAuthorizationController.
+//   2. iOS POSTs { identity_token } to /api/auth/apple.
+//   3. We verify the token against Apple's JWKs (cached for 6h).
+//   4. We compute user_hash = "u_" + first 8 hex of sha256(apple_sub).
+//   5. We upsert users/<apple_sub>.json in R2.
+//   6. We mint our own HS256 JWT (30-day TTL) and return it.
+//   7. iOS uses that JWT as Bearer for all subsequent calls.
+//
+// Secrets / vars:
+//   env.APPLE_BUNDLE_ID     — set in wrangler.toml [vars]
+//   env.JWT_SIGNING_SECRET  — set via `wrangler secret put JWT_SIGNING_SECRET`
+//
+// TODO before App Store: gate /api/auth/apple behind an allowlist of
+// approved Apple subs so anyone who installs the IPA can't sign in and
+// upload. For now, any Apple ID can sign in.
+// ---------------------------------------------------------------------------
+
+const APPLE_JWKS_URL = 'https://appleid.apple.com/auth/keys';
+const APPLE_ISSUER = 'https://appleid.apple.com';
+const APPLE_JWKS_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const OUR_JWT_TTL_SEC = 30 * 24 * 60 * 60;    // 30 days
+
+let _appleJwksCache = null; // { keys, expiresAt }
+
+async function fetchAppleJwks() {
+  if (_appleJwksCache && _appleJwksCache.expiresAt > Date.now()) {
+    return _appleJwksCache.keys;
+  }
+  const resp = await fetch(APPLE_JWKS_URL);
+  if (!resp.ok) throw new Error(`Apple JWKS fetch failed: ${resp.status}`);
+  const body = await resp.json();
+  _appleJwksCache = {
+    keys: body.keys,
+    expiresAt: Date.now() + APPLE_JWKS_TTL_MS,
+  };
+  return body.keys;
+}
+
+function base64urlDecodeToBytes(s) {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const raw = atob(b64 + pad);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+}
+
+function base64urlDecodeToString(s) {
+  return new TextDecoder().decode(base64urlDecodeToBytes(s));
+}
+
+function base64urlEncodeBytes(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64urlEncodeString(s) {
+  return base64urlEncodeBytes(new TextEncoder().encode(s));
+}
+
+async function verifyAppleIdentityToken(token, expectedBundleId) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('Malformed Apple token');
+  const [headerB64, payloadB64, signatureB64] = parts;
+
+  let header, payload;
+  try {
+    header = JSON.parse(base64urlDecodeToString(headerB64));
+    payload = JSON.parse(base64urlDecodeToString(payloadB64));
+  } catch {
+    throw new Error('Malformed Apple token: bad base64/json');
+  }
+
+  if (header.alg !== 'RS256') {
+    throw new Error(`Unsupported Apple token alg: ${header.alg}`);
+  }
+
+  const jwks = await fetchAppleJwks();
+  const jwk = jwks.find((k) => k.kid === header.kid);
+  if (!jwk) {
+    // Possibly a key rotation we haven't seen — invalidate cache and retry once.
+    _appleJwksCache = null;
+    const retried = await fetchAppleJwks();
+    const jwk2 = retried.find((k) => k.kid === header.kid);
+    if (!jwk2) throw new Error(`Apple JWKS missing kid: ${header.kid}`);
+    return verifyAppleIdentityTokenWithJwk(jwk2, headerB64, payloadB64, signatureB64, payload, expectedBundleId);
+  }
+
+  return verifyAppleIdentityTokenWithJwk(jwk, headerB64, payloadB64, signatureB64, payload, expectedBundleId);
+}
+
+async function verifyAppleIdentityTokenWithJwk(jwk, headerB64, payloadB64, signatureB64, payload, expectedBundleId) {
+  const key = await crypto.subtle.importKey(
+    'jwk',
+    { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+
+  const signingInput = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+  const signature = base64urlDecodeToBytes(signatureB64);
+  const ok = await crypto.subtle.verify({ name: 'RSASSA-PKCS1-v1_5' }, key, signature, signingInput);
+  if (!ok) throw new Error('Apple token signature invalid');
+
+  if (payload.iss !== APPLE_ISSUER) {
+    throw new Error(`Apple token iss mismatch: ${payload.iss}`);
+  }
+  if (payload.aud !== expectedBundleId) {
+    throw new Error(`Apple token aud mismatch: ${payload.aud}`);
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (payload.exp && payload.exp < nowSec) throw new Error('Apple token expired');
+  if (!payload.sub) throw new Error('Apple token missing sub');
+
+  return payload;
+}
+
+async function userHashFromAppleSub(sub) {
+  const data = new TextEncoder().encode(sub);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = [...new Uint8Array(hash)]
+    .slice(0, 4)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `u_${hex}`;
+}
+
+async function hmacSha256Sign(secret, message) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return new Uint8Array(sig);
+}
+
+async function hmacSha256Verify(secret, message, sigBytes) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  return crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(message));
+}
+
+async function signOurJWT(claims, secret) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const h = base64urlEncodeString(JSON.stringify(header));
+  const p = base64urlEncodeString(JSON.stringify(claims));
+  const sig = await hmacSha256Sign(secret, `${h}.${p}`);
+  const s = base64urlEncodeBytes(sig);
+  return `${h}.${p}.${s}`;
+}
+
+async function verifyOurJWT(jwt, secret) {
+  if (!jwt) throw new Error('Missing JWT');
+  const parts = jwt.split('.');
+  if (parts.length !== 3) throw new Error('Malformed JWT');
+  const [h, p, s] = parts;
+  const sigBytes = base64urlDecodeToBytes(s);
+  const ok = await hmacSha256Verify(secret, `${h}.${p}`, sigBytes);
+  if (!ok) throw new Error('JWT signature invalid');
+  const claims = JSON.parse(base64urlDecodeToString(p));
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (claims.exp && claims.exp < nowSec) throw new Error('JWT expired');
+  return claims;
+}
+
+// Extract authenticated user from the Authorization header.
+// Returns { kind: 'user', user_hash, claims } or { kind: null }.
+// Future PRs (chunked upload routes) will use this to attribute uploads.
+async function authenticateUser(request, env) {
+  const auth = request.headers.get('authorization') || '';
+  if (!auth.startsWith('Bearer ')) return { kind: null };
+  const token = auth.slice(7).trim();
+  // Heuristic: our JWTs have three dot-separated parts; the legacy
+  // IPHONE_UPLOAD_TOKEN is opaque — don't waste an HMAC verify on it.
+  if (token.split('.').length !== 3) return { kind: null };
+  if (!env.JWT_SIGNING_SECRET) return { kind: null };
+  try {
+    const claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET);
+    return { kind: 'user', user_hash: claims.sub, claims };
+  } catch {
+    return { kind: null };
+  }
+}
+
+// POST /api/auth/apple
+// Body:   { identity_token: string, nonce?: string }
+// Returns 200: { jwt, user_hash, gallery_url, expires_at }
+async function handleAuthApple(request, env, cors) {
+  if (!env.JWT_SIGNING_SECRET) {
+    return jsonResponse({ error: 'Server not configured (missing JWT secret)' }, 500, cors);
+  }
+  if (!env.APPLE_BUNDLE_ID) {
+    return jsonResponse({ error: 'Server not configured (missing bundle id)' }, 500, cors);
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const idToken = body.identity_token;
+  if (!idToken || typeof idToken !== 'string') {
+    return jsonResponse({ error: 'identity_token required' }, 400, cors);
+  }
+
+  let applePayload;
+  try {
+    applePayload = await verifyAppleIdentityToken(idToken, env.APPLE_BUNDLE_ID);
+  } catch (e) {
+    return jsonResponse(
+      { error: 'Apple token verification failed', detail: e.message },
+      401, cors,
+    );
+  }
+
+  const appleSub = applePayload.sub;
+  const userHash = await userHashFromAppleSub(appleSub);
+
+  const userKey = `users/${appleSub}.json`;
+  const existingObj = await env.BUCKET.get(userKey);
+  const nowIso = new Date().toISOString();
+  let userRecord;
+  if (existingObj) {
+    userRecord = await existingObj.json();
+    userRecord.last_seen = nowIso;
+    userRecord.user_hash = userHash; // keep in sync if the hash impl changes
+  } else {
+    userRecord = {
+      apple_sub: appleSub,
+      user_hash: userHash,
+      created_at: nowIso,
+      last_seen: nowIso,
+      video_count: 0,
+      status: 'active',
+      // email/name are only sent by Apple on first sign-in — keep what we get.
+      email: applePayload.email || null,
+      email_verified:
+        applePayload.email_verified === 'true' || applePayload.email_verified === true || null,
+    };
+  }
+  await env.BUCKET.put(userKey, JSON.stringify(userRecord), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const claims = {
+    sub: userHash,
+    apple_sub: appleSub,
+    iat: nowSec,
+    exp: nowSec + OUR_JWT_TTL_SEC,
+    scope: 'upload',
+  };
+  const jwt = await signOurJWT(claims, env.JWT_SIGNING_SECRET);
+
+  return jsonResponse(
+    {
+      jwt,
+      user_hash: userHash,
+      gallery_url: 'https://tennis.playfullife.com',
+      expires_at: claims.exp,
+    },
+    200, cors,
+  );
+}
+
+// GET /api/me — current user's profile (Bearer JWT required).
+async function handleMe(request, env, cors) {
+  const authResult = await authenticateUser(request, env);
+  if (authResult.kind !== 'user') {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  const appleSub = authResult.claims.apple_sub;
+  const userObj = await env.BUCKET.get(`users/${appleSub}.json`);
+  if (!userObj) {
+    return jsonResponse({ error: 'User not found' }, 404, cors);
+  }
+  const user = await userObj.json();
+  return jsonResponse(
+    {
+      user_hash: user.user_hash,
+      video_count: user.video_count || 0,
+      gallery_url: 'https://tennis.playfullife.com',
+      created_at: user.created_at,
+    },
+    200, cors,
+  );
 }
