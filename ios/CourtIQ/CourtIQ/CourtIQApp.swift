@@ -4,7 +4,7 @@ import SwiftUI
 struct CourtIQApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .preferredColorScheme(.dark)
         }
     }

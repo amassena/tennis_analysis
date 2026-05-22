@@ -7,20 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		01AC42E09A7984D698AE98D2 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F33FB7B573676A5E3CDE8A /* CameraManager.swift */; };
 		0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */; };
-		08C44807CD9132CF8930B4CC /* ShotClassifier.onnx.data in Resources */ = {isa = PBXBuildFile; fileRef = 80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */; };
-		2E314A34A9BE3AAA9B42C968 /* PoseOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEB81EEAEEE39412B5EF60A /* PoseOverlayView.swift */; };
-		461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */; };
-		4CCA774AD2B4E0C896C72374 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5238138C6C605707F088D692 /* CameraPreviewView.swift */; };
-		7D0C2D92E206699A11729D82 /* SessionReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */; };
-		819E8575E6E4EA07E17BEA16 /* ShotDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA888E123D9FAD2EB645A25 /* ShotDetector.swift */; };
-		9E7239CE8B982DFC6FC622EA /* TennisSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */; };
-		B635E0582ACE1E1C04F1ABDC /* SessionRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81919A058C6F2DB4692A72AB /* SessionRecording.swift */; };
-		BFD4823B905590FF0C40BF3D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB29C472F8C615C04C04C14C /* ContentView.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* RootView.swift */; };
 		C5910D796116F0640FEAF60E /* R2Uploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C4D1064E2874CB7189C8F6 /* R2Uploader.swift */; };
 		D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E18FC4BF081E8B9FDCC00 /* CourtIQApp.swift */; };
-		EAE3441A1E3C5D3209248C9C /* ShotClassifier.onnx in Resources */ = {isa = PBXBuildFile; fileRef = 74B6920863227888EF49C2A4 /* ShotClassifier.onnx */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,11 +20,8 @@
 		59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewWrapper.swift; sourceTree = "<group>"; };
 		5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionReviewView.swift; sourceTree = "<group>"; };
 		65F33FB7B573676A5E3CDE8A /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
-		74B6920863227888EF49C2A4 /* ShotClassifier.onnx */ = {isa = PBXFileReference; lastKnownFileType = file; path = ShotClassifier.onnx; sourceTree = "<group>"; };
-		80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = ShotClassifier.onnx.data; sourceTree = "<group>"; };
-		80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TennisSession.swift; sourceTree = "<group>"; };
-		81919A058C6F2DB4692A72AB /* SessionRecording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionRecording.swift; sourceTree = "<group>"; };
 		9DA888E123D9FAD2EB645A25 /* ShotDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShotDetector.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5D /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		B655EE832258520CAB2B2AB1 /* PoseProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseProcessor.swift; sourceTree = "<group>"; };
 		CC65490CBBD6E27B41C0DABF /* SwingLab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwingLab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB29C472F8C615C04C04C14C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -54,6 +41,7 @@
 		0DB58D40A10930F9573254B8 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F60718293A4B5D /* RootView.swift */,
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
 				5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */,
 				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
@@ -81,10 +69,6 @@
 			isa = PBXGroup;
 			children = (
 				F6C4D1064E2874CB7189C8F6 /* R2Uploader.swift */,
-				81919A058C6F2DB4692A72AB /* SessionRecording.swift */,
-				74B6920863227888EF49C2A4 /* ShotClassifier.onnx */,
-				80ABB2434E95489A4EBAD340 /* ShotClassifier.onnx.data */,
-				80C3B37C9AEC8E04F6C887C0 /* TennisSession.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -186,8 +170,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				EAE3441A1E3C5D3209248C9C /* ShotClassifier.onnx in Resources */,
-				08C44807CD9132CF8930B4CC /* ShotClassifier.onnx.data in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,17 +180,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				01AC42E09A7984D698AE98D2 /* CameraManager.swift in Sources */,
-				4CCA774AD2B4E0C896C72374 /* CameraPreviewView.swift in Sources */,
-				BFD4823B905590FF0C40BF3D /* ContentView.swift in Sources */,
 				D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */,
-				2E314A34A9BE3AAA9B42C968 /* PoseOverlayView.swift in Sources */,
-				461B63073CE8634A0F192F1D /* PoseProcessor.swift in Sources */,
 				C5910D796116F0640FEAF60E /* R2Uploader.swift in Sources */,
-				B635E0582ACE1E1C04F1ABDC /* SessionRecording.swift in Sources */,
-				7D0C2D92E206699A11729D82 /* SessionReviewView.swift in Sources */,
-				819E8575E6E4EA07E17BEA16 /* ShotDetector.swift in Sources */,
-				9E7239CE8B982DFC6FC622EA /* TennisSession.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* RootView.swift in Sources */,
 				0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -225,9 +199,10 @@
 				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwingLab;
-				INFOPLIST_KEY_NSCameraUsageDescription = "SwingLab uses the camera to analyze your tennis form in real time.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SwingLab uses the microphone to detect ball-strike sounds for shot timing.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "SwingLab saves recordings to your Photos library for cloud processing.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Pick existing videos to upload to your gallery.";
 				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -306,9 +281,10 @@
 				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwingLab;
-				INFOPLIST_KEY_NSCameraUsageDescription = "SwingLab uses the camera to analyze your tennis form in real time.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SwingLab uses the microphone to detect ball-strike sounds for shot timing.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "SwingLab saves recordings to your Photos library for cloud processing.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Pick existing videos to upload to your gallery.";
 				INFOPLIST_KEY_UILaunchStoryboardName = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

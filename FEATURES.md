@@ -12,6 +12,7 @@ Use `git worktree add ../tennis_<short-name> -b feature/<category>/<name>` to st
 
 | Feature | Branch | Worktree | Files | Status |
 |---|---|---|---|---|
+| Quick Upload iOS app (App Store target, shared gallery, Sign in with Apple) | `feature/ios-live/quick-upload` | `~/tennis_worktrees/ios-upload/` | ios/CourtIQ/**, worker/upload-worker.js | active — design v3 landed 2026-05-21 at `docs/ios_quick_upload_design.md`. PR 0 (project compiles) in progress. |
 | Mac PhotoKit uploader (replaces pyicloud watcher + iOS Shortcut path) | (main) | (none) | scripts/upload_tennis_album.py, worker/upload-worker.js, coordinator/iphone_upload_poller.py, gpu_worker/worker.py, ~/Library/LaunchAgents/com.tennis.uploader.plist | **Live.** Mac launchd agent `com.tennis.uploader` runs `upload_tennis_album.py --watch 300`. Enumerates slo-mo videos in local Photos via PhotoKit (since 2026-04-01 default), dedups against Worker `/check`, uploads single-shot or chunked (50 MB parts via `/api/upload/iphone/{init,part,complete}`). Worker writes to R2 `source/{vid}.{ext}` + marker; Hetzner poller registers coordinator job; GPU R2-first source resolution pulls and runs pipeline. Desktop `Start/Stop Tennis Uploader.command` shortcuts. iOS Shortcut path abandoned (iOS automation timeout on multi-GB uploads). |
 | Sapiens pose evaluation | `feature/detection/sapiens-eval` | (worktree removed 2026-05-09) | scripts/sapiens_pose.py, scripts/compare_pose_extractors.py, eval/sapiens/ | **REJECT on speed (closed).** Sapiens-2 0.4B at 0.11× MediaPipe. Branch preserves eval REPORT.md. |
 | Pose-extractor experiments | `feature/detection/pose-experiments` | (worktree removed 2026-05-09) | scripts/sapiens_pose_optimized.py, scripts/rtmpose_extract.py, eval/pose-experiments/ | **REJECT both candidates (closed).** Sapiens-2-opt 0.16× MP (speed REJECT). RTMPose 1.14× MP but 2D-only. Key finding: 2D pose isn't the bottleneck. Branch preserves eval REPORT.md. |
@@ -47,4 +48,5 @@ Use `git worktree add ../tennis_<short-name> -b feature/<category>/<name>` to st
 | `pros/wikidata_cache.json` | pro-library |
 | `scripts/update_r2_index.py` | (none — main only) |
 | `scripts/claude_coach.py` | (none — main only) |
-| `ios/CourtIQ/**` | (none — main only) |
+| `ios/CourtIQ/**` | quick-upload |
+| `worker/upload-worker.js` | quick-upload (auth additions only — coordinate before merging) |
