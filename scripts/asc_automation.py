@@ -195,7 +195,7 @@ def cmd_archive_and_upload(args):
         "-configuration", "Release",
         "-destination", "generic/platform=iOS",
         "archive",
-        f"-archivePath={archive_path}",
+        "-archivePath", str(archive_path),
         "CODE_SIGN_STYLE=Automatic",
     ], capture_output=False)
     if result.returncode != 0:
@@ -218,13 +218,25 @@ def cmd_archive_and_upload(args):
 </dict>
 </plist>
 """)
+    # -allowProvisioningUpdates lets xcodebuild contact Apple's signing
+    # service to mint a missing App Store distribution profile on-demand;
+    # without it, exportArchive fails with "No profiles for <bundleId>".
+    # The auth-* flags pass the API key creds so the signing service trusts us.
+    key_id = env_or_die("ASC_KEY_ID")
+    issuer_id = env_or_die("ASC_ISSUER_ID")
+    key_path_str = str(Path(env_or_die("ASC_KEY_PATH")).expanduser())
+
     print(f"[2/3] xcodebuild -exportArchive → {ipa_dir}")
     result = subprocess.run([
         "xcodebuild",
         "-exportArchive",
-        f"-archivePath={archive_path}",
-        f"-exportPath={ipa_dir}",
-        f"-exportOptionsPlist={export_opts_path}",
+        "-archivePath", str(archive_path),
+        "-exportPath", str(ipa_dir),
+        "-exportOptionsPlist", str(export_opts_path),
+        "-allowProvisioningUpdates",
+        "-authenticationKeyIssuerID", issuer_id,
+        "-authenticationKeyID", key_id,
+        "-authenticationKeyPath", key_path_str,
     ], capture_output=False)
     if result.returncode != 0:
         print(f"FAILED: -exportArchive exited {result.returncode}", file=sys.stderr)
@@ -261,6 +273,59 @@ def cmd_archive_and_upload(args):
         print(f"FAILED: altool --upload-app exited {result.returncode}", file=sys.stderr)
         sys.exit(1)
     print("✅ Upload complete. Build will appear in App Store Connect TestFlight in 5-15 min.")
+
+
+def cmd_rename_app(args):
+    """Change the App Store listing name of the app. Editable until the
+    first submission to App Review. Walks /apps → /appInfos → /appInfoLocalizations
+    to find the en-US locale, then PATCHes the name attribute."""
+    new_name = args.name
+    bundle_id = env_or_die("ASC_BUNDLE_ID", "com.amassena.courtiq.CourtIQ")
+
+    # Find the app
+    resp = api("GET", f"/v1/apps?filter[bundleId]={bundle_id}")
+    apps = resp.json().get("data", [])
+    if not apps:
+        print("App not found", file=sys.stderr)
+        sys.exit(1)
+    app_id = apps[0]["id"]
+
+    # Get the editable AppInfo (state PREPARE_FOR_SUBMISSION or similar)
+    resp = api("GET", f"/v1/apps/{app_id}/appInfos")
+    infos = resp.json().get("data", [])
+    if not infos:
+        print("No appInfos on this app", file=sys.stderr)
+        sys.exit(1)
+    # Prefer one that's editable; otherwise take the first.
+    editable_states = {"PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "WAITING_FOR_REVIEW"}
+    info = next((i for i in infos if i["attributes"].get("appStoreState") in editable_states), infos[0])
+    info_id = info["id"]
+
+    # Localizations on that AppInfo
+    resp = api("GET", f"/v1/appInfos/{info_id}/appInfoLocalizations")
+    locales = resp.json().get("data", [])
+    en_us = next((l for l in locales if l["attributes"].get("locale") == "en-US"), None)
+    if not en_us:
+        en_us = locales[0] if locales else None
+    if not en_us:
+        print("No localizations to update", file=sys.stderr)
+        sys.exit(1)
+    loc_id = en_us["id"]
+
+    # PATCH the name
+    payload = {
+        "data": {
+            "type": "appInfoLocalizations",
+            "id": loc_id,
+            "attributes": {"name": new_name}
+        }
+    }
+    resp = api("PATCH", f"/v1/appInfoLocalizations/{loc_id}", data=json.dumps(payload))
+    if resp.status_code in (200, 204):
+        print(f"Renamed app to: {new_name}")
+    else:
+        print(f"FAILED: {resp.status_code} {resp.text}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_add_tester(args):
@@ -320,6 +385,8 @@ def main():
     sub.add_parser("register-bundle-id")
     sub.add_parser("create-app")
     sub.add_parser("archive-and-upload")
+    p_rename = sub.add_parser("rename-app")
+    p_rename.add_argument("--name", required=True, help="New App Store display name")
     p_add = sub.add_parser("add-tester")
     p_add.add_argument("--email", required=True)
     p_add.add_argument("--name")
@@ -331,6 +398,7 @@ def main():
         "register-bundle-id": cmd_register_bundle_id,
         "create-app": cmd_create_app,
         "archive-and-upload": cmd_archive_and_upload,
+        "rename-app": cmd_rename_app,
         "add-tester": cmd_add_tester,
         "full": cmd_full,
     }
