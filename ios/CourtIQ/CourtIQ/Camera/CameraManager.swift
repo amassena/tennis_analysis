@@ -134,11 +134,14 @@ final class CameraManager: NSObject, ObservableObject {
                    let f = catalog[preferred] {
                     return (preferred, f)
                 }
-                // Auto: floor at 60 fps, max resolution, lowest fps ≥60 at that res.
+                // Auto: floor at 60 fps, max resolution, HIGHEST fps at that res.
+                // On iPhone 16 Pro this resolves to 4K · 120 fps (not 4K · 60),
+                // because once we're committing to 4K we may as well take the
+                // most temporal detail the device offers.
                 let eligible = sortedQualities.filter { $0.fps >= 60 }
                 guard let maxRes = eligible.first.map({ $0.width * $0.height }) else { return nil }
                 let atMaxRes = eligible.filter { $0.width * $0.height == maxRes }
-                guard let chosen = atMaxRes.min(by: { $0.fps < $1.fps }),
+                guard let chosen = atMaxRes.max(by: { $0.fps < $1.fps }),
                       let f = catalog[chosen] else { return nil }
                 return (chosen, f)
             }()
