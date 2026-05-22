@@ -18,6 +18,10 @@ final class CameraManager: NSObject, ObservableObject {
     @Published var lastError: String?
     @Published var lastRecordingURL: URL?
     @Published var permissionGranted: Bool? = nil  // nil = unknown
+    /// Resolved capture format, shown in the live camera UI as a small badge.
+    @Published var activeFPS: Double = 0
+    @Published var activeWidth: Int = 0
+    @Published var activeHeight: Int = 0
 
     private var startedAt: Date?
     private var timer: AnyCancellable?
@@ -99,6 +103,17 @@ final class CameraManager: NSObject, ObservableObject {
                 let scale = CMTimeScale(bestFPS)
                 camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: scale)
                 camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: scale)
+            }
+            // Publish the resolved format for the live UI badge.
+            let activeDims = CMVideoFormatDescriptionGetDimensions(camera.activeFormat.formatDescription)
+            let activeRange = camera.activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
+            let resolvedFPS = min(activeRange, bestFPS > 30 ? bestFPS : activeRange)
+            let w = Int(activeDims.width)
+            let h = Int(activeDims.height)
+            DispatchQueue.main.async {
+                self.activeFPS = resolvedFPS
+                self.activeWidth = w
+                self.activeHeight = h
             }
         } catch {
             // Not fatal — just stays at default

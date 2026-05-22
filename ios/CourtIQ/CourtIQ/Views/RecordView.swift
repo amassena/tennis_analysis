@@ -63,6 +63,11 @@ private struct LiveCameraView: View {
             CameraPreviewView(session: camera.captureSession)
                 .ignoresSafeArea()
 
+            // Rule-of-thirds grid overlay (helps frame the player)
+            GridOverlay()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
             VStack {
                 HStack {
                     Button(action: onClose) {
@@ -86,6 +91,17 @@ private struct LiveCameraView: View {
                         .cornerRadius(6)
                     }
                     Spacer()
+                    // Quality badge: e.g. "1080p · 240 fps" — confirms the
+                    // capture format we picked.
+                    if camera.activeFPS > 0 && camera.activeHeight > 0 {
+                        Text(qualityText)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(6)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -128,6 +144,42 @@ private struct LiveCameraView: View {
         let secs = Int(t) % 60
         let tenths = Int((t - floor(t)) * 10)
         return String(format: "%d:%02d.%d", mins, secs, tenths)
+    }
+
+    private var qualityText: String {
+        let shortDim = min(camera.activeWidth, camera.activeHeight)
+        let resLabel: String
+        switch shortDim {
+        case 2160...: resLabel = "4K"
+        case 1440...: resLabel = "1440p"
+        case 1080...: resLabel = "1080p"
+        case 720...: resLabel = "720p"
+        default: resLabel = "\(shortDim)p"
+        }
+        return "\(resLabel) · \(Int(camera.activeFPS)) fps"
+    }
+}
+
+// Rule-of-thirds grid overlay — two horizontal + two vertical
+// lines at the 1/3 and 2/3 marks. Light white at 30% opacity so it's
+// visible but doesn't dominate the frame.
+private struct GridOverlay: View {
+    var body: some View {
+        GeometryReader { geo in
+            Path { path in
+                let w = geo.size.width
+                let h = geo.size.height
+                let x1 = w / 3
+                let x2 = 2 * w / 3
+                let y1 = h / 3
+                let y2 = 2 * h / 3
+                path.move(to: CGPoint(x: x1, y: 0)); path.addLine(to: CGPoint(x: x1, y: h))
+                path.move(to: CGPoint(x: x2, y: 0)); path.addLine(to: CGPoint(x: x2, y: h))
+                path.move(to: CGPoint(x: 0, y: y1)); path.addLine(to: CGPoint(x: w, y: y1))
+                path.move(to: CGPoint(x: 0, y: y2)); path.addLine(to: CGPoint(x: w, y: y2))
+            }
+            .stroke(Color.white.opacity(0.28), lineWidth: 0.5)
+        }
     }
 }
 
