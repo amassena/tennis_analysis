@@ -31,6 +31,13 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                Section("Recording quality") {
+                    VideoQualityPicker()
+                    Text("4K · 120 fps is the highest-detail option on your iPhone. Higher fps and resolution mean larger files (~150–300 MB/min).")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 Section("About") {
                     Link("Privacy policy", destination: URL(string: "https://tennis.playfullife.com/privacy")!)
                     LabeledContent("Version", value: appVersionString)
@@ -93,6 +100,26 @@ struct SettingsView: View {
         let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
         let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
         return "\(v) (\(b))"
+    }
+
+    private struct VideoQualityPicker: View {
+        @AppStorage("videoQualityPref") private var prefId: String = "auto"
+        @State private var options: [VideoQuality] = CameraManager.enumerateAvailableQualities()
+
+        var body: some View {
+            Picker("Quality", selection: $prefId) {
+                Text("Auto (best ≥60 fps, max res)").tag("auto")
+                ForEach(options) { q in
+                    Text(q.displayName).tag(q.id)
+                }
+            }
+            .pickerStyle(.navigationLink)
+            .onChange(of: prefId) { _ in
+                // Force any live camera session to re-apply the choice.
+                // (RecordView spins up its own CameraManager; the
+                // preference is read on next configure().)
+            }
+        }
     }
 
     private func performDelete() {

@@ -22,6 +22,9 @@ final class CameraManager: NSObject, ObservableObject {
     @Published var activeFPS: Double = 0
     @Published var activeWidth: Int = 0
     @Published var activeHeight: Int = 0
+    /// All capture qualities offered by the back camera. Populated once
+    /// during configure() so Settings can render a picker.
+    @Published var availableQualities: [VideoQuality] = []
 
     private var startedAt: Date?
     private var timer: AnyCancellable?
@@ -80,69 +83,115 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
-    /// Pick the highest resolution available, then the SECOND-highest
-    /// frame rate at that resolution.
+    /// Enumerate the device's offered (resolution, fps) combinations and
+    /// honor the user's stored preference. Two paths:
     ///
-    /// On iPhone 16 Pro the picker lands on 4K (3840×2160) at 30 fps
-    /// — 4K/60fps is the top fps option, 4K/30fps is the second-highest.
-    /// Resolution is prioritized over fps per product decision: clarity
-    /// of the frame matters more than slow-motion smoothness for the
-    /// gallery output. (Downstream tennis-swing pipeline can interpolate
-    /// if it needs more temporal resolution.)
+    ///   • Auto: floor at 60 fps, maximize resolution, take the lowest fps
+    ///     ≥60 at that resolution (so we get 4K · 60 on iPhone 16 Pro
+    ///     rather than 4K · 120 if it existed). Default behavior.
+    ///   • Manual: SettingsView writes a VideoQuality.id (e.g.
+    ///     "3840x2160@60") to UserDefaults; we honor exactly that.
     ///
-    /// Fallbacks:
-    ///   - If only one fps is available at the max resolution → use it.
-    ///   - If lockForConfiguration fails → leave the default.
+    /// Either way, publishes `availableQualities` for the Settings picker
+    /// and `active{FPS,Width,Height}` for the live camera badge.
     private func configureBestFormat(for camera: AVCaptureDevice) {
         do {
             try camera.lockForConfiguration()
             defer { camera.unlockForConfiguration() }
 
-            // 1) Find the maximum pixel count across all formats.
-            var maxPixels = 0
+            // Build the catalog of every (width, height, fps) combo
+            // the device offers. Dedupe — Apple often exposes multiple
+            // formats with identical (res, fps) but different codecs.
+            var catalog: [VideoQuality: AVCaptureDevice.Format] = [:]
             for format in camera.formats {
                 let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                let pixels = Int(dims.width) * Int(dims.height)
-                if pixels > maxPixels { maxPixels = pixels }
-            }
-            guard maxPixels > 0 else { return }
-
-            // 2) Collect every format at that max resolution, with its
-            //    max fps. (Apple typically exposes one format entry per
-            //    distinct fps at a given resolution.)
-            var candidates: [(format: AVCaptureDevice.Format, maxFPS: Double)] = []
-            for format in camera.formats {
-                let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                let pixels = Int(dims.width) * Int(dims.height)
-                guard pixels == maxPixels else { continue }
+                let w = Int(dims.width)
+                let h = Int(dims.height)
                 let maxFPS = format.videoSupportedFrameRateRanges
-                    .map { $0.maxFrameRate }
-                    .max() ?? 0
-                candidates.append((format, maxFPS))
+                    .map { $0.maxFrameRate }.max() ?? 0
+                guard maxFPS > 0 else { continue }
+                let q = VideoQuality(width: w, height: h, fps: Int(maxFPS))
+                // First write wins; later duplicates ignored.
+                if catalog[q] == nil { catalog[q] = format }
             }
-            guard !candidates.isEmpty else { return }
 
-            // 3) Sort by maxFPS descending; pick index 1 (second-best)
-            //    if available, otherwise index 0 (only option).
-            candidates.sort { $0.maxFPS > $1.maxFPS }
-            let pick = candidates.count >= 2 ? candidates[1] : candidates[0]
+            // Publish sorted descending by resolution then fps so Settings
+            // shows the most capable options first.
+            let sortedQualities = catalog.keys.sorted { lhs, rhs in
+                let lp = lhs.width * lhs.height
+                let rp = rhs.width * rhs.height
+                if lp != rp { return lp > rp }
+                return lhs.fps > rhs.fps
+            }
+            DispatchQueue.main.async {
+                self.availableQualities = sortedQualities
+            }
+
+            // Decide which entry to apply.
+            let prefId = UserDefaults.standard.string(forKey: "videoQualityPref") ?? "auto"
+            let pick: (q: VideoQuality, format: AVCaptureDevice.Format)? = {
+                if prefId != "auto", let preferred = sortedQualities.first(where: { $0.id == prefId }),
+                   let f = catalog[preferred] {
+                    return (preferred, f)
+                }
+                // Auto: floor at 60 fps, max resolution, lowest fps ≥60 at that res.
+                let eligible = sortedQualities.filter { $0.fps >= 60 }
+                guard let maxRes = eligible.first.map({ $0.width * $0.height }) else { return nil }
+                let atMaxRes = eligible.filter { $0.width * $0.height == maxRes }
+                guard let chosen = atMaxRes.min(by: { $0.fps < $1.fps }),
+                      let f = catalog[chosen] else { return nil }
+                return (chosen, f)
+            }()
+
+            guard let pick else { return }
 
             camera.activeFormat = pick.format
-            let scale = CMTimeScale(pick.maxFPS)
+            let scale = CMTimeScale(pick.q.fps)
             camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: scale)
             camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: scale)
 
-            let activeDims = CMVideoFormatDescriptionGetDimensions(pick.format.formatDescription)
-            let w = Int(activeDims.width)
-            let h = Int(activeDims.height)
-            let fps = pick.maxFPS
+            let q = pick.q
             DispatchQueue.main.async {
-                self.activeFPS = fps
-                self.activeWidth = w
-                self.activeHeight = h
+                self.activeFPS = Double(q.fps)
+                self.activeWidth = q.width
+                self.activeHeight = q.height
             }
         } catch {
             // Not fatal — just stays at default
+        }
+    }
+
+    /// Settings view enumerates capture qualities without starting a session.
+    /// Reads back-camera formats once, dedupes, returns sorted (res desc, fps desc).
+    static func enumerateAvailableQualities() -> [VideoQuality] {
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+        else { return [] }
+        var seen = Set<VideoQuality>()
+        for format in camera.formats {
+            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            let maxFPS = format.videoSupportedFrameRateRanges
+                .map { $0.maxFrameRate }.max() ?? 0
+            guard maxFPS > 0 else { continue }
+            seen.insert(VideoQuality(width: Int(dims.width), height: Int(dims.height), fps: Int(maxFPS)))
+        }
+        return seen.sorted { lhs, rhs in
+            let lp = lhs.width * lhs.height
+            let rp = rhs.width * rhs.height
+            if lp != rp { return lp > rp }
+            return lhs.fps > rhs.fps
+        }
+    }
+
+    /// Re-apply the user's quality preference (call after Settings changes it).
+    /// Safe to invoke while the session is running.
+    func reapplyQualityPreference() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            guard let camera = (self.captureSession.inputs.compactMap { $0 as? AVCaptureDeviceInput }
+                .first { $0.device.hasMediaType(.video) }?.device) else { return }
+            self.captureSession.beginConfiguration()
+            self.configureBestFormat(for: camera)
+            self.captureSession.commitConfiguration()
         }
     }
 
@@ -180,6 +229,30 @@ final class CameraManager: NSObject, ObservableObject {
         }
         timer?.cancel()
         timer = nil
+    }
+}
+
+/// One (resolution, fps) capture option offered by the device.
+/// Used both as a Settings menu item and as the value persisted in
+/// UserDefaults under key "videoQualityPref" (or "auto").
+struct VideoQuality: Hashable, Identifiable {
+    let width: Int
+    let height: Int
+    let fps: Int
+
+    var id: String { "\(width)x\(height)@\(fps)" }
+
+    var displayName: String {
+        let shortDim = min(width, height)
+        let resLabel: String
+        switch shortDim {
+        case 2160...: resLabel = "4K"
+        case 1440...: resLabel = "1440p"
+        case 1080...: resLabel = "1080p"
+        case 720...: resLabel = "720p"
+        default: resLabel = "\(shortDim)p"
+        }
+        return "\(resLabel) · \(fps) fps"
     }
 }
 
