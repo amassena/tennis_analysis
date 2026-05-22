@@ -79,6 +79,8 @@ async function handleAsset(request, env, path) {
     key = 'highlights/index.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
+  } else if (path === '/support' || path === '/support.html') {
+    key = 'static/support.html';
   } else {
     key = path.slice(1); // strip leading /
   }
