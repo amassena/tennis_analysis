@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 /// Owns the active upload list and orchestrates the chunked-upload
 /// protocol against `/api/upload/iphone/{init,part,complete}`.
@@ -53,6 +54,24 @@ final class UploadManager: ObservableObject {
         Task { await self.run(stateId: id) }
     }
 
+    /// Pick up an upload that was interrupted by a crash / app kill.
+    /// Different from `retry`: this assumes the state is mid-flight,
+    /// not a confirmed-failed one. The run() loop knows how to skip
+    /// init/parts that are already on file in `partsDone`.
+    func resume(id: String) {
+        guard let idx = uploads.firstIndex(where: { $0.id == id }) else { return }
+        let status = uploads[idx].status
+        guard status != .completed && status != .failed else { return }
+        Task { await self.run(stateId: id) }
+    }
+
+    func markFailed(id: String, reason: String) {
+        update(stateId: id) {
+            $0.status = .failed
+            $0.errorMessage = reason
+        }
+    }
+
     func discard(id: String) {
         guard let idx = uploads.firstIndex(where: { $0.id == id }) else { return }
         let state = uploads[idx]
@@ -65,39 +84,58 @@ final class UploadManager: ObservableObject {
     // MARK: - Orchestration
 
     private func run(stateId: String) async {
-        guard let idx = uploads.firstIndex(where: { $0.id == stateId }) else { return }
+        guard let idx0 = uploads.firstIndex(where: { $0.id == stateId }) else { return }
 
-        // initializing
-        update(stateId: stateId) { $0.status = .initializing }
-        let initResult: InitResponse
-        do {
-            initResult = try await postInit(state: uploads[idx])
-        } catch {
-            update(stateId: stateId) {
-                $0.status = .failed
-                $0.errorMessage = "init: \(error.localizedDescription)"
+        // Ask iOS for extra runtime in case the user backgrounds the app.
+        // ~30s on most devices; not as good as true background URLSession
+        // but enough to finish small uploads or a few more chunks.
+        let bgTaskName = "upload-\(stateId)"
+        var bgTask = UIBackgroundTaskIdentifier.invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: bgTaskName) {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+        defer {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
             }
-            return
         }
 
-        // If the source already existed in R2, the Worker returns 409
-        // with status:"duplicate". Treat as completed.
-        if initResult.status == "duplicate" {
-            update(stateId: stateId) {
-                $0.uploadId = initResult.video_id
-                $0.status = .completed
-                $0.completedAt = Date()
-                $0.bytesUploaded = $0.totalBytes
+        // 1) Init step — skip if we already have an upload_id from a
+        // previous run (resume case). The Worker keeps multipart state
+        // around indefinitely, so resume can pick up days later.
+        if uploads[idx0].uploadId.isEmpty {
+            update(stateId: stateId) { $0.status = .initializing }
+            let initResult: InitResponse
+            do {
+                initResult = try await postInit(state: uploads[idx0])
+            } catch {
+                update(stateId: stateId) {
+                    $0.status = .failed
+                    $0.errorMessage = "init: \(error.localizedDescription)"
+                }
+                return
             }
-            return
+            if initResult.status == "duplicate" {
+                update(stateId: stateId) {
+                    $0.uploadId = initResult.video_id
+                    $0.status = .completed
+                    $0.completedAt = Date()
+                    $0.bytesUploaded = $0.totalBytes
+                }
+                return
+            }
+            update(stateId: stateId) {
+                $0.uploadId = initResult.upload_id ?? initResult.video_id
+                $0.status = .uploading
+            }
+        } else {
+            // Resume — just make sure we report the right status
+            update(stateId: stateId) { $0.status = .uploading }
         }
 
-        update(stateId: stateId) {
-            $0.uploadId = initResult.upload_id ?? initResult.video_id
-            $0.status = .uploading
-        }
-
-        // Upload parts
+        // 2) Parts step — uploadAllParts() skips any partNumber that's
+        // already in state.partsDone, so resume just continues.
         let parts: [UploadState.CompletedPart]
         do {
             parts = try await uploadAllParts(stateId: stateId)
@@ -109,7 +147,7 @@ final class UploadManager: ObservableObject {
             return
         }
 
-        // Complete
+        // 3) Complete step
         update(stateId: stateId) { $0.status = .finalizing }
         do {
             _ = try await postComplete(stateId: stateId, parts: parts)
@@ -121,7 +159,6 @@ final class UploadManager: ObservableObject {
             return
         }
 
-        // Success — clean up tmp file, keep the state for the UI history.
         if let idx = uploads.firstIndex(where: { $0.id == stateId }) {
             try? FileManager.default.removeItem(atPath: uploads[idx].sourcePath)
         }
@@ -139,10 +176,21 @@ final class UploadManager: ObservableObject {
         let totalParts = Int((state.totalBytes + state.chunkSize - 1) / state.chunkSize)
         guard totalParts > 0 else { throw UploadError.emptyFile }
 
+        // Seed results with anything we already finished in a prior run.
         var results: [Int: UploadState.CompletedPart] = [:]
+        for done in state.partsDone {
+            results[done.partNumber] = done
+        }
+        let alreadyDone = Set(state.partsDone.map { $0.partNumber })
+        let remaining = (1...totalParts).filter { !alreadyDone.contains($0) }
+
+        if remaining.isEmpty {
+            return (1...totalParts).compactMap { results[$0] }
+        }
+
         try await withThrowingTaskGroup(of: UploadState.CompletedPart.self) { group in
+            var nextIdx = 0
             var inFlight = 0
-            var nextPart = 1
 
             func startOne(_ pn: Int) {
                 group.addTask { [weak self] in
@@ -151,16 +199,16 @@ final class UploadManager: ObservableObject {
                 }
             }
 
-            while nextPart <= totalParts && inFlight < maxConcurrentParts {
-                startOne(nextPart); nextPart += 1; inFlight += 1
+            while nextIdx < remaining.count && inFlight < maxConcurrentParts {
+                startOne(remaining[nextIdx]); nextIdx += 1; inFlight += 1
             }
 
             while inFlight > 0 {
                 guard let part = try await group.next() else { break }
                 results[part.partNumber] = part
                 inFlight -= 1
-                if nextPart <= totalParts {
-                    startOne(nextPart); nextPart += 1; inFlight += 1
+                if nextIdx < remaining.count {
+                    startOne(remaining[nextIdx]); nextIdx += 1; inFlight += 1
                 }
             }
         }

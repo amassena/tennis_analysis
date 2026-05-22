@@ -9,6 +9,10 @@ struct CourtIQApp: App {
             RootView()
                 .environmentObject(auth)
                 .preferredColorScheme(.dark)
+                .task {
+                    // Pick up any in-flight uploads from a prior session.
+                    UploadResumer.resumeOnLaunch()
+                }
         }
     }
 }
