@@ -26,7 +26,13 @@ struct UploadState: Codable, Identifiable, Equatable {
     /// our local upload completes. nil = not yet polled.
     var serverStatus: String?
 
-    var id: String { uploadId.isEmpty ? assetId : uploadId }
+    /// Stable identifier for the lifetime of this upload — equal to the
+    /// asset_id we generate at pick/record time. We intentionally do NOT
+    /// switch to uploadId after /init returns; that would make every
+    /// subsequent `uploads.first(where: { $0.id == ... })` lookup fail
+    /// (silent hang at 0%, plus duplicate state files on disk because
+    /// UploadStore writes to `state_<id>.json` and the path would move).
+    var id: String { assetId }
 
     var progress: Double {
         guard totalBytes > 0 else { return 0 }
