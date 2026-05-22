@@ -577,9 +577,8 @@ async function handleIphoneUpload(request, env, cors) {
 }
 
 async function handleIphoneCheck(request, env, cors) {
-  const auth = request.headers.get('authorization') || '';
-  const expected = env.IPHONE_UPLOAD_TOKEN;
-  if (!expected || auth !== `Bearer ${expected}`) {
+  const auth = await authenticateIphoneUpload(request, env);
+  if (!auth.ok) {
     return jsonResponse({ error: 'Unauthorized' }, 401, cors);
   }
 
@@ -623,9 +622,8 @@ async function handleIphoneCheck(request, env, cors) {
 // ---------------------------------------------------------------------------
 
 async function handleIphoneInit(request, env, cors) {
-  const auth = request.headers.get('authorization') || '';
-  const expected = env.IPHONE_UPLOAD_TOKEN;
-  if (!expected || auth !== `Bearer ${expected}`) {
+  const auth = await authenticateIphoneUpload(request, env);
+  if (!auth.ok) {
     return jsonResponse({ error: 'Unauthorized' }, 401, cors);
   }
   const body = await request.json().catch(() => ({}));
@@ -680,6 +678,7 @@ async function handleIphoneInit(request, env, cors) {
       ext,
       r2_upload_id: multipart.uploadId,
       created_at_inflight: new Date().toISOString(),
+      uploaded_by: auth.kind === 'user' ? auth.user_hash : null,
     }),
     { httpMetadata: { contentType: 'application/json' } },
   );
@@ -696,9 +695,8 @@ async function handleIphoneInit(request, env, cors) {
 }
 
 async function handleIphonePart(request, env, cors, uploadId, partNumber) {
-  const auth = request.headers.get('authorization') || '';
-  const expected = env.IPHONE_UPLOAD_TOKEN;
-  if (!expected || auth !== `Bearer ${expected}`) {
+  const auth = await authenticateIphoneUpload(request, env);
+  if (!auth.ok) {
     return jsonResponse({ error: 'Unauthorized' }, 401, cors);
   }
 
@@ -718,9 +716,8 @@ async function handleIphonePart(request, env, cors, uploadId, partNumber) {
 }
 
 async function handleIphoneComplete(request, env, cors, uploadId) {
-  const auth = request.headers.get('authorization') || '';
-  const expected = env.IPHONE_UPLOAD_TOKEN;
-  if (!expected || auth !== `Bearer ${expected}`) {
+  const auth = await authenticateIphoneUpload(request, env);
+  if (!auth.ok) {
     return jsonResponse({ error: 'Unauthorized' }, 401, cors);
   }
 
@@ -753,11 +750,33 @@ async function handleIphoneComplete(request, env, cors, uploadId) {
       created_at: state.created_at,
       uploaded_at: new Date().toISOString(),
       r2_source_key: state.r2_key,
-      source: 'iphone_shortcut',
+      source: auth.kind === 'user' ? 'iphone_app' : 'iphone_shortcut',
       status: 'awaiting_coordinator',
+      uploaded_by: state.uploaded_by || (auth.kind === 'user' ? auth.user_hash : null),
     }),
     { httpMetadata: { contentType: 'application/json' } },
   );
+
+  // Bump user's video count on success (best-effort).
+  if (auth.kind === 'user') {
+    try {
+      // We don't know the apple_sub from the JWT alone here without re-verifying,
+      // but the JWT carries apple_sub in claims — fetch fresh via authenticateUser.
+      const userResult = await authenticateUser(request, env);
+      if (userResult.kind === 'user' && userResult.claims.apple_sub) {
+        const userKey = `users/${userResult.claims.apple_sub}.json`;
+        const userObj = await env.BUCKET.get(userKey);
+        if (userObj) {
+          const user = await userObj.json();
+          user.video_count = (user.video_count || 0) + 1;
+          user.last_upload_at = new Date().toISOString();
+          await env.BUCKET.put(userKey, JSON.stringify(user), {
+            httpMetadata: { contentType: 'application/json' },
+          });
+        }
+      }
+    } catch {}
+  }
 
   // Clean up in-flight state.
   try { await env.BUCKET.delete(stateKey); } catch {}
@@ -1152,6 +1171,34 @@ async function verifyOurJWT(jwt, secret) {
   const nowSec = Math.floor(Date.now() / 1000);
   if (claims.exp && claims.exp < nowSec) throw new Error('JWT expired');
   return claims;
+}
+
+// Authenticate an iPhone upload — accepts EITHER the legacy
+// IPHONE_UPLOAD_TOKEN (Mac uploader) OR a user JWT (iOS app).
+// Returns:
+//   { ok: true, kind: 'shared' }
+//   { ok: true, kind: 'user', user_hash }
+//   { ok: false }
+async function authenticateIphoneUpload(request, env) {
+  const auth = request.headers.get('authorization') || '';
+  if (!auth.startsWith('Bearer ')) return { ok: false };
+  const token = auth.slice(7).trim();
+
+  // Shared token (Mac uploader, single string)
+  if (env.IPHONE_UPLOAD_TOKEN && token === env.IPHONE_UPLOAD_TOKEN) {
+    return { ok: true, kind: 'shared' };
+  }
+
+  // User JWT (iOS app, three dot-separated parts)
+  if (env.JWT_SIGNING_SECRET && token.split('.').length === 3) {
+    try {
+      const claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET);
+      return { ok: true, kind: 'user', user_hash: claims.sub };
+    } catch {
+      return { ok: false };
+    }
+  }
+  return { ok: false };
 }
 
 // Extract authenticated user from the Authorization header.

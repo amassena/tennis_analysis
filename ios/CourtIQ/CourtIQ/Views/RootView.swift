@@ -37,12 +37,12 @@ private struct SignedInTabs: View {
 
     var body: some View {
         TabView {
-            UploadTabPlaceholder(userHash: userHash)
+            UploadTabView(userHash: userHash)
                 .tabItem {
                     Label("Upload", systemImage: "icloud.and.arrow.up")
                 }
 
-            GalleryTabPlaceholder()
+            GalleryTabView()
                 .tabItem {
                     Label("Gallery", systemImage: "play.rectangle.on.rectangle")
                 }
@@ -50,29 +50,7 @@ private struct SignedInTabs: View {
     }
 }
 
-private struct UploadTabPlaceholder: View {
-    let userHash: String
-    @EnvironmentObject var auth: AuthCoordinator
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "icloud.and.arrow.up")
-                .font(.system(size: 56))
-                .foregroundColor(.secondary)
-            Text("Upload")
-                .font(.title2.bold())
-            Text("Signed in as \(userHash). Real upload flow lands in PR 2+.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Button("Sign out") { auth.signOut() }
-                .padding(.top, 24)
-        }
-    }
-}
-
-private struct GalleryTabPlaceholder: View {
+private struct GalleryTabView: View {
     var body: some View {
         WebViewWrapper(url: URL(string: "https://tennis.playfullife.com")!)
             .ignoresSafeArea(edges: .bottom)
