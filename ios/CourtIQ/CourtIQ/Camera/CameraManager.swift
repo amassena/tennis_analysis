@@ -1,161 +1,166 @@
+import Foundation
 import AVFoundation
-import Vision
-import UIKit
+import Combine
 
-class CameraManager: NSObject, ObservableObject {
+/// Recording-only camera. No Vision / live-coaching work — that will
+/// come from the live-coaching stream in a future PR and likely lives
+/// in a separate manager class.
+///
+/// Tries to configure 240 fps at 1080p if available (matches the
+/// product 240fps slo-mo bar); falls back to the best available.
+final class CameraManager: NSObject, ObservableObject {
     let captureSession = AVCaptureSession()
-    private let videoOutput = AVCaptureVideoDataOutput()
-    private var movieOutput = AVCaptureMovieFileOutput()
-    private let processingQueue = DispatchQueue(label: "com.courtiq.camera", qos: .userInitiated)
+    private let movieOutput = AVCaptureMovieFileOutput()
+    private let sessionQueue = DispatchQueue(label: "com.playfullife.courtiq.camera")
 
     @Published var isRecording = false
+    @Published var recordingDuration: TimeInterval = 0
+    @Published var lastError: String?
+    @Published var lastRecordingURL: URL?
+    @Published var permissionGranted: Bool? = nil  // nil = unknown
 
-    var onFrameProcessed: (([VNHumanBodyPoseObservation]) -> Void)?
-    var lastCapturedFrame: CGImage?  // latest frame for swing sequence buffer
+    private var startedAt: Date?
+    private var timer: AnyCancellable?
+    private var onFinished: ((Result<URL, Error>) -> Void)?
 
-    private var frameSkipCounter = 0
-    private let mlFrameInterval = 8  // process every 8th frame (30fps ML from 240fps capture)
-
-    func configure() {
-        captureSession.beginConfiguration()
-        captureSession.sessionPreset = .hd1920x1080
-
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
-            print("[CameraManager] No back camera")
-            return
+    func requestPermissionAndConfigure() {
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] vGranted in
+            AVCaptureDevice.requestAccess(for: .audio) { aGranted in
+                DispatchQueue.main.async {
+                    self?.permissionGranted = vGranted
+                }
+                if vGranted {
+                    self?.configure(audioGranted: aGranted)
+                }
+            }
         }
+    }
 
-        // Configure for 240fps if available, otherwise best available
+    private func configure(audioGranted: Bool) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.captureSession.beginConfiguration()
+            self.captureSession.sessionPreset = .hd1920x1080
+
+            guard
+                let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                let videoInput = try? AVCaptureDeviceInput(device: camera)
+            else {
+                DispatchQueue.main.async { self.lastError = "Back camera unavailable" }
+                self.captureSession.commitConfiguration()
+                return
+            }
+
+            self.configureBestFormat(for: camera)
+
+            if self.captureSession.canAddInput(videoInput) {
+                self.captureSession.addInput(videoInput)
+            }
+
+            if audioGranted,
+               let mic = AVCaptureDevice.default(for: .audio),
+               let audioInput = try? AVCaptureDeviceInput(device: mic),
+               self.captureSession.canAddInput(audioInput) {
+                self.captureSession.addInput(audioInput)
+            }
+
+            if self.captureSession.canAddOutput(self.movieOutput) {
+                self.captureSession.addOutput(self.movieOutput)
+            }
+
+            self.captureSession.commitConfiguration()
+            self.captureSession.startRunning()
+        }
+    }
+
+    /// Pick the highest-fps 1080p format. Caps at 240 fps because that
+    /// is the slow-motion ceiling on current iPhones.
+    private func configureBestFormat(for camera: AVCaptureDevice) {
         do {
             try camera.lockForConfiguration()
-            let targetFPS = 240.0
-            var bestFormat: AVCaptureDevice.Format?
-            var bestFrameRange: AVFrameRateRange?
+            defer { camera.unlockForConfiguration() }
 
+            let targetFPS: Double = 240
+            var bestFormat: AVCaptureDevice.Format?
+            var bestFPS: Double = 0
             for format in camera.formats {
                 let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
                 guard dims.width >= 1920 else { continue }
                 for range in format.videoSupportedFrameRateRanges {
-                    if range.maxFrameRate >= targetFPS {
-                        if bestFrameRange == nil || range.maxFrameRate > bestFrameRange!.maxFrameRate {
-                            bestFormat = format
-                            bestFrameRange = range
-                        }
+                    let maxFPS = min(range.maxFrameRate, targetFPS)
+                    if maxFPS > bestFPS {
+                        bestFPS = maxFPS
+                        bestFormat = format
                     }
                 }
             }
-
-            if let format = bestFormat, let range = bestFrameRange {
-                camera.activeFormat = format
-                camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(range.maxFrameRate))
-                camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(range.maxFrameRate))
-                print("[CameraManager] Configured at \(range.maxFrameRate) fps")
-            } else {
-                print("[CameraManager] 240fps not available, using default")
+            if let f = bestFormat, bestFPS > 30 {
+                camera.activeFormat = f
+                let scale = CMTimeScale(bestFPS)
+                camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: scale)
+                camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: scale)
             }
-            camera.unlockForConfiguration()
         } catch {
-            print("[CameraManager] Failed to configure camera: \(error)")
-        }
-
-        guard let input = try? AVCaptureDeviceInput(device: camera) else { return }
-        if captureSession.canAddInput(input) {
-            captureSession.addInput(input)
-        }
-
-        // Audio input for shot detection
-        if let mic = AVCaptureDevice.default(for: .audio),
-           let audioInput = try? AVCaptureDeviceInput(device: mic),
-           captureSession.canAddInput(audioInput) {
-            captureSession.addInput(audioInput)
-        }
-
-        // Video output for ML processing
-        videoOutput.setSampleBufferDelegate(self, queue: processingQueue)
-        videoOutput.alwaysDiscardsLateVideoFrames = true
-        videoOutput.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-        ]
-        if captureSession.canAddOutput(videoOutput) {
-            captureSession.addOutput(videoOutput)
-        }
-
-        // Movie file output for recording
-        if captureSession.canAddOutput(movieOutput) {
-            captureSession.addOutput(movieOutput)
-        }
-
-        captureSession.commitConfiguration()
-    }
-
-    func start() {
-        // Request camera + mic permission before starting
-        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-            guard granted else {
-                print("[CameraManager] Camera permission denied")
-                return
-            }
-            AVCaptureDevice.requestAccess(for: .audio) { _ in
-                // Audio is optional — proceed either way
-                self?.processingQueue.async {
-                    self?.captureSession.startRunning()
-                    print("[CameraManager] Session running")
-                }
-            }
+            // Not fatal — just stays at default
         }
     }
 
-    func startRecording(to url: URL) {
+    /// Start recording to a freshly-staged file under `UploadStaging`.
+    func startRecording(onFinished: @escaping (Result<URL, Error>) -> Void) {
         guard !isRecording else { return }
-        movieOutput.startRecording(to: url, recordingDelegate: self)
-        DispatchQueue.main.async { self.isRecording = true }
+        self.onFinished = onFinished
+        let url = UploadStaging.stagingURL(for: "rec_\(Int(Date().timeIntervalSince1970)).mov")
+        DispatchQueue.main.async {
+            self.startedAt = Date()
+            self.recordingDuration = 0
+            self.isRecording = true
+            self.timer = Timer.publish(every: 0.1, on: .main, in: .common)
+                .autoconnect()
+                .sink { [weak self] _ in
+                    guard let self, let s = self.startedAt else { return }
+                    self.recordingDuration = Date().timeIntervalSince(s)
+                }
+        }
+        sessionQueue.async {
+            self.movieOutput.startRecording(to: url, recordingDelegate: self)
+        }
     }
 
     func stopRecording() {
         guard isRecording else { return }
-        movieOutput.stopRecording()
+        sessionQueue.async {
+            self.movieOutput.stopRecording()
+        }
+    }
+
+    func teardown() {
+        sessionQueue.async {
+            self.captureSession.stopRunning()
+        }
+        timer?.cancel()
+        timer = nil
     }
 }
 
-// MARK: - Video frame processing → Vision pose detection
-extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        frameSkipCounter += 1
-        guard frameSkipCounter % mlFrameInterval == 0 else { return }
-
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-
-        // Capture frame for swing sequence buffer (every ML frame)
-        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext()
-        if let cgImage = context.createCGImage(ciImage, from: ciImage.extent) {
-            self.lastCapturedFrame = cgImage
-        }
-
-        let request = VNDetectHumanBodyPoseRequest()
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up)
-
-        do {
-            try handler.perform([request])
-            if let observations = request.results {
-                DispatchQueue.main.async { [weak self] in
-                    self?.onFrameProcessed?(observations)
-                }
-            }
-        } catch {
-            // Vision pose detection failed for this frame — skip silently
-        }
-    }
-}
-
-// MARK: - Recording delegate
 extension CameraManager: AVCaptureFileOutputRecordingDelegate {
-    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        DispatchQueue.main.async { self.isRecording = false }
-        if let error = error {
-            print("[CameraManager] Recording error: \(error.localizedDescription)")
-        } else {
-            print("[CameraManager] Recording saved: \(outputFileURL.lastPathComponent)")
+    func fileOutput(
+        _ output: AVCaptureFileOutput,
+        didFinishRecordingTo outputFileURL: URL,
+        from connections: [AVCaptureConnection],
+        error: Error?
+    ) {
+        DispatchQueue.main.async {
+            self.isRecording = false
+            self.timer?.cancel()
+            self.timer = nil
+            if let error {
+                self.lastError = error.localizedDescription
+                self.onFinished?(.failure(error))
+            } else {
+                self.lastRecordingURL = outputFileURL
+                self.onFinished?(.success(outputFileURL))
+            }
+            self.onFinished = nil
         }
     }
 }

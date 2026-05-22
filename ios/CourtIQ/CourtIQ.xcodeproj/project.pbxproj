@@ -7,8 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01AC42E09A7984D698AE98D2 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F33FB7B573676A5E3CDE8A /* CameraManager.swift */; };
 		0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */; };
+		4CCA774AD2B4E0C896C72374 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5238138C6C605707F088D692 /* CameraPreviewView.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* RootView.swift */; };
+		D1D2D3D4D5D6D7D8D9DAD0E1 /* RecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1D2D3D4D5D6D7D8D9DAD0E2 /* RecordView.swift */; };
 		B0B1B2B3B4B5B6B7B8B9BAA1 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B1B2B3B4B5B6B7B8B9BAA2 /* TokenStore.swift */; };
 		B0B1B2B3B4B5B6B7B8B9BAB1 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B1B2B3B4B5B6B7B8B9BAB2 /* APIClient.swift */; };
 		B0B1B2B3B4B5B6B7B8B9BAC1 /* AuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0B1B2B3B4B5B6B7B8B9BAC2 /* AuthCoordinator.swift */; };
@@ -43,6 +46,7 @@
 		C0C1C2C3C4C5C6C7C8C9CAD2 /* UploadComposerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadComposerSheet.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadRowView.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAF2 /* UploadTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadTabView.swift; sourceTree = "<group>"; };
+		D1D2D3D4D5D6D7D8D9DAD0E2 /* RecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordView.swift; sourceTree = "<group>"; };
 		CC65490CBBD6E27B41C0DABF /* SwingLab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwingLab.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB29C472F8C615C04C04C14C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -66,6 +70,7 @@
 				C0C1C2C3C4C5C6C7C8C9CAD2 /* UploadComposerSheet.swift */,
 				C0C1C2C3C4C5C6C7C8C9CAC2 /* PickerView.swift */,
 				C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */,
+				D1D2D3D4D5D6D7D8D9DAD0E2 /* RecordView.swift */,
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
 				5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */,
 				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
@@ -226,6 +231,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D1A245F9F7F578D2FBCE6EFE /* CourtIQApp.swift in Sources */,
+				01AC42E09A7984D698AE98D2 /* CameraManager.swift in Sources */,
+				4CCA774AD2B4E0C896C72374 /* CameraPreviewView.swift in Sources */,
 				B0B1B2B3B4B5B6B7B8B9BAA1 /* TokenStore.swift in Sources */,
 				B0B1B2B3B4B5B6B7B8B9BAB1 /* APIClient.swift in Sources */,
 				B0B1B2B3B4B5B6B7B8B9BAC1 /* AuthCoordinator.swift in Sources */,
@@ -236,6 +243,7 @@
 				C0C1C2C3C4C5C6C7C8C9CAD1 /* UploadComposerSheet.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAE1 /* UploadRowView.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAF1 /* UploadTabView.swift in Sources */,
+				D1D2D3D4D5D6D7D8D9DAD0E1 /* RecordView.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5C /* RootView.swift in Sources */,
 				0756200D82CB09617897F0AF /* WebViewWrapper.swift in Sources */,
 			);

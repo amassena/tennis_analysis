@@ -6,8 +6,7 @@ struct UploadComposerSheet: View {
     @Binding var isPresented: Bool
 
     @State private var showingPicker = false
-    // Record flow lands in PR 3; gate the button so PR 2 still ships clean.
-    @State private var showingRecordUnavailable = false
+    @State private var showingRecord = false
 
     var body: some View {
         NavigationView {
@@ -25,14 +24,14 @@ struct UploadComposerSheet: View {
                 Spacer().frame(height: 12)
 
                 Button {
-                    showingRecordUnavailable = true
+                    showingRecord = true
                 } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "video.fill")
                             .font(.system(size: 28))
                         Text("Record new")
                             .font(.headline)
-                        Text("Coming in next update")
+                        Text("Capture and upload immediately")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -42,10 +41,9 @@ struct UploadComposerSheet: View {
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
-                .alert("Coming soon", isPresented: $showingRecordUnavailable) {
-                    Button("OK", role: .cancel) {}
-                } message: {
-                    Text("In-app recording lands in the next update. For now, choose an existing video.")
+                .fullScreenCover(isPresented: $showingRecord) {
+                    RecordView(userHash: userHash, isPresented: $showingRecord)
+                        .onDisappear { isPresented = false }
                 }
 
                 Button {
