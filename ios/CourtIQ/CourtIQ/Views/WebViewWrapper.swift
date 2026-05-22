@@ -1,6 +1,8 @@
 import SwiftUI
 import WebKit
 
+/// WKWebView wrapper. Reloads with a new URL when `url` changes
+/// (used by the Gallery tab to deep-link to `#<video_id>` anchors).
 struct WebViewWrapper: UIViewRepresentable {
     let url: URL
 
@@ -18,14 +20,17 @@ struct WebViewWrapper: UIViewRepresentable {
         return webView
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        // Reload when URL meaningfully changes (eg new anchor).
+        if uiView.url != url {
+            uiView.load(URLRequest(url: url))
+        }
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     class Coordinator: NSObject, WKNavigationDelegate {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            // Allow all navigation within tennis.playfullife.com
-            // Open external links in Safari
             if let host = navigationAction.request.url?.host,
                host.contains("playfullife.com") || host.contains("localhost") {
                 decisionHandler(.allow)

@@ -19,6 +19,8 @@
 		C0C1C2C3C4C5C6C7C8C9CAA1 /* UploadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAA2 /* UploadState.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAB1 /* UploadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAB2 /* UploadManager.swift */; };
 		E0E1E2E3E4E5E6E7E8E9EAE1 /* UploadResumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E1E2E3E4E5E6E7E8E9EAE2 /* UploadResumer.swift */; };
+		E0E1E2E3E4E5E6E7E8E9EAF1 /* StatusPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0E1E2E3E4E5E6E7E8E9EAF2 /* StatusPoller.swift */; };
+		F0F1F2F3F4F5F6F7F8F9FA01 /* AppNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F1F2F3F4F5F6F7F8F9FA02 /* AppNavigation.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAC1 /* PickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAC2 /* PickerView.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAD1 /* UploadComposerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAD2 /* UploadComposerSheet.swift */; };
 		C0C1C2C3C4C5C6C7C8C9CAE1 /* UploadRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */; };
@@ -44,6 +46,8 @@
 		C0C1C2C3C4C5C6C7C8C9CAA2 /* UploadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadState.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAB2 /* UploadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadManager.swift; sourceTree = "<group>"; };
 		E0E1E2E3E4E5E6E7E8E9EAE2 /* UploadResumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadResumer.swift; sourceTree = "<group>"; };
+		E0E1E2E3E4E5E6E7E8E9EAF2 /* StatusPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPoller.swift; sourceTree = "<group>"; };
+		F0F1F2F3F4F5F6F7F8F9FA02 /* AppNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNavigation.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAC2 /* PickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerView.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAD2 /* UploadComposerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadComposerSheet.swift; sourceTree = "<group>"; };
 		C0C1C2C3C4C5C6C7C8C9CAE2 /* UploadRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadRowView.swift; sourceTree = "<group>"; };
@@ -119,6 +123,7 @@
 				C0C1C2C3C4C5C6C7C8C9CAA2 /* UploadState.swift */,
 				C0C1C2C3C4C5C6C7C8C9CAB2 /* UploadManager.swift */,
 				E0E1E2E3E4E5E6E7E8E9EAE2 /* UploadResumer.swift */,
+				E0E1E2E3E4E5E6E7E8E9EAF2 /* StatusPoller.swift */,
 			);
 			path = Upload;
 			sourceTree = "<group>";
@@ -135,6 +140,7 @@
 			isa = PBXGroup;
 			children = (
 				1A0E18FC4BF081E8B9FDCC00 /* CourtIQApp.swift */,
+				F0F1F2F3F4F5F6F7F8F9FA02 /* AppNavigation.swift */,
 				B0B1B2B3B4B5B6B7B8B9BAE2 /* CourtIQ.entitlements */,
 				B0B1B2B3B4B5B6B7B8B9BAF0 /* Auth */,
 				099218106745159E9241A2D4 /* Camera */,
@@ -243,6 +249,8 @@
 				C0C1C2C3C4C5C6C7C8C9CAA1 /* UploadState.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAB1 /* UploadManager.swift in Sources */,
 				E0E1E2E3E4E5E6E7E8E9EAE1 /* UploadResumer.swift in Sources */,
+				E0E1E2E3E4E5E6E7E8E9EAF1 /* StatusPoller.swift in Sources */,
+				F0F1F2F3F4F5F6F7F8F9FA01 /* AppNavigation.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAC1 /* PickerView.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAD1 /* UploadComposerSheet.swift in Sources */,
 				C0C1C2C3C4C5C6C7C8C9CAE1 /* UploadRowView.swift in Sources */,

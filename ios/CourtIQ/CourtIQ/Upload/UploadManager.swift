@@ -167,6 +167,18 @@ final class UploadManager: ObservableObject {
             $0.completedAt = Date()
             $0.bytesUploaded = $0.totalBytes
         }
+
+        // Kick off server-side status polling so the row can flip from
+        // "uploaded" -> "ready in gallery" once the pipeline finishes.
+        if let videoId = uploads.first(where: { $0.id == stateId })?.uploadId {
+            StatusPoller.shared.start(videoId: videoId) { [weak self] resp in
+                Task { @MainActor in
+                    self?.update(stateId: stateId) {
+                        $0.serverStatus = resp.status
+                    }
+                }
+            }
+        }
     }
 
     private func uploadAllParts(stateId: String) async throws -> [UploadState.CompletedPart] {

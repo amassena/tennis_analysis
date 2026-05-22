@@ -4,6 +4,7 @@ struct UploadTabView: View {
     let userHash: String
     @ObservedObject private var manager = UploadManager.shared
     @EnvironmentObject var auth: AuthCoordinator
+    @EnvironmentObject var nav: AppNavigation
     @State private var showingComposer = false
 
     var body: some View {
@@ -17,7 +18,8 @@ struct UploadTabView: View {
                             UploadRowView(
                                 state: upload,
                                 onRetry: { manager.retry(id: upload.id) },
-                                onDiscard: { manager.discard(id: upload.id) }
+                                onDiscard: { manager.discard(id: upload.id) },
+                                onViewInGallery: { nav.openGallery(anchor: upload.uploadId) }
                             )
                         }
                     }

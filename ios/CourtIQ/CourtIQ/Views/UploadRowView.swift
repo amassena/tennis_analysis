@@ -4,10 +4,11 @@ struct UploadRowView: View {
     let state: UploadState
     var onRetry: () -> Void
     var onDiscard: () -> Void
+    var onViewInGallery: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(alignment: .top) {
                 Image(systemName: iconName)
                     .foregroundColor(iconColor)
                     .font(.system(size: 18, weight: .semibold))
@@ -34,8 +35,18 @@ struct UploadRowView: View {
                         .foregroundColor(.red)
                     }
                 case .completed:
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                    if state.serverStatus == "completed" {
+                        Button(action: onViewInGallery) {
+                            Label("View", systemImage: "arrow.up.right.square")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    }
                 default:
                     Text(percentText)
                         .font(.caption.monospacedDigit())
@@ -63,7 +74,8 @@ struct UploadRowView: View {
         case .queued, .initializing: return "clock"
         case .uploading: return "arrow.up.circle"
         case .finalizing: return "hourglass"
-        case .completed: return "checkmark.circle.fill"
+        case .completed:
+            return state.serverStatus == "completed" ? "checkmark.seal.fill" : "checkmark.circle.fill"
         case .failed: return "exclamationmark.triangle.fill"
         }
     }
@@ -71,7 +83,7 @@ struct UploadRowView: View {
     private var iconColor: Color {
         switch state.status {
         case .failed: return .red
-        case .completed: return .green
+        case .completed: return state.serverStatus == "completed" ? .green : .accentColor
         default: return .accentColor
         }
     }
@@ -85,7 +97,15 @@ struct UploadRowView: View {
             let mbTotal = Double(state.totalBytes) / 1_048_576
             return String(format: "%.0f / %.0f MB", mbDone, mbTotal)
         case .finalizing: return "Finishing…"
-        case .completed: return "Uploaded"
+        case .completed:
+            switch state.serverStatus {
+            case nil, "awaiting_coordinator": return "Uploaded — waiting for processing"
+            case "queued": return "In processing queue"
+            case "running": return "Processing on GPU"
+            case "completed": return "Ready in gallery"
+            case "failed": return "Processing failed"
+            default: return "Uploaded"
+            }
         case .failed: return "Failed"
         }
     }

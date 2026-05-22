@@ -22,6 +22,9 @@ struct UploadState: Codable, Identifiable, Equatable {
     var errorMessage: String?
     var startedAt: Date
     var completedAt: Date?
+    /// Server-side pipeline status, populated by `StatusPoller` after
+    /// our local upload completes. nil = not yet polled.
+    var serverStatus: String?
 
     var id: String { uploadId.isEmpty ? assetId : uploadId }
 
@@ -65,7 +68,8 @@ struct UploadState: Codable, Identifiable, Equatable {
             bytesUploaded: 0,
             errorMessage: nil,
             startedAt: Date(),
-            completedAt: nil
+            completedAt: nil,
+            serverStatus: nil
         )
     }
 }
