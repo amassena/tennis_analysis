@@ -44,7 +44,10 @@ final class CameraManager: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.captureSession.beginConfiguration()
-            self.captureSession.sessionPreset = .hd1920x1080
+            // .high is a sensible fallback; configureBestFormat will set
+            // activeFormat below, which switches the session into
+            // inputPriority mode and overrides this preset.
+            self.captureSession.sessionPreset = .high
 
             guard
                 let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
@@ -77,41 +80,64 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
-    /// Pick the highest-fps 1080p format. Caps at 240 fps because that
-    /// is the slow-motion ceiling on current iPhones.
+    /// Pick the highest resolution available, then the SECOND-highest
+    /// frame rate at that resolution.
+    ///
+    /// On iPhone 16 Pro the picker lands on 4K (3840×2160) at 30 fps
+    /// — 4K/60fps is the top fps option, 4K/30fps is the second-highest.
+    /// Resolution is prioritized over fps per product decision: clarity
+    /// of the frame matters more than slow-motion smoothness for the
+    /// gallery output. (Downstream tennis-swing pipeline can interpolate
+    /// if it needs more temporal resolution.)
+    ///
+    /// Fallbacks:
+    ///   - If only one fps is available at the max resolution → use it.
+    ///   - If lockForConfiguration fails → leave the default.
     private func configureBestFormat(for camera: AVCaptureDevice) {
         do {
             try camera.lockForConfiguration()
             defer { camera.unlockForConfiguration() }
 
-            let targetFPS: Double = 240
-            var bestFormat: AVCaptureDevice.Format?
-            var bestFPS: Double = 0
+            // 1) Find the maximum pixel count across all formats.
+            var maxPixels = 0
             for format in camera.formats {
                 let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                guard dims.width >= 1920 else { continue }
-                for range in format.videoSupportedFrameRateRanges {
-                    let maxFPS = min(range.maxFrameRate, targetFPS)
-                    if maxFPS > bestFPS {
-                        bestFPS = maxFPS
-                        bestFormat = format
-                    }
-                }
+                let pixels = Int(dims.width) * Int(dims.height)
+                if pixels > maxPixels { maxPixels = pixels }
             }
-            if let f = bestFormat, bestFPS > 30 {
-                camera.activeFormat = f
-                let scale = CMTimeScale(bestFPS)
-                camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: scale)
-                camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: scale)
+            guard maxPixels > 0 else { return }
+
+            // 2) Collect every format at that max resolution, with its
+            //    max fps. (Apple typically exposes one format entry per
+            //    distinct fps at a given resolution.)
+            var candidates: [(format: AVCaptureDevice.Format, maxFPS: Double)] = []
+            for format in camera.formats {
+                let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                let pixels = Int(dims.width) * Int(dims.height)
+                guard pixels == maxPixels else { continue }
+                let maxFPS = format.videoSupportedFrameRateRanges
+                    .map { $0.maxFrameRate }
+                    .max() ?? 0
+                candidates.append((format, maxFPS))
             }
-            // Publish the resolved format for the live UI badge.
-            let activeDims = CMVideoFormatDescriptionGetDimensions(camera.activeFormat.formatDescription)
-            let activeRange = camera.activeFormat.videoSupportedFrameRateRanges.first?.maxFrameRate ?? 30
-            let resolvedFPS = min(activeRange, bestFPS > 30 ? bestFPS : activeRange)
+            guard !candidates.isEmpty else { return }
+
+            // 3) Sort by maxFPS descending; pick index 1 (second-best)
+            //    if available, otherwise index 0 (only option).
+            candidates.sort { $0.maxFPS > $1.maxFPS }
+            let pick = candidates.count >= 2 ? candidates[1] : candidates[0]
+
+            camera.activeFormat = pick.format
+            let scale = CMTimeScale(pick.maxFPS)
+            camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: scale)
+            camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: scale)
+
+            let activeDims = CMVideoFormatDescriptionGetDimensions(pick.format.formatDescription)
             let w = Int(activeDims.width)
             let h = Int(activeDims.height)
+            let fps = pick.maxFPS
             DispatchQueue.main.async {
-                self.activeFPS = resolvedFPS
+                self.activeFPS = fps
                 self.activeWidth = w
                 self.activeHeight = h
             }
