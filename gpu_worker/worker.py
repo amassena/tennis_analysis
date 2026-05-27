@@ -588,6 +588,102 @@ def upload_thumbnail_to_r2(thumb_path: Path, video_name: str) -> bool:
     return False
 
 
+def _read_user_hash_for_video(video_name: str):
+    """Look up `user_hash` on the R2 marker (uploads/<vid>.json). Returns
+    the hash string, or None if no marker / no hash and no default.
+
+    Lookup order:
+      1. marker.user_hash (set by iOS JWT-authed uploads)
+      2. marker.uploaded_by (older field name, same meaning)
+      3. env.DEFAULT_USER_HASH (fallback for Mac-uploader/iCloud flows
+         that auth with the legacy IPHONE_UPLOAD_TOKEN and so carry no
+         per-user identity — for a single-user installation this routes
+         them to the operator's prefix)
+
+    Pipeline scripts write outputs flat (highlights/<vid>/...); we read
+    the marker here to decide whether to migrate them to a per-user prefix.
+    """
+    client, bucket = _get_r2_client()
+    default = os.environ.get("DEFAULT_USER_HASH") or None
+    if default and not (default.startswith("u_") and len(default) == 10):
+        default = None  # don't let a typo poison everyone's outputs
+    if not client:
+        return default
+    try:
+        obj = client.get_object(Bucket=bucket, Key=f"uploads/{video_name}.json")
+        import json as _json
+        meta = _json.loads(obj["Body"].read())
+        h = meta.get("user_hash") or meta.get("uploaded_by")
+        if isinstance(h, str) and h.startswith("u_") and len(h) == 10:
+            return h
+    except Exception:
+        pass
+    return default
+
+
+def _move_pipeline_outputs_to_user_prefix(video_name: str, user_hash: str) -> int:
+    """After the pipeline finishes, move that video's flat-layout outputs
+    under highlights/<user_hash>/ so the per-user gallery URL can serve them.
+
+    Moves:
+      highlights/<vid>/*    →  highlights/<user_hash>/<vid>/*
+      thumbs/<vid>.jpg      →  highlights/<user_hash>/thumbs/<vid>.jpg
+      highlights/thumbs/<vid>.jpg → highlights/<user_hash>/thumbs/<vid>.jpg
+        (legacy GPU code uploaded to either path; cover both)
+
+    Idempotent: copy-then-delete; re-runs are no-ops because the source
+    keys are gone after success. Returns the count of keys moved.
+    """
+    client, bucket = _get_r2_client()
+    if not client:
+        log("R2 client unavailable; skipping user-prefix move", "WARN")
+        return 0
+
+    user_prefix = f"highlights/{user_hash}"
+    sources = []
+
+    # All gallery outputs under highlights/<vid>/
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=f"highlights/{video_name}/"):
+        for obj in page.get("Contents", []):
+            sources.append(obj["Key"])
+
+    # Two possible thumb locations (GPU writes thumbs/<vid>.jpg; older code
+    # wrote highlights/thumbs/<vid>.jpg). Probe both.
+    for thumb_key in [f"thumbs/{video_name}.jpg",
+                      f"highlights/thumbs/{video_name}.jpg"]:
+        try:
+            client.head_object(Bucket=bucket, Key=thumb_key)
+            sources.append(thumb_key)
+        except Exception:
+            pass
+
+    if not sources:
+        log(f"No outputs found to move for {video_name}", "WARN")
+        return 0
+
+    moved = 0
+    for src in sources:
+        # Compute destination: keep the relative path under highlights/<user>/
+        if src.startswith("highlights/"):
+            rest = src[len("highlights/"):]
+        else:  # thumbs/<vid>.jpg
+            rest = src
+        dst = f"{user_prefix}/{rest}"
+        try:
+            client.copy_object(
+                Bucket=bucket,
+                CopySource={"Bucket": bucket, "Key": src},
+                Key=dst,
+            )
+            client.delete_object(Bucket=bucket, Key=src)
+            moved += 1
+        except Exception as e:
+            log(f"Move failed {src} → {dst}: {e}", "WARN")
+    log(f"Migrated {moved}/{len(sources)} outputs to {user_prefix}/")
+    return moved
+
+
 def run_pipeline(video_path: Path) -> Path:
     """Run the full processing pipeline on a video (no stage reporting)."""
     return run_pipeline_with_stages(video_path, None)
@@ -814,16 +910,24 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
         log("Export and R2 upload complete")
     stage("clips", 100, "Export complete")
 
+    # Step 6b: Move outputs to per-user prefix (if marker has user_hash).
+    # Pipeline scripts upload flat (highlights/<vid>/...) to keep them
+    # decoupled from the auth/sharing model; we re-key here, where we
+    # know which iOS user uploaded the source video.
+    user_hash = _read_user_hash_for_video(video_name)
+    if user_hash:
+        log(f"Step 6b: Migrating outputs to per-user prefix {user_hash}")
+        _move_pipeline_outputs_to_user_prefix(video_name, user_hash)
+
     # Step 7: Update R2 gallery index
     log("Step 7: Updating gallery index")
     stage("uploading", 0, "Updating gallery index")
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    cmd = [python, str(PROJECT_ROOT / "scripts" / "update_r2_index.py")]
+    if user_hash:
+        cmd += ["--user", user_hash]
     result = subprocess.run(
-        [python, str(PROJECT_ROOT / "scripts" / "update_r2_index.py")],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        env=env,
+        cmd, cwd=PROJECT_ROOT, capture_output=True, text=True, env=env,
     )
     if result.returncode != 0:
         log(f"Index update failed: {result.stderr[-300:]}", "WARN")
