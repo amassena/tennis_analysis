@@ -20,10 +20,12 @@ struct WebViewWrapper: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
-        // Register the openVideo JS bridge. Gallery JS posts via
-        // window.webkit.messageHandlers.openVideo.postMessage({url,title})
-        // and we hand the URL off to AVPlayerViewController.
+        // JS bridges. Gallery JS posts to these via
+        // window.webkit.messageHandlers.<name>.postMessage(payload):
+        //   openVideo → hand the URL off to AVPlayerViewController
+        //   openCoach → present a native SwiftUI CoachSummarySheet
         config.userContentController.add(context.coordinator, name: "openVideo")
+        config.userContentController.add(context.coordinator, name: "openCoach")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
@@ -85,31 +87,62 @@ struct WebViewWrapper: UIViewRepresentable {
             _ userContentController: WKUserContentController,
             didReceive message: WKScriptMessage,
         ) {
-            guard message.name == "openVideo" else { return }
-            guard let body = message.body as? [String: Any],
-                  let urlStr = body["url"] as? String,
-                  let url = URL(string: urlStr) else { return }
-            let title = body["title"] as? String ?? ""
-            presentNativePlayer(url: url, title: title)
+            switch message.name {
+            case "openVideo":
+                guard let body = message.body as? [String: Any],
+                      let urlStr = body["url"] as? String,
+                      let url = URL(string: urlStr) else { return }
+                let title = body["title"] as? String ?? ""
+                presentNativePlayer(url: url, title: title)
+            case "openCoach":
+                guard let body = message.body as? [String: Any],
+                      let vid = body["vid"] as? String,
+                      let coaching = body["coaching"] else { return }
+                presentNativeCoach(videoId: vid, coachingRaw: coaching)
+            default:
+                break
+            }
         }
 
-        private func presentNativePlayer(url: URL, title: String) {
-            // Locate the top-most view controller to present from.
+        private func presentNativeCoach(videoId: String, coachingRaw: Any) {
+            // Re-encode the JS-side payload to JSON, then decode as our
+            // strongly-typed CoachPayload. This is the cleanest bridge —
+            // works regardless of how JSONSerialization typed the nested
+            // values.
+            guard JSONSerialization.isValidJSONObject(coachingRaw),
+                  let data = try? JSONSerialization.data(withJSONObject: coachingRaw),
+                  let payload = try? JSONDecoder().decode(CoachPayload.self, from: data)
+            else { return }
+            guard let top = topPresentedVC() else { return }
+            let host = UIHostingController(
+                rootView: CoachSummarySheet(videoId: videoId, payload: payload),
+            )
+            host.modalPresentationStyle = .pageSheet
+            if let sheet = host.sheetPresentationController {
+                sheet.detents = [.medium(), .large()]
+                sheet.prefersGrabberVisible = true
+            }
+            top.present(host, animated: true)
+        }
+
+        private func topPresentedVC() -> UIViewController? {
             guard let scene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
                   let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
-            else { return }
+            else { return nil }
             var top = root
             while let presented = top.presentedViewController { top = presented }
+            return top
+        }
 
+        private func presentNativePlayer(url: URL, title: String) {
+            guard let top = topPresentedVC() else { return }
             let player = AVPlayer(url: url)
             let vc = AVPlayerViewController()
             vc.player = player
             vc.modalPresentationStyle = .fullScreen
             vc.allowsPictureInPicturePlayback = true
-            top.present(vc, animated: true) {
-                player.play()
-            }
+            top.present(vc, animated: true) { player.play() }
         }
     }
 }

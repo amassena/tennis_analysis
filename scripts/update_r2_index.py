@@ -882,33 +882,24 @@ function dlFile(url) {{
 
 function deleteVideo(vid) {{
   if(!confirm('Permanently delete '+vid+' and all its files?')) return;
-  // Per-user gallery is cookie-authenticated; the worker checks the
-  // JWT and accepts the delete from the owner or an admin. Only fall
-  // back to the password prompt if the cookie path 403s.
-  function send(body) {{
-    return fetch('/api/video/'+vid+'/delete', {{
-      method:'POST', headers:{{'Content-Type':'application/json'}},
-      credentials:'include',
-      body:JSON.stringify(body||{{}}),
-    }}).then(function(r){{ return r.json().then(function(j){{return {{status:r.status, json:j}}}}) }});
-  }}
-  send().then(function(res) {{
-    if(res.status === 200) return res.json;
-    if(res.status === 403) {{
-      var pwd = prompt('Enter delete password:');
-      if(!pwd) throw new Error('cancelled');
-      return send({{password:pwd}}).then(function(r2) {{
-        if(r2.status !== 200) throw new Error(r2.json.error||'delete failed');
-        return r2.json;
-      }});
-    }}
-    throw new Error(res.json.error || 'delete failed');
-  }}).then(function(d) {{
+  // Per-user gallery is cookie-authenticated. Worker validates the JWT
+  // and accepts the delete from the owner or an admin. No fallback —
+  // the legacy shared password is gone (every signed-in user has a JWT).
+  fetch('/api/video/'+vid+'/delete', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    credentials:'include',
+    body:'{{}}',
+  }}).then(function(r){{
+    return r.json().then(function(j){{ return {{status:r.status, json:j}}; }});
+  }}).then(function(res){{
+    if(res.status !== 200) throw new Error(res.json.error || ('delete failed: '+res.status));
+    return res.json;
+  }}).then(function(d){{
     alert('Deleted '+vid+' ('+d.deleted+' files removed)');
     VIDEOS = VIDEOS.filter(function(v){{ return v.id !== vid; }});
     buildFilters();
     renderGallery();
-  }}).catch(function(e){{ if(e.message!=='cancelled') alert('Error: '+e.message); }});
+  }}).catch(function(e){{ alert('Error: '+e.message); }});
 }}
 
 function downloadCurrent() {{
@@ -970,6 +961,18 @@ function applySummary(vid, d) {{
 function openCoachModal(vid) {{
   var d = coachCache[vid];
   if(!d) return;
+  // UX-3: if we're inside the iOS WebView wrapper, hand off to the
+  // native SwiftUI sheet. JS posts the cached coaching JSON over the
+  // openCoach message bridge instead of opening the inline HTML modal.
+  try {{
+    if (window.webkit && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.openCoach) {{
+      window.webkit.messageHandlers.openCoach.postMessage(
+        {{vid: vid, coaching: d}}
+      );
+      return;
+    }}
+  }} catch (e) {{}}
   document.getElementById('coachVid').textContent = vid;
   document.getElementById('coachHeadline').textContent = d.headline || '';
   var body = document.getElementById('coachBody');

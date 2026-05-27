@@ -1179,11 +1179,8 @@ async function handleDeleteVideo(request, env, cors, vid) {
     return jsonResponse({ error: 'Invalid video id' }, 400, cors);
   }
 
-  const body = await request.json().catch(() => ({}));
-  const password = body.password;
-
   // Resolve the owner from the marker. If the marker lacks a user_hash
-  // (legacy upload), we treat it as owned by the admin.
+  // (legacy upload), only an admin can delete.
   let owner = null;
   try {
     const markerObj = await env.BUCKET.get(`uploads/${vid}.json`);
@@ -1193,12 +1190,12 @@ async function handleDeleteVideo(request, env, cors, vid) {
     }
   } catch {}
 
-  // Authorize. Three paths, any one suffices:
+  // Authorize. Two paths:
   //   a) JWT cookie/header whose sub matches the marker's owner
   //   b) JWT cookie/header whose sub is an admin
-  //   c) Legacy `password: "deletevideo"` form-field (kept as a fallback
-  //      so the unauth'd web gallery's delete prompt keeps working for
-  //      videos with no owner stamped on their marker yet)
+  // The legacy `deletevideo` shared password is gone — every web user
+  // now signs in via SIWA or magic-link, both of which carry a JWT
+  // cookie that handles delete auth natively.
   const cookieToken = readCookie(request, 'tennis_jwt');
   const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
     ? request.headers.get('authorization').slice(7).trim() : null;
@@ -1209,9 +1206,8 @@ async function handleDeleteVideo(request, env, cors, vid) {
   }
   const isOwner = !!(claims && owner && claims.sub === owner);
   const isAdmin = !!(claims && isAdminUser(env, claims.sub));
-  const isPasswordOk = password === 'deletevideo';
 
-  if (!isOwner && !isAdmin && !isPasswordOk) {
+  if (!isOwner && !isAdmin) {
     return jsonResponse(
       { error: 'Not authorized to delete this video' }, 403, cors,
     );
@@ -1229,7 +1225,7 @@ async function handleDeleteVideo(request, env, cors, vid) {
     video_id: vid,
     deleted_at: new Date().toISOString(),
     files_removed: deleted.length,
-    via: isOwner ? 'owner_jwt' : (isAdmin ? 'admin_jwt' : 'password'),
+    via: isOwner ? 'owner_jwt' : 'admin_jwt',
     by: claims ? claims.sub : null,
   });
   await env.BUCKET.put('highlights/deleted.json', JSON.stringify(log), {
