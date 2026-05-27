@@ -370,6 +370,174 @@ def cmd_add_tester(args):
         sys.exit(1)
 
 
+def _find_app_id(bundle_id: str) -> str:
+    resp = api("GET", f"/v1/apps?filter[bundleId]={bundle_id}")
+    apps = resp.json().get("data", [])
+    if not apps:
+        print(f"ERROR: app with bundleId {bundle_id} not found", file=sys.stderr)
+        sys.exit(1)
+    return apps[0]["id"]
+
+
+def _wait_for_build(app_id: str, version_string: str, build_number: str,
+                    timeout_sec: int = 1800) -> str:
+    """Poll until the freshly-uploaded build appears as PROCESSED, return its id."""
+    deadline = time.time() + timeout_sec
+    last_state = None
+    while time.time() < deadline:
+        # processingState transitions PROCESSING → VALID. INVALID = bad upload.
+        resp = api(
+            "GET",
+            f"/v1/builds?filter[app]={app_id}"
+            f"&filter[preReleaseVersion.version]={version_string}"
+            f"&filter[version]={build_number}"
+            "&sort=-uploadedDate&limit=1",
+        )
+        if resp.status_code == 200:
+            data = resp.json().get("data", [])
+            if data:
+                attrs = data[0]["attributes"]
+                state = attrs.get("processingState")
+                if state != last_state:
+                    print(f"  build {data[0]['id']} state={state}")
+                    last_state = state
+                if state == "VALID":
+                    return data[0]["id"]
+                if state == "INVALID":
+                    print("ERROR: build is INVALID — check ASC for details", file=sys.stderr)
+                    sys.exit(1)
+        time.sleep(30)
+    print(f"ERROR: build {version_string} ({build_number}) didn't process within "
+          f"{timeout_sec}s", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_submit_version(args):
+    """Create an App Store Version, attach the uploaded build, write
+    'What's new', and submit for review."""
+    bundle_id = env_or_die("ASC_BUNDLE_ID", "com.amassena.courtiq.CourtIQ")
+    app_id = _find_app_id(bundle_id)
+    print(f"app_id={app_id}")
+
+    # 1. Wait for the build to be processed.
+    print(f"[1/5] Waiting for build {args.version}/{args.build} to finish processing…")
+    build_id = _wait_for_build(app_id, args.version, args.build)
+    print(f"  build_id={build_id}")
+
+    # 2. Find or create the v<version> appStoreVersion.
+    print(f"[2/5] Creating appStoreVersion {args.version} (releaseType={args.release_type})…")
+    payload = {
+        "data": {
+            "type": "appStoreVersions",
+            "attributes": {
+                "platform": "IOS",
+                "versionString": args.version,
+                "releaseType": args.release_type,
+            },
+            "relationships": {
+                "app": {"data": {"type": "apps", "id": app_id}},
+                "build": {"data": {"type": "builds", "id": build_id}},
+            },
+        }
+    }
+    resp = api("POST", "/v1/appStoreVersions", data=json.dumps(payload))
+    if resp.status_code == 201:
+        version_id = resp.json()["data"]["id"]
+        print(f"  version_id={version_id}")
+    elif resp.status_code == 409:
+        # Conflict — version already exists. Fetch its id.
+        list_resp = api(
+            "GET",
+            f"/v1/apps/{app_id}/appStoreVersions"
+            f"?filter[versionString]={args.version}&filter[platform]=IOS",
+        )
+        existing = list_resp.json().get("data", [])
+        if not existing:
+            print(f"FAILED: 409 but no existing version: {resp.text}", file=sys.stderr)
+            sys.exit(1)
+        version_id = existing[0]["id"]
+        print(f"  version already exists, version_id={version_id} — re-attaching build")
+        # Update the build relationship + releaseType to be sure.
+        patch = {
+            "data": {
+                "type": "appStoreVersions",
+                "id": version_id,
+                "attributes": {"releaseType": args.release_type},
+                "relationships": {
+                    "build": {"data": {"type": "builds", "id": build_id}},
+                },
+            }
+        }
+        api("PATCH", f"/v1/appStoreVersions/{version_id}", data=json.dumps(patch))
+    else:
+        print(f"FAILED: create version {resp.status_code} {resp.text}", file=sys.stderr)
+        sys.exit(1)
+
+    # 3. Set "What's New" in the en-US localization.
+    print(f"[3/5] Setting 'What's New' text (en-US)…")
+    loc_resp = api(
+        "GET",
+        f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations?limit=50",
+    )
+    locales = {l["attributes"]["locale"]: l["id"]
+               for l in loc_resp.json().get("data", [])}
+    en_id = locales.get("en-US")
+    if en_id:
+        patch = {
+            "data": {
+                "type": "appStoreVersionLocalizations",
+                "id": en_id,
+                "attributes": {"whatsNew": args.whats_new},
+            }
+        }
+        r = api("PATCH", f"/v1/appStoreVersionLocalizations/{en_id}",
+                data=json.dumps(patch))
+        if r.status_code not in (200, 204):
+            print(f"  WARN: localization PATCH {r.status_code} {r.text}")
+    else:
+        # No en-US loc yet — create one.
+        post = {
+            "data": {
+                "type": "appStoreVersionLocalizations",
+                "attributes": {"locale": "en-US", "whatsNew": args.whats_new},
+                "relationships": {
+                    "appStoreVersion": {
+                        "data": {"type": "appStoreVersions", "id": version_id},
+                    }
+                },
+            }
+        }
+        r = api("POST", "/v1/appStoreVersionLocalizations", data=json.dumps(post))
+        if r.status_code != 201:
+            print(f"  WARN: localization POST {r.status_code} {r.text}")
+
+    # 4. Submit for review.
+    print("[4/5] Submitting for review…")
+    submit = {
+        "data": {
+            "type": "appStoreVersionSubmissions",
+            "relationships": {
+                "appStoreVersion": {
+                    "data": {"type": "appStoreVersions", "id": version_id},
+                }
+            },
+        }
+    }
+    r = api("POST", "/v1/appStoreVersionSubmissions", data=json.dumps(submit))
+    if r.status_code == 201:
+        print(f"  submission_id={r.json()['data']['id']}")
+    elif r.status_code == 409:
+        # Already submitted; treat as success.
+        print("  (already submitted)")
+    else:
+        print(f"FAILED: submit {r.status_code} {r.text}", file=sys.stderr)
+        sys.exit(1)
+
+    # 5. Print the App Store Connect URL.
+    print("[5/5] Done.")
+    print(f"     https://appstoreconnect.apple.com/apps/{app_id}/distribution")
+
+
 def cmd_full(args):
     print("=== Full automation: register bundle id → create app → archive + upload ===")
     cmd_register_bundle_id(args)
@@ -390,6 +558,17 @@ def main():
     p_add = sub.add_parser("add-tester")
     p_add.add_argument("--email", required=True)
     p_add.add_argument("--name")
+    p_submit = sub.add_parser("submit-version",
+                              help="Create appStoreVersion, attach build, submit for review")
+    p_submit.add_argument("--version", required=True,
+                          help="Marketing version (e.g. 1.1)")
+    p_submit.add_argument("--build", required=True,
+                          help="Build number / CFBundleVersion (e.g. 2)")
+    p_submit.add_argument("--whats-new", required=True,
+                          help="Release notes text shown to users")
+    p_submit.add_argument("--release-type", default="MANUAL",
+                          choices=["MANUAL", "AFTER_APPROVAL", "SCHEDULED"],
+                          help="When to release once approved")
     sub.add_parser("full")
 
     args = parser.parse_args()
@@ -400,6 +579,7 @@ def main():
         "archive-and-upload": cmd_archive_and_upload,
         "rename-app": cmd_rename_app,
         "add-tester": cmd_add_tester,
+        "submit-version": cmd_submit_version,
         "full": cmd_full,
     }
     handlers[args.command](args)
