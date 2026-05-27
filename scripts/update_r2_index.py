@@ -846,19 +846,33 @@ function dlFile(url) {{
 
 function deleteVideo(vid) {{
   if(!confirm('Permanently delete '+vid+' and all its files?')) return;
-  var pwd = prompt('Enter delete password:');
-  if(!pwd) return;
-  fetch('/api/video/'+vid+'/delete', {{
-    method:'POST', headers:{{'Content-Type':'application/json'}},
-    body:JSON.stringify({{password:pwd}})
-  }}).then(function(r){{return r.json()}}).then(function(d) {{
-    if(d.error) {{ alert('Delete failed: '+d.error); return; }}
+  // Per-user gallery is cookie-authenticated; the worker checks the
+  // JWT and accepts the delete from the owner or an admin. Only fall
+  // back to the password prompt if the cookie path 403s.
+  function send(body) {{
+    return fetch('/api/video/'+vid+'/delete', {{
+      method:'POST', headers:{{'Content-Type':'application/json'}},
+      credentials:'include',
+      body:JSON.stringify(body||{{}}),
+    }}).then(function(r){{ return r.json().then(function(j){{return {{status:r.status, json:j}}}}) }});
+  }}
+  send().then(function(res) {{
+    if(res.status === 200) return res.json;
+    if(res.status === 403) {{
+      var pwd = prompt('Enter delete password:');
+      if(!pwd) throw new Error('cancelled');
+      return send({{password:pwd}}).then(function(r2) {{
+        if(r2.status !== 200) throw new Error(r2.json.error||'delete failed');
+        return r2.json;
+      }});
+    }}
+    throw new Error(res.json.error || 'delete failed');
+  }}).then(function(d) {{
     alert('Deleted '+vid+' ('+d.deleted+' files removed)');
-    // Remove from local data and re-render
     VIDEOS = VIDEOS.filter(function(v){{ return v.id !== vid; }});
     buildFilters();
     renderGallery();
-  }}).catch(function(e){{ alert('Error: '+e); }});
+  }}).catch(function(e){{ if(e.message!=='cancelled') alert('Error: '+e.message); }});
 }}
 
 function downloadCurrent() {{

@@ -148,13 +148,21 @@ async function serveR2Object(request, env, key, opts = {}) {
 
   const ct = (headers.get('content-type') || '').toLowerCase();
   const isHtml = ct.includes('html') || key.endsWith('.html') || key === 'highlights/';
+  // Auth-gated assets: cache only in the browser, never at the edge.
+  // CF's default cache key does NOT include cookies, so a public 401
+  // for /u/<hash>/thumbs/<vid>.jpg can be served back to a signed-in
+  // user if we let the edge cache. `private` opts CF out.
+  const cacheScope = opts.private ? 'private' : 'public';
   if (ct.startsWith('video/')) {
-    headers.set('cache-control', 'public, max-age=86400');
+    headers.set('cache-control', `${cacheScope}, max-age=86400`);
   } else if (isHtml) {
     headers.set('cache-control', 'no-store, no-cache, must-revalidate, max-age=0');
     headers.set('cdn-cache-control', 'no-store');
   } else {
-    headers.set('cache-control', 'public, max-age=3600');
+    headers.set('cache-control', `${cacheScope}, max-age=3600`);
+  }
+  if (opts.private) {
+    headers.set('cdn-cache-control', 'no-store');
   }
 
   if (!obj.body) {
@@ -246,7 +254,7 @@ async function handleUserAsset(request, env, userHash, subpath) {
   if (request.method === 'HEAD') {
     return handleHead(env, key);
   }
-  return serveR2Object(request, env, key);
+  return serveR2Object(request, env, key, { private: true });
 }
 
 function readCookie(request, name) {
@@ -300,6 +308,15 @@ async function handleApi(request, env, path) {
     // Auth — Sign in with Apple (PR 1)
     if (path === '/api/auth/apple' && request.method === 'POST') {
       return await handleAuthApple(request, env, cors);
+    }
+
+    // Temporary, gated debug endpoint. Lets the operator mint a JWT for an
+    // arbitrary `sub` claim, used to verify per-user isolation without a
+    // second Apple ID. Gated by env.DEBUG_MINT_SECRET (a wrangler secret
+    // set out-of-band). Both the endpoint and the secret are intended to
+    // be removed once verification is complete.
+    if (path === '/api/_debug/mint-jwt' && request.method === 'POST') {
+      return await handleDebugMintJwt(request, env, cors);
     }
 
     if (path === '/api/me' && request.method === 'GET') {
@@ -984,31 +1001,95 @@ async function handleQueue(env, cors) {
 // ---------------------------------------------------------------------------
 
 async function handleDeleteVideo(request, env, cors, vid) {
-  const body = await request.json();
-  const { password } = body;
-
-  if (password !== 'deletevideo') {
-    return jsonResponse({ error: 'Invalid delete password' }, 403, cors);
-  }
-
-  // Sanitize vid: only allow safe characters
+  // Sanitize vid: only allow safe characters.
   if (!/^[A-Za-z0-9_-]+$/.test(vid)) {
     return jsonResponse({ error: 'Invalid video id' }, 400, cors);
   }
 
-  const deleted = [];
-  // List all files under highlights/{vid}/
-  const listed = await env.BUCKET.list({ prefix: `highlights/${vid}/` });
-  for (const obj of listed.objects) {
-    await env.BUCKET.delete(obj.key);
-    deleted.push(obj.key);
+  const body = await request.json().catch(() => ({}));
+  const password = body.password;
+
+  // Resolve the owner from the marker. If the marker lacks a user_hash
+  // (legacy upload), we treat it as owned by the admin.
+  let owner = null;
+  try {
+    const markerObj = await env.BUCKET.get(`uploads/${vid}.json`);
+    if (markerObj) {
+      const marker = await markerObj.json();
+      owner = marker.user_hash || marker.uploaded_by || null;
+    }
+  } catch {}
+
+  // Authorize. Three paths, any one suffices:
+  //   a) JWT cookie/header whose sub matches the marker's owner
+  //   b) JWT cookie/header whose sub is an admin
+  //   c) Legacy `password: "deletevideo"` form-field (kept as a fallback
+  //      so the unauth'd web gallery's delete prompt keeps working for
+  //      videos with no owner stamped on their marker yet)
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
   }
-  // Also delete thumbnails
-  for (const thumbKey of [`highlights/thumbs/${vid}.jpg`, `thumbs/${vid}.jpg`]) {
-    try { await env.BUCKET.delete(thumbKey); deleted.push(thumbKey); } catch {}
+  const isOwner = !!(claims && owner && claims.sub === owner);
+  const isAdmin = !!(claims && isAdminUser(env, claims.sub));
+  const isPasswordOk = password === 'deletevideo';
+
+  if (!isOwner && !isAdmin && !isPasswordOk) {
+    return jsonResponse(
+      { error: 'Not authorized to delete this video' }, 403, cors,
+    );
   }
 
-  // Append to deletion log
+  // Build the list of keys to delete. Covers both per-user prefixed
+  // outputs (new) and flat-layout outputs (legacy).
+  const deleted = [];
+  const ownerPrefix = owner ? `${owner}/` : '';
+  const candidatePrefixes = [
+    `highlights/${ownerPrefix}${vid}/`,
+    `highlights/${vid}/`,             // legacy flat
+    `processed/${ownerPrefix}${vid}/`,
+    `processed/${vid}/`,              // legacy flat
+  ];
+  for (const prefix of candidatePrefixes) {
+    let cursor;
+    do {
+      const page = await env.BUCKET.list({ prefix, cursor });
+      for (const obj of page.objects) {
+        await env.BUCKET.delete(obj.key).catch(() => {});
+        deleted.push(obj.key);
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+  }
+  // Standalone thumbnail candidates.
+  for (const thumbKey of [
+    `highlights/${ownerPrefix}thumbs/${vid}.jpg`,
+    `highlights/thumbs/${vid}.jpg`,
+    `thumbs/${vid}.jpg`,
+  ]) {
+    try {
+      await env.BUCKET.delete(thumbKey);
+      deleted.push(thumbKey);
+    } catch {}
+  }
+  // Source file (raw upload). Best-effort across known extensions.
+  for (const ext of ['mov', 'mp4', 'MOV', 'MP4']) {
+    try {
+      await env.BUCKET.delete(`source/${vid}.${ext}`);
+      deleted.push(`source/${vid}.${ext}`);
+    } catch {}
+  }
+  // Marker itself.
+  try {
+    await env.BUCKET.delete(`uploads/${vid}.json`);
+    deleted.push(`uploads/${vid}.json`);
+  } catch {}
+
+  // Append to deletion log.
   let log = [];
   try {
     const logObj = await env.BUCKET.get('highlights/deleted.json');
@@ -1018,6 +1099,8 @@ async function handleDeleteVideo(request, env, cors, vid) {
     video_id: vid,
     deleted_at: new Date().toISOString(),
     files_removed: deleted.length,
+    via: isOwner ? 'owner_jwt' : (isAdmin ? 'admin_jwt' : 'password'),
+    by: claims ? claims.sub : null,
   });
   await env.BUCKET.put('highlights/deleted.json', JSON.stringify(log), {
     httpMetadata: { contentType: 'application/json' },
@@ -1522,6 +1605,49 @@ async function handleDeleteAccount(request, env, cors) {
     { deleted: true, videos_removed: deletedVideos.length, video_ids: deletedVideos },
     200, cors,
   );
+}
+
+// POST /api/_debug/mint-jwt
+//   header: X-Debug-Secret: <env.DEBUG_MINT_SECRET>
+//   body:   { sub: "u_xxxxxxxx" }  // any 10-char user_hash
+//   200:    { jwt, sub, urls: { mine, andrews } }
+// Intended for one-time isolation testing; both this route and the
+// DEBUG_MINT_SECRET wrangler secret should be removed afterwards.
+async function handleDebugMintJwt(request, env, cors) {
+  if (!env.DEBUG_MINT_SECRET) {
+    return jsonResponse({ error: 'Debug endpoint disabled' }, 404, cors);
+  }
+  const supplied = request.headers.get('x-debug-secret') || '';
+  if (supplied !== env.DEBUG_MINT_SECRET) {
+    return jsonResponse({ error: 'Forbidden' }, 403, cors);
+  }
+  if (!env.JWT_SIGNING_SECRET) {
+    return jsonResponse({ error: 'JWT_SIGNING_SECRET not set' }, 500, cors);
+  }
+  const body = await request.json().catch(() => ({}));
+  const sub = body.sub;
+  if (!sub || typeof sub !== 'string' ||
+      !sub.startsWith('u_') || sub.length !== 10) {
+    return jsonResponse({ error: 'sub must be u_xxxxxxxx' }, 400, cors);
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  const claims = {
+    sub,
+    apple_sub: `debug-${sub}`,
+    iat: nowSec,
+    exp: nowSec + 3600,  // 1 hour TTL — short on purpose
+    scope: 'upload',
+    debug: true,
+  };
+  const jwt = await signOurJWT(claims, env.JWT_SIGNING_SECRET);
+  return jsonResponse({
+    jwt,
+    sub,
+    urls: {
+      mine: `https://tennis.playfullife.com/u/${sub}?t=${jwt}`,
+      andrews: `https://tennis.playfullife.com/u/u_666f1a02?t=${jwt}`,
+    },
+  }, 200, cors);
 }
 
 // GET /api/me — current user's profile (Bearer JWT required).
