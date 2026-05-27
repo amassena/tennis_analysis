@@ -563,7 +563,6 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
     </div>
     <div class="header-actions">
       <span class="stat-badge" id="statBadge"></span>
-      <button class="btn-upload" onclick="document.getElementById('uploadModal').classList.add('open')">Upload</button>
     </div>
   </div>
 </div>
@@ -1647,10 +1646,14 @@ document.getElementById('searchInput').addEventListener('input', function(e) {{
       var inner = '';
       inflight.forEach(function(item) {{
         var name = stripName(item.filename);
-        var label = stageLabels[item.stage]||stageLabels[item.status]||item.status;
+        // Status may be missing on freshly-written markers (the worker
+        // writes the marker before the coordinator stamps a status).
+        // Show those as "Queued" instead of literal 'undefined'.
+        var label = stageLabels[item.stage]||stageLabels[item.status]||
+                    (item.status ? item.status : 'Queued');
         var pct = (item.progress!=null && item.progress!==0) ? ' '+item.progress+'%' : '';
         var cls = 'proc-item';
-        if(item.status==='pending'||item.status==='coordinator_registered'||item.status==='awaiting_coordinator') cls += ' proc-pending';
+        if(!item.status||item.status==='pending'||item.status==='coordinator_registered'||item.status==='awaiting_coordinator') cls += ' proc-pending';
         inner += '<span class="'+cls+'"><span class="proc-dot"></span>'+name+' <span class="stage">'+label+pct+'</span></span>';
       }});
       rows.push('<div class="proc-bar"><span class="proc-label">Processing now ('+inflight.length+')</span><div class="proc-items">'+inner+'</div></div>');

@@ -27,6 +27,13 @@ struct UploadTabView: View {
                 }
             }
             .navigationTitle("Upload")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                Text(appVersionString)
+                    .font(.caption2.monospaced())
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, 4)
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { showingSettings = true } label: {
@@ -47,6 +54,12 @@ struct UploadTabView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView(userHash: userHash, isPresented: $showingSettings)
         }
+    }
+
+    private var appVersionString: String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "v\(v) (\(b))"
     }
 }
 

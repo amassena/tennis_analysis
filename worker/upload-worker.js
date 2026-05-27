@@ -198,11 +198,27 @@ async function handleUserAsset(request, env, userHash, subpath) {
   if (!claims) {
     return new Response(
       'Sign-in required. Open this gallery from the Tennis Uploader iOS app.',
-      { status: 401, headers: { 'content-type': 'text/plain; charset=utf-8' } },
+      {
+        status: 401,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          // Critical: never let CF/edge cache the 401. Without this,
+          // browsers that fetch /u/<hash>/thumbs/<vid>.jpg before the
+          // auth cookie is set can get a cached 401 even after sign-in.
+          'cache-control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'cdn-cache-control': 'no-store',
+        },
+      },
     );
   }
   if (claims.sub !== userHash && !isAdminUser(env, claims.sub)) {
-    return new Response('Forbidden', { status: 403 });
+    return new Response('Forbidden', {
+      status: 403,
+      headers: {
+        'cache-control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'cdn-cache-control': 'no-store',
+      },
+    });
   }
 
   // Bootstrap: ?t=<jwt> → Set-Cookie + 302 to clean URL.
