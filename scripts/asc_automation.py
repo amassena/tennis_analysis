@@ -511,26 +511,77 @@ def cmd_submit_version(args):
         if r.status_code != 201:
             print(f"  WARN: localization POST {r.status_code} {r.text}")
 
-    # 4. Submit for review.
-    print("[4/5] Submitting for review…")
-    submit = {
+    # 4. Submit for review via the new reviewSubmissions flow.
+    # Apple deprecated POST /v1/appStoreVersionSubmissions in favor of
+    # the multi-resource /v1/reviewSubmissions flow. Three calls:
+    #   a) create a reviewSubmissions
+    #   b) attach the appStoreVersion as a reviewSubmissionItems
+    #   c) PATCH the reviewSubmission with submitted: true
+    print("[4/5] Submitting for review (reviewSubmissions flow)…")
+    create = {
         "data": {
-            "type": "appStoreVersionSubmissions",
+            "type": "reviewSubmissions",
+            "attributes": {"platform": "IOS"},
             "relationships": {
-                "appStoreVersion": {
-                    "data": {"type": "appStoreVersions", "id": version_id},
-                }
+                "app": {"data": {"type": "apps", "id": app_id}},
             },
         }
     }
-    r = api("POST", "/v1/appStoreVersionSubmissions", data=json.dumps(submit))
+    r = api("POST", "/v1/reviewSubmissions", data=json.dumps(create))
     if r.status_code == 201:
-        print(f"  submission_id={r.json()['data']['id']}")
+        rs_id = r.json()["data"]["id"]
     elif r.status_code == 409:
-        # Already submitted; treat as success.
-        print("  (already submitted)")
+        # In-progress submission already exists — fetch it.
+        rs_list = api(
+            "GET",
+            f"/v1/reviewSubmissions?filter[app]={app_id}&filter[state]=READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW",
+        )
+        rs_data = rs_list.json().get("data", [])
+        if not rs_data:
+            # try open states too
+            rs_list = api("GET", f"/v1/reviewSubmissions?filter[app]={app_id}&limit=10&sort=-createdDate")
+            rs_data = rs_list.json().get("data", [])
+        if not rs_data:
+            print(f"FAILED: 409 but no in-progress submission: {r.text}", file=sys.stderr)
+            sys.exit(1)
+        rs_id = rs_data[0]["id"]
+        print(f"  re-using open reviewSubmission id={rs_id}")
     else:
-        print(f"FAILED: submit {r.status_code} {r.text}", file=sys.stderr)
+        print(f"FAILED: create reviewSubmission {r.status_code} {r.text}", file=sys.stderr)
+        sys.exit(1)
+    print(f"  reviewSubmission id={rs_id}")
+
+    # Attach the version. POST is idempotent on duplicate per Apple's
+    # behavior, but a 409 means "already attached" — treat as success.
+    item = {
+        "data": {
+            "type": "reviewSubmissionItems",
+            "relationships": {
+                "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": rs_id}},
+                "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}},
+            },
+        }
+    }
+    r2 = api("POST", "/v1/reviewSubmissionItems", data=json.dumps(item))
+    if r2.status_code in (201, 409):
+        print(f"  attached version {version_id}")
+    else:
+        print(f"FAILED: attach version {r2.status_code} {r2.text}", file=sys.stderr)
+        sys.exit(1)
+
+    # Mark submitted.
+    submit = {
+        "data": {
+            "type": "reviewSubmissions",
+            "id": rs_id,
+            "attributes": {"submitted": True},
+        }
+    }
+    r3 = api("PATCH", f"/v1/reviewSubmissions/{rs_id}", data=json.dumps(submit))
+    if r3.status_code in (200, 204):
+        print("  submitted: true")
+    else:
+        print(f"FAILED: mark submitted {r3.status_code} {r3.text}", file=sys.stderr)
         sys.exit(1)
 
     # 5. Print the App Store Connect URL.

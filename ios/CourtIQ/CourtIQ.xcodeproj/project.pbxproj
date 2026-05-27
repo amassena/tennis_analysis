@@ -286,6 +286,7 @@
 				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				MARKETING_VERSION = 1.1;
 				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
@@ -371,6 +372,7 @@
 				DEVELOPMENT_TEAM = 5L4UYJDBXY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				MARKETING_VERSION = 1.1;
 				CURRENT_PROJECT_VERSION = 2;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
