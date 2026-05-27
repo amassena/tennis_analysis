@@ -1018,6 +1018,12 @@ async function handleQueue(env, cors) {
 
   for (const obj of listed.objects) {
     if (!obj.key.endsWith('.json')) continue;
+    // Skip in-flight init state files (uploads that started but never
+    // completed). They leak into the gallery as ghost "Queued" rows
+    // with no status field.
+    if (obj.key.includes('_inflight_')) continue;
+    // Skip the allowlist config.
+    if (obj.key === 'uploads/_allowlist.json') continue;
     try {
       const metaObj = await env.BUCKET.get(obj.key);
       if (metaObj) {
