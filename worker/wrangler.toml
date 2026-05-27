@@ -10,6 +10,9 @@ bucket_name = "tennis-videos"
 MAX_SIZE_GB = "5"
 # Sign in with Apple — the bundle ID that Apple tokens must be issued for.
 APPLE_BUNDLE_ID = "com.amassena.courtiq.CourtIQ"
+# Comma-separated list of user_hash values that bypass per-user auth gating
+# (i.e. can view /u/<other>/ pages). Andrew is the only admin.
+ADMIN_USER_HASHES = "u_666f1a02"
 
 # Secrets (set via `wrangler secret put <NAME>`, not stored here):
 #   JWT_SIGNING_SECRET    — HS256 signing key for our user JWTs (PR 1+)

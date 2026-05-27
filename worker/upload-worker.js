@@ -29,6 +29,9 @@
  *   GET  /api/me                   → current user's profile (Bearer JWT)
  *   DELETE /api/account            → tombstone + delete user's videos (PR 6)
  *
+ *   GET  /u/{hash}                 → per-user gallery, cookie-auth (PR per-user)
+ *   GET  /u/{hash}/{path}          → per-user asset (videos, thumbs, json)
+ *
  *   GET  /privacy                  → static privacy policy (PR 6)
  *
  *   playfullife.com/*              → redirect to tennis.playfullife.com
@@ -57,6 +60,13 @@ export default {
     // API routes
     if (path.startsWith('/api/')) {
       return handleApi(request, env, path);
+    }
+
+    // Per-user gallery: /u/<hash> and /u/<hash>/<rest> — cookie-auth gated.
+    // Match before generic asset handling so the auth gate always runs.
+    const userMatch = path.match(/^\/u\/(u_[a-f0-9]{8})(\/.*)?$/);
+    if (userMatch && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handleUserAsset(request, env, userMatch[1], userMatch[2] || '/');
     }
 
     // Static assets from R2
@@ -89,7 +99,13 @@ async function handleAsset(request, env, path) {
     return handleHead(env, key);
   }
 
-  // GET — supports range requests for video streaming (skip for downloads)
+  return serveR2Object(request, env, key, { fallbackHighlightsPrefix: true });
+}
+
+// Serve an R2 object as an HTTP response. Handles range requests, ?dl=1,
+// content-type-aware caching, and an optional fallback to "highlights/" +
+// key (used by the legacy flat layout). Caller is responsible for auth.
+async function serveR2Object(request, env, key, opts = {}) {
   const reqUrl = new URL(request.url);
   const isDownload = reqUrl.searchParams.get('dl') === '1';
   const rangeHeader = isDownload ? null : request.headers.get('range');
@@ -102,8 +118,8 @@ async function handleAsset(request, env, path) {
     obj = await env.BUCKET.get(key, getOpts);
   } catch {}
 
-  // Fallback: try highlights/ prefix for clean URLs (e.g. /IMG_1108/file.mp4)
-  if (!obj && !key.startsWith('highlights/') && !key.startsWith('uploads/')) {
+  if (!obj && opts.fallbackHighlightsPrefix &&
+      !key.startsWith('highlights/') && !key.startsWith('uploads/')) {
     try {
       obj = await env.BUCKET.get('highlights/' + key, getOpts);
     } catch {}
@@ -118,14 +134,15 @@ async function handleAsset(request, env, path) {
   headers.set('etag', obj.httpEtag);
   headers.set('accept-ranges', 'bytes');
   headers.set('access-control-allow-origin', '*');
+  if (opts.extraHeaders) {
+    for (const [k, v] of Object.entries(opts.extraHeaders)) headers.set(k, v);
+  }
 
-  // Force download when ?dl=1 is present
   if (isDownload) {
     const filename = key.split('/').pop();
     headers.set('content-disposition', `attachment; filename="${filename}"`);
   }
 
-  // Cache: videos 24h, html always revalidate, images 1h
   const ct = (headers.get('content-type') || '').toLowerCase();
   const isHtml = ct.includes('html') || key.endsWith('.html') || key === 'highlights/';
   if (ct.startsWith('video/')) {
@@ -137,33 +154,94 @@ async function handleAsset(request, env, path) {
     headers.set('cache-control', 'public, max-age=3600');
   }
 
-  // Conditional request not met → 304
   if (!obj.body) {
     return new Response(null, { status: 304, headers });
   }
 
-  // Range response → 206 only when the client actually sent a Range header
-  // (R2 sometimes populates obj.range anyway; returning 206 to a non-range
-  // request breaks <img> tags and download managers)
   if (obj.range && rangeHeader && !isDownload) {
     const { offset, length } = obj.range;
-    headers.set(
-      'content-range',
-      `bytes ${offset}-${offset + length - 1}/${obj.size}`
-    );
+    headers.set('content-range', `bytes ${offset}-${offset + length - 1}/${obj.size}`);
     headers.set('content-length', String(length));
     return new Response(obj.body, { status: 206, headers });
   }
 
-  // Full response → 200
   headers.set('content-length', String(obj.size));
-  // Ensure cache-control is set (explicitly set after all other header manipulation)
   if (isHtml) {
     headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     headers.set('Pragma', 'no-cache');
     headers.set('Expires', '0');
   }
   return new Response(obj.body, { status: 200, headers });
+}
+
+// ---------------------------------------------------------------------------
+// Per-user gallery — /u/<hash>/...
+// ---------------------------------------------------------------------------
+//
+// Auth: either a `tennis_jwt` cookie or a `?t=<jwt>` query param. The query
+// param path is the iOS WebView's bootstrap — on success we redirect to the
+// clean URL with Set-Cookie so subresources (video src, img src) load with
+// the cookie alone. Admins (env.ADMIN_USER_HASHES) can view any user's URL.
+async function handleUserAsset(request, env, userHash, subpath) {
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get('t');
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const token = queryToken || cookieToken;
+
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) {
+    return new Response(
+      'Sign-in required. Open this gallery from the Tennis Uploader iOS app.',
+      { status: 401, headers: { 'content-type': 'text/plain; charset=utf-8' } },
+    );
+  }
+  if (claims.sub !== userHash && !isAdminUser(env, claims.sub)) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // Bootstrap: ?t=<jwt> → Set-Cookie + 302 to clean URL.
+  if (queryToken) {
+    url.searchParams.delete('t');
+    const cleanUrl = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '');
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'location': cleanUrl,
+        // 30 days; Secure required for SameSite=None but we use Lax (same-site).
+        'set-cookie': `tennis_jwt=${queryToken}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+      },
+    });
+  }
+
+  // Resolve R2 key under highlights/<user_hash>/...
+  let key;
+  if (subpath === '/' || subpath === '') {
+    key = `highlights/${userHash}/index.html`;
+  } else {
+    key = `highlights/${userHash}${subpath}`;
+  }
+
+  if (request.method === 'HEAD') {
+    return handleHead(env, key);
+  }
+  return serveR2Object(request, env, key);
+}
+
+function readCookie(request, name) {
+  const cookieHeader = request.headers.get('cookie') || '';
+  for (const c of cookieHeader.split(';')) {
+    const [k, ...rest] = c.trim().split('=');
+    if (k === name) return rest.join('=');
+  }
+  return null;
+}
+
+function isAdminUser(env, userHash) {
+  const raw = env.ADMIN_USER_HASHES || '';
+  return raw.split(',').map((s) => s.trim()).filter(Boolean).includes(userHash);
 }
 
 async function handleHead(env, key) {
@@ -1350,7 +1428,7 @@ async function handleAuthApple(request, env, cors) {
     {
       jwt,
       user_hash: userHash,
-      gallery_url: 'https://tennis.playfullife.com',
+      gallery_url: `https://tennis.playfullife.com/u/${userHash}`,
       expires_at: claims.exp,
     },
     200, cors,
@@ -1448,7 +1526,7 @@ async function handleMe(request, env, cors) {
     {
       user_hash: user.user_hash,
       video_count: user.video_count || 0,
-      gallery_url: 'https://tennis.playfullife.com',
+      gallery_url: `https://tennis.playfullife.com/u/${user.user_hash}`,
       created_at: user.created_at,
     },
     200, cors,
