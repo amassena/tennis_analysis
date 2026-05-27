@@ -3,29 +3,45 @@ import SwiftUI
 struct UploadTabView: View {
     let userHash: String
     @ObservedObject private var manager = UploadManager.shared
+    @StateObject private var recent: RecentUploadsModel
     @EnvironmentObject var auth: AuthCoordinator
     @EnvironmentObject var nav: AppNavigation
     @State private var showingComposer = false
     @State private var showingSettings = false
 
+    init(userHash: String) {
+        self.userHash = userHash
+        _recent = StateObject(wrappedValue: RecentUploadsModel(userHash: userHash))
+    }
+
     var body: some View {
         NavigationView {
             Group {
-                if manager.uploads.isEmpty {
+                if manager.uploads.isEmpty && recent.items.isEmpty {
                     EmptyUploadsView { showingComposer = true }
                 } else {
                     List {
-                        ForEach(manager.uploads) { upload in
-                            UploadRowView(
-                                state: upload,
-                                onRetry: { manager.retry(id: upload.id) },
-                                onDiscard: { manager.discard(id: upload.id) },
-                                onViewInGallery: { nav.openGallery(anchor: upload.uploadId) }
-                            )
+                        if !manager.uploads.isEmpty {
+                            Section("Uploading") {
+                                ForEach(manager.uploads) { upload in
+                                    UploadRowView(
+                                        state: upload,
+                                        onRetry: { manager.retry(id: upload.id) },
+                                        onDiscard: { manager.discard(id: upload.id) },
+                                        onViewInGallery: { nav.openGallery(anchor: upload.uploadId) }
+                                    )
+                                }
+                            }
+                        }
+                        RecentUploadsSection(model: recent) { item in
+                            nav.openGallery(anchor: item.video_id)
                         }
                     }
+                    .refreshable { await recent.refresh() }
                 }
             }
+            .onAppear { recent.start() }
+            .onDisappear { recent.stop() }
             .navigationTitle("Upload")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {

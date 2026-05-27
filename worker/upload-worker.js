@@ -406,6 +406,12 @@ async function handleApi(request, env, path) {
       return await handleDeleteVideo(request, env, cors, deleteMatch[1]);
     }
 
+    // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
+    const recentMatch = path.match(/^\/api\/u\/(u_[a-f0-9]{8})\/recent$/);
+    if (recentMatch && request.method === 'GET') {
+      return await handleUserRecent(request, env, cors, recentMatch[1]);
+    }
+
     return jsonResponse({ error: 'Not found' }, 404, cors);
   } catch (err) {
     return jsonResponse({ error: err.message }, 500, cors);
@@ -1000,6 +1006,125 @@ async function handleQueue(env, cors) {
 // Delete a video and all its files (videos, thumbnail, meta.json)
 // ---------------------------------------------------------------------------
 
+// GET /api/u/<hash>/recent — return the user's recent upload markers
+// (default last 25), sorted by uploaded_at desc. Auth: JWT cookie or
+// Bearer whose sub matches the URL hash, or admin.
+async function handleUserRecent(request, env, cors, userHash) {
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) {
+    return jsonResponse({ error: 'Unauthorized' }, 401,
+      { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' });
+  }
+  if (claims.sub !== userHash && !isAdminUser(env, claims.sub)) {
+    return jsonResponse({ error: 'Forbidden' }, 403,
+      { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' });
+  }
+
+  const url = new URL(request.url);
+  const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get('limit') || '25')));
+
+  // List all markers, parse, filter by owner, sort desc by uploaded_at.
+  const items = [];
+  let cursor;
+  do {
+    const page = await env.BUCKET.list({ prefix: 'uploads/', cursor });
+    for (const obj of page.objects) {
+      if (!obj.key.endsWith('.json')) continue;
+      if (obj.key.includes('_inflight_')) continue;
+      if (obj.key === 'uploads/_allowlist.json') continue;
+      try {
+        const m = await env.BUCKET.get(obj.key);
+        if (!m) continue;
+        const marker = await m.json();
+        const owner = marker.user_hash || marker.uploaded_by;
+        if (owner !== userHash) continue;
+        items.push({
+          video_id: marker.video_id || marker.id,
+          filename: marker.filename || '',
+          status: marker.status || 'queued',
+          stage: marker.stage || null,
+          progress: marker.progress != null ? marker.progress : null,
+          uploaded_at: marker.uploaded_at || marker.created_at || null,
+          updated_at: marker.updated_at || marker.completed_at || marker.uploaded_at || null,
+          error: marker.error || null,
+          video_url: marker.video_url || null,
+          // Browser-resolvable URL once processing is done; the app can
+          // tap-through directly into the gallery WebView.
+          gallery_url: marker.status === 'complete'
+            ? `https://tennis.playfullife.com/u/${userHash}#${marker.video_id || marker.id}`
+            : null,
+        });
+      } catch {}
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  items.sort((a, b) => {
+    const ta = a.uploaded_at ? Date.parse(a.uploaded_at) : 0;
+    const tb = b.uploaded_at ? Date.parse(b.uploaded_at) : 0;
+    return tb - ta;
+  });
+
+  return jsonResponse(
+    { user_hash: userHash, count: items.length, items: items.slice(0, limit) },
+    200,
+    { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' },
+  );
+}
+
+// Delete every R2 key associated with one video — gallery outputs,
+// thumbnail, source file, marker — covering both the per-user-prefixed
+// layout (post-refactor) and the legacy flat layout (in case stragglers
+// remain). Returns an array of keys actually deleted. Used by both
+// /api/video/:vid/delete (per-video, owner JWT) and /api/account
+// (bulk, account deletion).
+async function deleteVideoFamily(env, vid, owner) {
+  const deleted = [];
+  const ownerPrefix = owner ? `${owner}/` : '';
+  const prefixesToList = [
+    `highlights/${ownerPrefix}${vid}/`,
+    `highlights/${vid}/`,
+    `processed/${ownerPrefix}${vid}/`,
+    `processed/${vid}/`,
+  ];
+  for (const prefix of prefixesToList) {
+    let cursor;
+    do {
+      const page = await env.BUCKET.list({ prefix, cursor });
+      for (const obj of page.objects) {
+        await env.BUCKET.delete(obj.key).catch(() => {});
+        deleted.push(obj.key);
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+  }
+  for (const thumbKey of [
+    `highlights/${ownerPrefix}thumbs/${vid}.jpg`,
+    `highlights/thumbs/${vid}.jpg`,
+    `thumbs/${vid}.jpg`,
+  ]) {
+    try { await env.BUCKET.delete(thumbKey); deleted.push(thumbKey); } catch {}
+  }
+  for (const ext of ['mov', 'mp4', 'MOV', 'MP4']) {
+    try {
+      await env.BUCKET.delete(`source/${vid}.${ext}`);
+      deleted.push(`source/${vid}.${ext}`);
+    } catch {}
+  }
+  try {
+    await env.BUCKET.delete(`uploads/${vid}.json`);
+    deleted.push(`uploads/${vid}.json`);
+  } catch {}
+  return deleted;
+}
+
 async function handleDeleteVideo(request, env, cors, vid) {
   // Sanitize vid: only allow safe characters.
   if (!/^[A-Za-z0-9_-]+$/.test(vid)) {
@@ -1044,50 +1169,7 @@ async function handleDeleteVideo(request, env, cors, vid) {
     );
   }
 
-  // Build the list of keys to delete. Covers both per-user prefixed
-  // outputs (new) and flat-layout outputs (legacy).
-  const deleted = [];
-  const ownerPrefix = owner ? `${owner}/` : '';
-  const candidatePrefixes = [
-    `highlights/${ownerPrefix}${vid}/`,
-    `highlights/${vid}/`,             // legacy flat
-    `processed/${ownerPrefix}${vid}/`,
-    `processed/${vid}/`,              // legacy flat
-  ];
-  for (const prefix of candidatePrefixes) {
-    let cursor;
-    do {
-      const page = await env.BUCKET.list({ prefix, cursor });
-      for (const obj of page.objects) {
-        await env.BUCKET.delete(obj.key).catch(() => {});
-        deleted.push(obj.key);
-      }
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
-  }
-  // Standalone thumbnail candidates.
-  for (const thumbKey of [
-    `highlights/${ownerPrefix}thumbs/${vid}.jpg`,
-    `highlights/thumbs/${vid}.jpg`,
-    `thumbs/${vid}.jpg`,
-  ]) {
-    try {
-      await env.BUCKET.delete(thumbKey);
-      deleted.push(thumbKey);
-    } catch {}
-  }
-  // Source file (raw upload). Best-effort across known extensions.
-  for (const ext of ['mov', 'mp4', 'MOV', 'MP4']) {
-    try {
-      await env.BUCKET.delete(`source/${vid}.${ext}`);
-      deleted.push(`source/${vid}.${ext}`);
-    } catch {}
-  }
-  // Marker itself.
-  try {
-    await env.BUCKET.delete(`uploads/${vid}.json`);
-    deleted.push(`uploads/${vid}.json`);
-  } catch {}
+  const deleted = await deleteVideoFamily(env, vid, owner);
 
   // Append to deletion log.
   let log = [];
@@ -1557,7 +1639,8 @@ async function handleDeleteAccount(request, env, cors) {
   }
   const user = await userObj.json();
 
-  // Find every marker tagged with this user_hash and delete its file family.
+  // Find every marker tagged with this user_hash (the new `user_hash`
+  // field or the legacy `uploaded_by`) and delete the full file family.
   const deletedVideos = [];
   let cursor;
   do {
@@ -1568,30 +1651,17 @@ async function handleDeleteAccount(request, env, cors) {
         const m = await env.BUCKET.get(obj.key);
         if (!m) continue;
         const marker = await m.json();
-        if (marker.uploaded_by !== userHash) continue;
-        const vid = marker.video_id;
-        // Source file (either .mov or .mp4)
-        for (const ext of ['mov', 'mp4']) {
-          await env.BUCKET.delete(`source/${vid}.${ext}`).catch(() => {});
-        }
-        // Processed outputs
-        let pCursor;
-        do {
-          const pList = await env.BUCKET.list({ prefix: `processed/${vid}/`, cursor: pCursor });
-          for (const p of pList.objects) {
-            await env.BUCKET.delete(p.key).catch(() => {});
-          }
-          pCursor = pList.truncated ? pList.cursor : undefined;
-        } while (pCursor);
-        // Thumbnail
-        await env.BUCKET.delete(`highlights/thumbs/${vid}.jpg`).catch(() => {});
-        // Marker itself
-        await env.BUCKET.delete(obj.key).catch(() => {});
-        deletedVideos.push(vid);
+        const ownerOnMarker = marker.user_hash || marker.uploaded_by;
+        if (ownerOnMarker !== userHash) continue;
+        await deleteVideoFamily(env, marker.video_id, userHash);
+        deletedVideos.push(marker.video_id);
       } catch {}
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
+  // The user's per-user gallery index is now stale — drop it so we don't
+  // serve a 200 for `/u/<hash>` to a future visitor.
+  try { await env.BUCKET.delete(`highlights/${userHash}/index.html`); } catch {}
 
   // Tombstone the user record so audit history remains. Sign-in re-uses
   // the same record (deleted_at cleared) if they come back later.

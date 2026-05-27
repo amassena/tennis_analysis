@@ -1,0 +1,116 @@
+import SwiftUI
+
+/// "Recently uploaded" section rendered inside UploadTabView's List.
+/// Pulls server-side state (post-upload-completion) so the user can see
+/// "queued / processing / ready" without having to switch to the Gallery
+/// tab and look for the card.
+struct RecentUploadsSection: View {
+    @ObservedObject var model: RecentUploadsModel
+    let onTapReady: (RecentUpload) -> Void
+
+    var body: some View {
+        if !model.items.isEmpty {
+            Section {
+                ForEach(model.items) { item in
+                    RecentRow(item: item, onTapReady: onTapReady)
+                }
+            } header: {
+                HStack {
+                    Text("Recent")
+                    Spacer()
+                    if model.isLoading {
+                        ProgressView().scaleEffect(0.6)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct RecentRow: View {
+    let item: RecentUpload
+    let onTapReady: (RecentUpload) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            statusDot
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(item.isFailed ? .red : .secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            if item.isComplete {
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.secondary)
+                    .font(.caption.weight(.semibold))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if item.isComplete { onTapReady(item) }
+        }
+    }
+
+    private var displayName: String {
+        let name = item.filename ?? item.video_id
+        if name.count > 32 { return String(name.prefix(29)) + "…" }
+        return name
+    }
+
+    private var subtitle: String {
+        let when = item.uploaded_at.flatMap(Self.shortRelativeAge) ?? ""
+        let stage = stageLabel
+        return when.isEmpty ? stage : "\(when) · \(stage)"
+    }
+
+    private var stageLabel: String {
+        if item.isComplete { return "Ready" }
+        if item.isFailed { return item.error ?? "Failed" }
+        switch item.status {
+        case "uploading": return "Uploading\(progressSuffix)"
+        case "awaiting_coordinator", "pending", "queued": return "Queued"
+        case "coordinator_registered": return "Queued"
+        case "downloading": return "Downloading\(progressSuffix)"
+        case "preprocessing": return "Preprocessing\(progressSuffix)"
+        case "extracting_poses": return "Extracting poses\(progressSuffix)"
+        case "detecting_shots": return "Detecting shots\(progressSuffix)"
+        case "exporting": return "Rendering clips\(progressSuffix)"
+        case "uploading_results", "processing": return "Finalizing\(progressSuffix)"
+        default: return item.stage ?? item.status
+        }
+    }
+
+    private var progressSuffix: String {
+        guard let p = item.progress, p > 0 else { return "" }
+        return " · \(p)%"
+    }
+
+    private var statusDot: some View {
+        Circle()
+            .fill(item.isComplete ? Color.green
+                  : item.isFailed ? Color.red
+                  : Color.orange)
+            .frame(width: 8, height: 8)
+    }
+
+    static func shortRelativeAge(from iso: String) -> String? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = f.date(from: iso)
+        if date == nil {
+            f.formatOptions = [.withInternetDateTime]
+            date = f.date(from: iso)
+        }
+        guard let d = date else { return nil }
+        let seconds = -d.timeIntervalSinceNow
+        if seconds < 60 { return "just now" }
+        if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
+        if seconds < 86400 { return "\(Int(seconds / 3600))h ago" }
+        return "\(Int(seconds / 86400))d ago"
+    }
+}
