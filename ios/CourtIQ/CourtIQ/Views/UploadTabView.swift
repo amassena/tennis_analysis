@@ -21,6 +21,7 @@ struct UploadTabView: View {
                     EmptyUploadsView { showingComposer = true }
                 } else {
                     List {
+                        TodayHeroCard(userHash: userHash, recent: recent)
                         if !manager.uploads.isEmpty {
                             Section("Uploading") {
                                 ForEach(manager.uploads) { upload in
@@ -37,6 +38,9 @@ struct UploadTabView: View {
                             nav.openGallery(anchor: item.video_id)
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.brandBackground)
                     .refreshable { await recent.refresh() }
                 }
             }
@@ -83,21 +87,43 @@ private struct EmptyUploadsView: View {
     var onAdd: () -> Void
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "icloud.and.arrow.up")
-                .font(.system(size: 56))
-                .foregroundColor(.secondary)
-            Text("No uploads yet")
-                .font(.title3.weight(.semibold))
-            Text("Tap + to record or pick a video.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Button(action: onAdd) {
-                Label("Upload a video", systemImage: "plus")
-                    .font(.headline)
+        ZStack {
+            Color.brandBackground.ignoresSafeArea()
+            VStack(spacing: 22) {
+                // Neon tennis-ball glyph in a soft halo. Keeps the
+                // empty-state on-brand without an extra asset.
+                ZStack {
+                    Circle()
+                        .fill(Color.brandAccent.opacity(0.12))
+                        .frame(width: 168, height: 168)
+                    Circle()
+                        .fill(Color.brandAccent)
+                        .frame(width: 96, height: 96)
+                    Image(systemName: "figure.tennis")
+                        .font(.system(size: 44, weight: .bold))
+                        .foregroundColor(.brandBackground)
+                }
+                VStack(spacing: 8) {
+                    Text("Your gallery is empty")
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(.brandText)
+                    Text("Record a session or pick a clip from Photos.\nWe'll detect every shot and stack it against the pros.")
+                        .font(.subheadline)
+                        .foregroundColor(.brandTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+                Button(action: onAdd) {
+                    Label("Upload your first video", systemImage: "plus.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: 320, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.brandAccent)
+                .foregroundColor(.brandBackground)
+                .padding(.top, 4)
             }
-            .buttonStyle(.borderedProminent)
-            .padding(.top, 8)
+            .padding(.bottom, 40)
         }
     }
 }

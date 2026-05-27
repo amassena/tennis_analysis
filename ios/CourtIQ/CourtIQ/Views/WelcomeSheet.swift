@@ -10,25 +10,36 @@ struct WelcomeSheet: View {
     let userHash: String
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 20) {
-                    Image(systemName: "tennis.racket")
-                        .font(.system(size: 64, weight: .light))
-                        .foregroundColor(.accentColor)
-                        .padding(.top, 40)
+        ZStack {
+            Color.brandBackground.ignoresSafeArea()
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.brandAccent.opacity(0.15))
+                                .frame(width: 140, height: 140)
+                            Circle()
+                                .fill(Color.brandAccent)
+                                .frame(width: 88, height: 88)
+                            Image(systemName: "figure.tennis")
+                                .font(.system(size: 40, weight: .bold))
+                                .foregroundColor(.brandBackground)
+                        }
+                        .padding(.top, 36)
 
-                    Text("Welcome to Tennis Uploader")
-                        .font(.title.weight(.semibold))
-                        .multilineTextAlignment(.center)
+                        Text("Welcome to Tennis Uploader")
+                            .font(.title.weight(.semibold))
+                            .foregroundColor(.brandText)
+                            .multilineTextAlignment(.center)
 
-                    Text("Record or pick a tennis video. We'll detect every shot, render slow-motion clips, and stack your form against the pros.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
+                        Text("Record or pick a tennis video. We'll detect every shot, render slow-motion clips, and stack your form against the pros.")
+                            .font(.subheadline)
+                            .foregroundColor(.brandTextSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
 
-                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 18) {
                         Bullet(systemImage: "video.fill",
                                title: "Record or pick",
                                detail: "Tap the + button — record a session or pick a clip from Photos.")
@@ -45,27 +56,30 @@ struct WelcomeSheet: View {
                     .padding(.horizontal, 28)
                     .padding(.top, 8)
 
-                    Text("Gallery URL: tennis.playfullife.com/u/\(userHash)")
-                        .font(.caption.monospaced())
-                        .foregroundColor(.secondary)
-                        .padding(.top, 8)
-                        .textSelection(.enabled)
+                        Text("Gallery URL: tennis.playfullife.com/u/\(userHash)")
+                            .font(.caption.monospaced())
+                            .foregroundColor(.brandTextSecondary)
+                            .padding(.top, 8)
+                            .textSelection(.enabled)
+                    }
+                    .padding(.bottom, 24)
                 }
-                .padding(.bottom, 24)
-            }
 
-            Button {
-                isPresented = false
-            } label: {
-                Text("Get Started")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    isPresented = false
+                } label: {
+                    Text("Get Started")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .foregroundColor(.brandBackground)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.brandAccent)
+                .controlSize(.large)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+                .padding(.top, 12)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 32)
-            .padding(.top, 12)
         }
     }
 
@@ -78,11 +92,13 @@ struct WelcomeSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3)
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(.brandAccent)
                     .frame(width: 28)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline.weight(.semibold))
-                    Text(detail).font(.footnote).foregroundColor(.secondary)
+                        .foregroundColor(.brandText)
+                    Text(detail).font(.footnote)
+                        .foregroundColor(.brandTextSecondary)
                 }
             }
         }
