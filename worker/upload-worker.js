@@ -83,10 +83,13 @@ export default {
 // ---------------------------------------------------------------------------
 
 async function handleAsset(request, env, path) {
-  // Resolve R2 key — root serves the gallery index
+  // Resolve R2 key — root serves a "sign-in required" landing page now
+  // that the gallery is per-user. The legacy `highlights/index.html`
+  // was kept around at the same key until the per-user refactor; both
+  // anonymous and signed-in users land here from bare `/`.
   let key;
   if (path === '/' || path === '/index.html') {
-    key = 'highlights/index.html';
+    key = 'static/root-landing.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {

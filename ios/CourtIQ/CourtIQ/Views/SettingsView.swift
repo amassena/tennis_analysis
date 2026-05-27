@@ -18,6 +18,12 @@ struct SettingsView: View {
                 Section("Account") {
                     LabeledContent("Signed in as", value: userHash)
                         .textSelection(.enabled)
+                    LabeledContent("Gallery URL") {
+                        Text("tennis.playfullife.com/u/\(userHash)")
+                            .font(.caption.monospaced())
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
+                    }
                     Button("Sign out") {
                         auth.signOut()
                         isPresented = false

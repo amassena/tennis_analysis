@@ -67,7 +67,13 @@ def s3_client():
         endpoint_url=f"https://{os.environ['CF_ACCOUNT_ID']}.r2.cloudflarestorage.com",
         aws_access_key_id=os.environ["CF_R2_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["CF_R2_SECRET_ACCESS_KEY"],
-        config=Config(retries={"max_attempts": 5, "mode": "standard"}),
+        # 2-4 GB files (rally + timeline mp4s) hit the default 60s read
+        # timeout during R2 server-side CopyObject. Bump generously.
+        config=Config(
+            retries={"max_attempts": 5, "mode": "standard"},
+            read_timeout=900,
+            connect_timeout=30,
+        ),
     )
 
 

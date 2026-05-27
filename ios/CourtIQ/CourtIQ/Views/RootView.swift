@@ -44,7 +44,7 @@ private struct SignedInTabs: View {
                 }
                 .tag(AppNavigation.Tab.upload)
 
-            GalleryTabView()
+            GalleryTabView(userHash: userHash)
                 .tabItem {
                     Label("Gallery", systemImage: "play.rectangle.on.rectangle")
                 }
@@ -54,15 +54,14 @@ private struct SignedInTabs: View {
 }
 
 private struct GalleryTabView: View {
+    let userHash: String
     @EnvironmentObject var nav: AppNavigation
 
     var body: some View {
         WebViewWrapper(url: galleryURL)
             .ignoresSafeArea(edges: .bottom)
             .onChange(of: nav.selectedTab) { newValue in
-                // Anchor consumed once we land on the gallery tab.
                 if newValue == .gallery && nav.pendingGalleryAnchor != nil {
-                    // Defer clearing so URL update propagates first.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         nav.pendingGalleryAnchor = nil
                     }
@@ -70,10 +69,21 @@ private struct GalleryTabView: View {
             }
     }
 
+    // Per-user gallery URL. Always carries the JWT as `?t=` so the
+    // worker can re-set the auth cookie even if WKWebView cleared it
+    // between launches. The worker 302s back to the clean URL after
+    // setting Set-Cookie.
     private var galleryURL: URL {
-        if let anchor = nav.pendingGalleryAnchor {
-            return URL(string: "https://tennis.playfullife.com/#\(anchor)")!
+        var comps = URLComponents()
+        comps.scheme = "https"
+        comps.host = "tennis.playfullife.com"
+        comps.path = "/u/\(userHash)"
+        if let jwt = TokenStore.load() {
+            comps.queryItems = [URLQueryItem(name: "t", value: jwt)]
         }
-        return URL(string: "https://tennis.playfullife.com")!
+        if let anchor = nav.pendingGalleryAnchor {
+            comps.fragment = anchor
+        }
+        return comps.url ?? URL(string: "https://tennis.playfullife.com/u/\(userHash)")!
     }
 }

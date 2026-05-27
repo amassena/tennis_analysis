@@ -66,11 +66,17 @@ def generate_thumbnail(vid):
     return False
 
 
-def upload_thumbnail(client, vid):
-    """Upload thumbnail to R2 if it exists locally."""
+def upload_thumbnail(client, vid, user_hash=None):
+    """Upload thumbnail to R2 if it exists locally.
+
+    user_hash: if set, upload under highlights/<user_hash>/thumbs/ so the
+    per-user gallery URL can resolve it. Otherwise (legacy) upload flat.
+    """
     thumb = os.path.join(PROJECT_ROOT, 'exports', 'thumbs', f'{vid}.jpg')
     if os.path.exists(thumb):
-        client.upload(thumb, f'highlights/thumbs/{vid}.jpg', content_type='image/jpeg')
+        key = (f'highlights/{user_hash}/thumbs/{vid}.jpg'
+               if user_hash else f'highlights/thumbs/{vid}.jpg')
+        client.upload(thumb, key, content_type='image/jpeg')
 
 
 def get_video_metadata(vid, r2_client=None):
@@ -1781,13 +1787,19 @@ def get_branch_slug():
     return 'unknown'
 
 
-def update_index(mode='production'):
+def update_index(mode='production', user_hash=None):
     """Main: gather metadata, build HTML, deploy.
 
     mode:
       'production' — upload to highlights/index.html (live URL)
       'staging'    — upload to staging/<branch>/highlights/index.html
       'preview'    — write to ~/whiteboards/preview-<branch>/index.html (no upload)
+
+    user_hash: if set (e.g. 'u_666f1a02'), generate a PER-USER gallery:
+      - Source keys filtered to highlights/<user_hash>/...
+      - All in-HTML URLs rewritten with `/u/<user_hash>` prefix
+      - Index uploaded to highlights/<user_hash>/index.html
+      Otherwise behaves as the legacy flat root gallery.
     """
     from dotenv import load_dotenv
     load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
@@ -1796,21 +1808,31 @@ def update_index(mode='production'):
     from storage.r2_client import R2Client
 
     c = R2Client()
-    keys = c.list(prefix='highlights/', max_keys=10000)
+    if user_hash:
+        list_prefix = f'highlights/{user_hash}/'
+        strip_prefix = f'highlights/{user_hash}/'
+    else:
+        list_prefix = 'highlights/'
+        strip_prefix = 'highlights/'
+    keys = c.list(prefix=list_prefix, max_keys=10000)
 
-    # Group files by video
+    # Group files by video. The flat layout has parts = [highlights, vid, file]
+    # while the per-user layout has [highlights, user_hash, vid, file]. We
+    # normalize by stripping the highlights/<user_hash?>/ prefix and reparsing.
     videos = {}
     video_features = {}  # vid -> set of features detected from R2 keys
     for k in keys:
         if 'index.html' in k or 'thumbs/' in k:
             continue
-        parts = k.split('/')
-        if len(parts) >= 3:
-            vid = parts[1]
+        if not k.startswith(strip_prefix):
+            continue
+        rel = k[len(strip_prefix):]  # e.g. "IMG_1108/timeline.mp4"
+        parts = rel.split('/')
+        if len(parts) >= 2:
+            vid = parts[0]
             fname = parts[-1]
-            # Track feature presence from subfolder names
-            if len(parts) == 4:
-                subfolder = parts[2]
+            if len(parts) == 3:
+                subfolder = parts[1]
                 feats = video_features.setdefault(vid, set())
                 if subfolder == 'sequences':
                     feats.add('sequences')
@@ -1818,7 +1840,7 @@ def update_index(mode='production'):
                         feats.add('racket_removed')
                 elif subfolder == 'comparisons':
                     feats.add('comparisons')
-            if len(parts) == 3 and fname.endswith('.mp4'):
+            if len(parts) == 2 and fname.endswith('.mp4'):
                 videos.setdefault(vid, []).append(fname)
                 if '_tracked' in fname:
                     video_features.setdefault(vid, set()).add('tracked')
@@ -1831,12 +1853,20 @@ def update_index(mode='production'):
         meta['features'] = sorted(video_features.get(vid, set()))
         has_thumb = generate_thumbnail(vid)
         if has_thumb:
-            upload_thumbnail(c, vid)
+            upload_thumbnail(c, vid, user_hash=user_hash)
         meta['has_thumb'] = has_thumb
         all_meta[vid] = meta
 
     # Build and upload index
     html = build_index_html(all_meta)
+    # Per-user mode: rewrite every absolute URL to live under /u/<user_hash>/.
+    # Every URL in the generated HTML/JS is built as `https://tennis.playfullife.com/<...>`
+    # so a single string-replace catches all of them, including the JS
+    # `?v=...` deep-link path which strips and re-prepends this exact prefix.
+    if user_hash:
+        old = 'https://tennis.playfullife.com/'
+        new = f'https://tennis.playfullife.com/u/{user_hash}/'
+        html = html.replace(old, new)
     tmp = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w', encoding='utf-8')
     tmp.write(html)
     tmp.close()
@@ -1891,11 +1921,18 @@ def update_index(mode='production'):
         return None
 
     # production
-    c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
-    c.upload(tmp.name, 'highlights/', content_type='text/html')
-    os.unlink(tmp.name)
-    print(f'Updated index: {len(all_meta)} videos')
-    print('https://tennis.playfullife.com/')
+    if user_hash:
+        key = f'highlights/{user_hash}/index.html'
+        c.upload(tmp.name, key, content_type='text/html')
+        os.unlink(tmp.name)
+        print(f'Updated per-user index: {len(all_meta)} videos → r2://{key}')
+        print(f'https://tennis.playfullife.com/u/{user_hash}')
+    else:
+        c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
+        c.upload(tmp.name, 'highlights/', content_type='text/html')
+        os.unlink(tmp.name)
+        print(f'Updated index: {len(all_meta)} videos')
+        print('https://tennis.playfullife.com/')
 
 
 if __name__ == '__main__':
@@ -1906,6 +1943,10 @@ if __name__ == '__main__':
                    help='Write HTML locally to ~/whiteboards/preview-<branch>/, no upload. Fast iteration.')
     g.add_argument('--staging', action='store_true',
                    help='Upload to r2://staging/<branch>/ — shareable URL, does not affect production.')
+    p.add_argument('--user', dest='user_hash', default=None,
+                   help='Generate per-user index (e.g. --user u_666f1a02). Sources keys '
+                        'under highlights/<hash>/, rewrites URLs with /u/<hash> prefix, '
+                        'uploads to highlights/<hash>/index.html.')
     args = p.parse_args()
     mode = 'preview' if args.preview else ('staging' if args.staging else 'production')
-    update_index(mode)
+    update_index(mode, user_hash=args.user_hash)
