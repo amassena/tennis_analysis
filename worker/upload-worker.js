@@ -1268,6 +1268,14 @@ async function handleAuthApple(request, env, cors) {
   //     (or already-existing users) can sign in.
   //   - Before the App Store wider release, flip `open: false` and
   //     add invited Apple subs to keep randos out.
+  // We need to peek at the existing user record to know if they're
+  // banned (admin-tombstoned) vs self-deleted. Pull it once, use it
+  // for both allowlist and rejoin logic below.
+  const userKey = `users/${appleSub}.json`;
+  const existingObj = await env.BUCKET.get(userKey);
+  const existingRecord = existingObj ? await existingObj.json() : null;
+  const isBanned = !!(existingRecord && existingRecord.status === 'banned');
+
   try {
     const allowlistObj = await env.BUCKET.get('users/_allowlist.json');
     if (allowlistObj) {
@@ -1275,8 +1283,16 @@ async function handleAuthApple(request, env, cors) {
       if (allowlist.open === false) {
         const subs = Array.isArray(allowlist.subs) ? allowlist.subs : [];
         const isAllowedSub = subs.includes(appleSub);
-        const alreadyKnown = await env.BUCKET.head(`users/${appleSub}.json`);
-        if (!isAllowedSub && !alreadyKnown) {
+        // Admin-banned users (status:'banned') NEVER pass the allowlist,
+        // even though their user record still exists. They must be
+        // explicitly re-added to subs[] AND have their status reset.
+        if (isBanned) {
+          return jsonResponse(
+            { error: 'Not approved', detail: 'Your account has been banned by the administrator.' },
+            403, cors,
+          );
+        }
+        if (!isAllowedSub && !existingRecord) {
           return jsonResponse(
             { error: 'Not approved', detail: 'Your account is not on the invite list. Ask the administrator to add you.' },
             403, cors,
@@ -1289,16 +1305,15 @@ async function handleAuthApple(request, env, cors) {
     // because of an R2 hiccup). Log if you wire structured logging later.
   }
 
-  const userKey = `users/${appleSub}.json`;
-  const existingObj = await env.BUCKET.get(userKey);
   const nowIso = new Date().toISOString();
   let userRecord;
-  if (existingObj) {
-    userRecord = await existingObj.json();
+  if (existingRecord) {
+    userRecord = existingRecord;
     userRecord.last_seen = nowIso;
     userRecord.user_hash = userHash; // keep in sync if the hash impl changes
-    // If they previously deleted their account, treat sign-in as a clean re-join.
-    if (userRecord.deleted_at) {
+    // If they previously SELF-deleted (status === 'deleted'), allow rejoin.
+    // status === 'banned' is admin-only and caught above.
+    if (userRecord.deleted_at && userRecord.status !== 'banned') {
       delete userRecord.deleted_at;
       userRecord.status = 'active';
       userRecord.rejoined_at = nowIso;
