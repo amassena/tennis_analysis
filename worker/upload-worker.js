@@ -350,14 +350,16 @@ async function handleApi(request, env, path) {
       return await handleAuthApple(request, env, cors);
     }
 
-    // Temporary, gated debug endpoint. Lets the operator mint a JWT for an
-    // arbitrary `sub` claim, used to verify per-user isolation without a
-    // second Apple ID. Gated by env.DEBUG_MINT_SECRET (a wrangler secret
-    // set out-of-band). Both the endpoint and the secret are intended to
-    // be removed once verification is complete.
-    if (path === '/api/_debug/mint-jwt' && request.method === 'POST') {
-      return await handleDebugMintJwt(request, env, cors);
+    // Magic-link auth: request sends a one-time URL to the user's email;
+    // consume verifies the token, mints a JWT, sets the auth cookie, and
+    // redirects to the user's gallery.
+    if (path === '/api/auth/magic/request' && request.method === 'POST') {
+      return await handleMagicRequest(request, env, cors);
     }
+    if (path === '/api/auth/magic/consume' && request.method === 'GET') {
+      return await handleMagicConsume(request, env, cors);
+    }
+
 
     if (path === '/api/me' && request.method === 'GET') {
       return await handleMe(request, env, cors);
@@ -1430,6 +1432,21 @@ async function verifyAppleIdentityTokenWithJwk(jwk, headerB64, payloadB64, signa
   return payload;
 }
 
+// Canonical user_hash derivation. Identity is keyed on email so the
+// SIWA flow and the magic-link flow deduplicate naturally: same email
+// → same hash → same gallery. Keep userHashFromAppleSub for legacy
+// callers, but new code should use userHashFromEmail.
+async function userHashFromEmail(email) {
+  const normalized = (email || '').trim().toLowerCase();
+  const data = new TextEncoder().encode(normalized);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hex = [...new Uint8Array(hash)]
+    .slice(0, 4)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `u_${hex}`;
+}
+
 async function userHashFromAppleSub(sub) {
   const data = new TextEncoder().encode(sub);
   const hash = await crypto.subtle.digest('SHA-256', data);
@@ -1561,40 +1578,45 @@ async function handleAuthApple(request, env, cors) {
   }
 
   const appleSub = applePayload.sub;
-  const userHash = await userHashFromAppleSub(appleSub);
 
-  // Allowlist check.
-  //   - If users/_allowlist.json is absent → app is open (default).
-  //   - If present and { open: true } → still open.
-  //   - If present and { open: false } → only subs in `subs` array
-  //     (or already-existing users) can sign in.
-  //   - Before the App Store wider release, flip `open: false` and
-  //     add invited Apple subs to keep randos out.
-  // We need to peek at the existing user record to know if they're
-  // banned (admin-tombstoned) vs self-deleted. Pull it once, use it
-  // for both allowlist and rejoin logic below.
+  // Pull the existing user record (keyed by apple_sub) so we can recover
+  // the email Apple sent on first sign-in. Apple only sends `email` on the
+  // first request, so we cache it onto the user record and reuse later.
   const userKey = `users/${appleSub}.json`;
   const existingObj = await env.BUCKET.get(userKey);
   const existingRecord = existingObj ? await existingObj.json() : null;
   const isBanned = !!(existingRecord && existingRecord.status === 'banned');
 
+  const email = applePayload.email || (existingRecord && existingRecord.email) || null;
+  if (!email) {
+    return jsonResponse(
+      { error: 'Apple did not return an email and none on file. Sign out + back in on Apple ID to refresh.' },
+      400, cors,
+    );
+  }
+  // Identity = sha256(email). SIWA + magic-link share this hash so the
+  // same email always resolves to the same gallery.
+  const userHash = await userHashFromEmail(email);
+
+  // Allowlist check. Supports `subs` (apple_sub list) AND `emails` (email
+  // list) for invite-only mode. Either match grants access. Anyone with an
+  // existing user record is grandfathered in.
   try {
     const allowlistObj = await env.BUCKET.get('users/_allowlist.json');
     if (allowlistObj) {
       const allowlist = await allowlistObj.json();
       if (allowlist.open === false) {
         const subs = Array.isArray(allowlist.subs) ? allowlist.subs : [];
+        const emails = (allowlist.emails || []).map((e) => e.toLowerCase());
         const isAllowedSub = subs.includes(appleSub);
-        // Admin-banned users (status:'banned') NEVER pass the allowlist,
-        // even though their user record still exists. They must be
-        // explicitly re-added to subs[] AND have their status reset.
+        const isAllowedEmail = emails.includes(email.toLowerCase());
         if (isBanned) {
           return jsonResponse(
             { error: 'Not approved', detail: 'Your account has been banned by the administrator.' },
             403, cors,
           );
         }
-        if (!isAllowedSub && !existingRecord) {
+        if (!isAllowedSub && !isAllowedEmail && !existingRecord) {
           return jsonResponse(
             { error: 'Not approved', detail: 'Your account is not on the invite list. Ask the administrator to add you.' },
             403, cors,
@@ -1602,19 +1624,15 @@ async function handleAuthApple(request, env, cors) {
         }
       }
     }
-  } catch {
-    // Allowlist read failed — fail open (don't lock out legitimate users
-    // because of an R2 hiccup). Log if you wire structured logging later.
-  }
+  } catch {}
 
   const nowIso = new Date().toISOString();
   let userRecord;
   if (existingRecord) {
     userRecord = existingRecord;
     userRecord.last_seen = nowIso;
-    userRecord.user_hash = userHash; // keep in sync if the hash impl changes
-    // If they previously SELF-deleted (status === 'deleted'), allow rejoin.
-    // status === 'banned' is admin-only and caught above.
+    userRecord.user_hash = userHash;
+    if (email && !userRecord.email) userRecord.email = email;
     if (userRecord.deleted_at && userRecord.status !== 'banned') {
       delete userRecord.deleted_at;
       userRecord.status = 'active';
@@ -1628,20 +1646,26 @@ async function handleAuthApple(request, env, cors) {
       last_seen: nowIso,
       video_count: 0,
       status: 'active',
-      // email/name are only sent by Apple on first sign-in — keep what we get.
-      email: applePayload.email || null,
+      email,
       email_verified:
         applePayload.email_verified === 'true' || applePayload.email_verified === true || null,
+      auth_methods: ['apple'],
     };
   }
+  // Track that this account has authenticated via apple at least once.
+  userRecord.auth_methods = Array.from(new Set([...(userRecord.auth_methods || []), 'apple']));
   await env.BUCKET.put(userKey, JSON.stringify(userRecord), {
     httpMetadata: { contentType: 'application/json' },
   });
+  // Maintain an email→user_hash index used by the magic-link flow to
+  // resolve incoming sign-ins. Cheap: small JSON per email.
+  await writeEmailIndex(env, email, { user_hash: userHash, apple_sub: appleSub });
 
   const nowSec = Math.floor(Date.now() / 1000);
   const claims = {
     sub: userHash,
     apple_sub: appleSub,
+    email,
     iat: nowSec,
     exp: nowSec + OUR_JWT_TTL_SEC,
     scope: 'upload',
@@ -1657,6 +1681,241 @@ async function handleAuthApple(request, env, cors) {
     },
     200, cors,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Magic-link auth (email-based, no Apple required)
+// ---------------------------------------------------------------------------
+//
+// POST /api/auth/magic/request  { email }
+//   - Enforces allowlist (open mode OR email in allowlist OR existing user)
+//   - Generates a single-use token (URL-safe random) with 15-min TTL
+//   - Stores `magic/<token>.json` { email, exp, used:false }
+//   - Sends a one-click link via Resend
+//   - Always returns 200 (don't leak which emails are valid)
+//
+// GET  /api/auth/magic/consume?token=<token>&continue=<url>
+//   - Validates token, marks used:true (single-use)
+//   - Mints our JWT (sub = email-hash), sets cookie, 302 → /u/<hash>
+const MAGIC_TOKEN_TTL_SEC = 15 * 60;
+
+async function handleMagicRequest(request, env, cors) {
+  const body = await request.json().catch(() => ({}));
+  const rawEmail = (body.email || '').toString().trim().toLowerCase();
+  if (!rawEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rawEmail)) {
+    return jsonResponse({ error: 'Valid email required' }, 400, cors);
+  }
+
+  // Allowlist (same rules as Apple flow): open mode, email match, or
+  // an existing user record indexed by email.
+  let isAllowed = true;
+  try {
+    const allowlistObj = await env.BUCKET.get('users/_allowlist.json');
+    if (allowlistObj) {
+      const allowlist = await allowlistObj.json();
+      if (allowlist.open === false) {
+        const emails = (allowlist.emails || []).map((e) => e.toLowerCase());
+        const isAllowedEmail = emails.includes(rawEmail);
+        const existing = await readEmailIndex(env, rawEmail);
+        isAllowed = isAllowedEmail || !!existing;
+      }
+    }
+  } catch {}
+  if (!isAllowed) {
+    // Always 200 — don't leak allowlist contents. The user just won't get
+    // an email. We log the denial for the operator.
+    console.log(`magic-link denied (not allowed): ${rawEmail}`);
+    return jsonResponse({ ok: true, sent: false, message: 'If this email is invited, a sign-in link is on the way.' }, 200, cors);
+  }
+
+  const token = base64urlEncodeBytes(crypto.getRandomValues(new Uint8Array(32)));
+  const nowSec = Math.floor(Date.now() / 1000);
+  const record = {
+    email: rawEmail,
+    iat: nowSec,
+    exp: nowSec + MAGIC_TOKEN_TTL_SEC,
+    used: false,
+  };
+  await env.BUCKET.put(`magic/${token}.json`, JSON.stringify(record), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  const link = `https://tennis.playfullife.com/api/auth/magic/consume?token=${token}`;
+  try {
+    await sendMagicLinkEmail(env, rawEmail, link);
+  } catch (e) {
+    console.log(`magic-link send failed for ${rawEmail}: ${e.message}`);
+    return jsonResponse(
+      { error: 'Email send failed', detail: 'Try again or contact the administrator.' },
+      500, cors,
+    );
+  }
+  return jsonResponse({ ok: true, sent: true, message: 'Check your inbox for a sign-in link.' }, 200, cors);
+}
+
+async function handleMagicConsume(request, env, cors) {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token') || '';
+  if (!token || !/^[A-Za-z0-9_-]+$/.test(token)) {
+    return new Response('Invalid sign-in link.', { status: 400 });
+  }
+  const key = `magic/${token}.json`;
+  const obj = await env.BUCKET.get(key);
+  if (!obj) {
+    return new Response('Sign-in link not found or already used.', { status: 404 });
+  }
+  const record = await obj.json();
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (record.used) {
+    return new Response('Sign-in link already used. Request a new one.', { status: 410 });
+  }
+  if (record.exp < nowSec) {
+    return new Response('Sign-in link expired. Request a new one.', { status: 410 });
+  }
+
+  // Burn the token first (so refresh-double-click doesn't replay).
+  record.used = true;
+  record.used_at = new Date().toISOString();
+  await env.BUCKET.put(key, JSON.stringify(record), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  const email = record.email;
+  const userHash = await userHashFromEmail(email);
+
+  // Find-or-create a user record. For magic-link-only users we key the
+  // user record on a synthetic `magic:<email>` instead of an apple_sub.
+  const existingByEmail = await readEmailIndex(env, email);
+  let userKey;
+  let userRecord;
+  if (existingByEmail && existingByEmail.apple_sub) {
+    // Email was previously associated with an Apple account — reuse it.
+    userKey = `users/${existingByEmail.apple_sub}.json`;
+    const ex = await env.BUCKET.get(userKey);
+    userRecord = ex ? await ex.json() : null;
+  }
+  if (!userRecord) {
+    userKey = `users/magic:${email}.json`;
+    const ex = await env.BUCKET.get(userKey);
+    userRecord = ex ? await ex.json() : null;
+  }
+  const nowIso = new Date().toISOString();
+  if (userRecord) {
+    if (userRecord.status === 'banned') {
+      return new Response('Your account has been banned by the administrator.', { status: 403 });
+    }
+    userRecord.last_seen = nowIso;
+    userRecord.user_hash = userHash;
+    if (userRecord.deleted_at) {
+      delete userRecord.deleted_at;
+      userRecord.status = 'active';
+      userRecord.rejoined_at = nowIso;
+    }
+  } else {
+    userRecord = {
+      email,
+      user_hash: userHash,
+      created_at: nowIso,
+      last_seen: nowIso,
+      video_count: 0,
+      status: 'active',
+      auth_methods: ['magic'],
+    };
+  }
+  userRecord.auth_methods = Array.from(new Set([...(userRecord.auth_methods || []), 'magic']));
+  await env.BUCKET.put(userKey, JSON.stringify(userRecord), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  await writeEmailIndex(env, email, {
+    user_hash: userHash,
+    apple_sub: userRecord.apple_sub || null,
+  });
+
+  const claims = {
+    sub: userHash,
+    email,
+    iat: nowSec,
+    exp: nowSec + OUR_JWT_TTL_SEC,
+    scope: 'upload',
+  };
+  if (userRecord.apple_sub) claims.apple_sub = userRecord.apple_sub;
+  const jwt = await signOurJWT(claims, env.JWT_SIGNING_SECRET);
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'location': `/u/${userHash}`,
+      'set-cookie': `tennis_jwt=${jwt}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${OUR_JWT_TTL_SEC}`,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Email sending — Resend
+// ---------------------------------------------------------------------------
+async function sendMagicLinkEmail(env, toEmail, link) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY not configured');
+  }
+  const from = env.MAGIC_LINK_FROM || 'Tennis Uploader <onboarding@resend.dev>';
+  const subject = 'Sign in to Tennis Uploader';
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1c1c1e;max-width:520px;margin:32px auto;padding:24px;">
+    <h1 style="font-size:22px;margin:0 0 10px;">Sign in to Tennis Uploader</h1>
+    <p style="font-size:15px;line-height:1.5;color:#3a3a3c;">Click the button below to sign in. The link works once and expires in 15 minutes.</p>
+    <p style="margin:24px 0;"><a href="${link}" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#0a84ff;color:#fff;text-decoration:none;font-weight:600;">Sign in</a></p>
+    <p style="font-size:12px;color:#6b7280;">If you didn't request this, you can safely ignore this email.</p>
+    <p style="font-size:12px;color:#6b7280;word-break:break-all;">Or copy this link: ${link}</p>
+  </body></html>`;
+  const text = `Sign in to Tennis Uploader\n\nOpen this link (works once, expires in 15 min):\n${link}\n\nIf you didn't request this, ignore this email.\n`;
+
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ from, to: [toEmail], subject, html, text }),
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Resend ${resp.status}: ${body.slice(0, 300)}`);
+  }
+}
+
+// users/_email_index/<sha-of-email>.json — maps email → user record refs.
+// Used by the magic-link flow and any future "find me by email" code.
+async function writeEmailIndex(env, email, refs) {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized) return;
+  const hashBuf = await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(normalized),
+  );
+  const key = [...new Uint8Array(hashBuf)]
+    .slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
+  const payload = {
+    email: normalized,
+    updated_at: new Date().toISOString(),
+    ...refs,
+  };
+  await env.BUCKET.put(
+    `users/_email_index/${key}.json`,
+    JSON.stringify(payload),
+    { httpMetadata: { contentType: 'application/json' } },
+  );
+}
+
+async function readEmailIndex(env, email) {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized) return null;
+  const hashBuf = await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(normalized),
+  );
+  const key = [...new Uint8Array(hashBuf)]
+    .slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('');
+  try {
+    const obj = await env.BUCKET.get(`users/_email_index/${key}.json`);
+    return obj ? await obj.json() : null;
+  } catch { return null; }
 }
 
 // DELETE /api/account — Apple App Review requires in-app account deletion.
@@ -1715,49 +1974,6 @@ async function handleDeleteAccount(request, env, cors) {
     { deleted: true, videos_removed: deletedVideos.length, video_ids: deletedVideos },
     200, cors,
   );
-}
-
-// POST /api/_debug/mint-jwt
-//   header: X-Debug-Secret: <env.DEBUG_MINT_SECRET>
-//   body:   { sub: "u_xxxxxxxx" }  // any 10-char user_hash
-//   200:    { jwt, sub, urls: { mine, andrews } }
-// Intended for one-time isolation testing; both this route and the
-// DEBUG_MINT_SECRET wrangler secret should be removed afterwards.
-async function handleDebugMintJwt(request, env, cors) {
-  if (!env.DEBUG_MINT_SECRET) {
-    return jsonResponse({ error: 'Debug endpoint disabled' }, 404, cors);
-  }
-  const supplied = request.headers.get('x-debug-secret') || '';
-  if (supplied !== env.DEBUG_MINT_SECRET) {
-    return jsonResponse({ error: 'Forbidden' }, 403, cors);
-  }
-  if (!env.JWT_SIGNING_SECRET) {
-    return jsonResponse({ error: 'JWT_SIGNING_SECRET not set' }, 500, cors);
-  }
-  const body = await request.json().catch(() => ({}));
-  const sub = body.sub;
-  if (!sub || typeof sub !== 'string' ||
-      !sub.startsWith('u_') || sub.length !== 10) {
-    return jsonResponse({ error: 'sub must be u_xxxxxxxx' }, 400, cors);
-  }
-  const nowSec = Math.floor(Date.now() / 1000);
-  const claims = {
-    sub,
-    apple_sub: `debug-${sub}`,
-    iat: nowSec,
-    exp: nowSec + 3600,  // 1 hour TTL — short on purpose
-    scope: 'upload',
-    debug: true,
-  };
-  const jwt = await signOurJWT(claims, env.JWT_SIGNING_SECRET);
-  return jsonResponse({
-    jwt,
-    sub,
-    urls: {
-      mine: `https://tennis.playfullife.com/u/${sub}?t=${jwt}`,
-      andrews: `https://tennis.playfullife.com/u/u_666f1a02?t=${jwt}`,
-    },
-  }, 200, cors);
 }
 
 // GET /api/me — current user's profile (Bearer JWT required).
