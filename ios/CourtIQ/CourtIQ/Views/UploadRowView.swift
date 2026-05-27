@@ -48,9 +48,17 @@ struct UploadRowView: View {
                             .foregroundColor(.green)
                     }
                 default:
-                    Text(percentText)
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 10) {
+                        Text(percentText)
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                        Button(action: onDiscard) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 18))
+                        }
+                        .accessibilityLabel("Cancel upload")
+                    }
                 }
             }
 

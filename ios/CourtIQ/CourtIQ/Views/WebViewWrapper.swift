@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import AVKit
 
 /// WKWebView wrapper. Reloads with a new URL when `url` changes
 /// (used by the Gallery tab to deep-link to `#<video_id>` anchors).
@@ -19,6 +20,10 @@ struct WebViewWrapper: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+        // Register the openVideo JS bridge. Gallery JS posts via
+        // window.webkit.messageHandlers.openVideo.postMessage({url,title})
+        // and we hand the URL off to AVPlayerViewController.
+        config.userContentController.add(context.coordinator, name: "openVideo")
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.isOpaque = false
@@ -62,7 +67,7 @@ struct WebViewWrapper: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if let host = navigationAction.request.url?.host,
                host.contains("playfullife.com") || host.contains("localhost") {
@@ -73,6 +78,37 @@ struct WebViewWrapper: UIViewRepresentable {
                 decisionHandler(.cancel)
             } else {
                 decisionHandler(.allow)
+            }
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage,
+        ) {
+            guard message.name == "openVideo" else { return }
+            guard let body = message.body as? [String: Any],
+                  let urlStr = body["url"] as? String,
+                  let url = URL(string: urlStr) else { return }
+            let title = body["title"] as? String ?? ""
+            presentNativePlayer(url: url, title: title)
+        }
+
+        private func presentNativePlayer(url: URL, title: String) {
+            // Locate the top-most view controller to present from.
+            guard let scene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+                  let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+            else { return }
+            var top = root
+            while let presented = top.presentedViewController { top = presented }
+
+            let player = AVPlayer(url: url)
+            let vc = AVPlayerViewController()
+            vc.player = player
+            vc.modalPresentationStyle = .fullScreen
+            vc.allowsPictureInPicturePlayback = true
+            top.present(vc, animated: true) {
+                player.play()
             }
         }
     }

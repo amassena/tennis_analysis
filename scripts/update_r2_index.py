@@ -691,6 +691,20 @@ var currentShots = null;   // {{video, shots[]}} loaded from shots.json
 var currentVariant = null; // e.g. "timeline" / "rally_slowmo" — derived from url
 
 function openPlayer(url, title) {{
+  // PR-J: if we're inside the iOS WebView wrapper, hand the URL off
+  // to native AVPlayerViewController. WKWebView exposes a message
+  // handler at window.webkit.messageHandlers.openVideo; if it's
+  // present we post and bail before opening the HTML5 player.
+  try {{
+    if (window.webkit && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.openVideo) {{
+      window.webkit.messageHandlers.openVideo.postMessage(
+        {{url: url, title: title || ''}}
+      );
+      return;
+    }}
+  }} catch (e) {{}}
+
   // Reset to a clean paused state before loading new source so native
   // controls don't flash the wrong play/pause icon.
   try {{ vid.pause(); }} catch (e) {{}}

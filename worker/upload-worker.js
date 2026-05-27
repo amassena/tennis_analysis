@@ -83,10 +83,6 @@ export default {
 // ---------------------------------------------------------------------------
 
 async function handleAsset(request, env, path) {
-  // Resolve R2 key — root serves a "sign-in required" landing page now
-  // that the gallery is per-user. The legacy `highlights/index.html`
-  // was kept around at the same key until the per-user refactor; both
-  // anonymous and signed-in users land here from bare `/`.
   let key;
   if (path === '/' || path === '/index.html') {
     key = 'static/root-landing.html';
@@ -95,14 +91,46 @@ async function handleAsset(request, env, path) {
   } else if (path === '/support' || path === '/support.html') {
     key = 'static/support.html';
   } else {
-    key = path.slice(1); // strip leading /
+    key = path.slice(1);
+  }
+
+  // Per-user JWT fallback: if the request carries a valid `tennis_jwt`
+  // cookie/bearer, treat any non-static path as a request for the
+  // user's per-user-prefixed copy of that asset. Lets the legacy gallery
+  // URLs (/thumbs/<vid>.jpg, /<vid>/timeline.mp4) keep working even
+  // when CDN/WKWebView quirks drop the per-user prefix in subresource
+  // fetches. Matches the user's "worker-side JWT lookup" option.
+  let perUserKey = null;
+  if (!key.startsWith('static/') && !key.startsWith('uploads/') &&
+      !key.startsWith('users/')) {
+    const cookieToken = readCookie(request, 'tennis_jwt');
+    const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+      ? request.headers.get('authorization').slice(7).trim() : null;
+    const token = cookieToken || headerAuth;
+    if (token && env.JWT_SIGNING_SECRET) {
+      try {
+        const claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET);
+        const sub = claims.sub;
+        if (sub && sub.startsWith('u_') && sub.length === 10) {
+          // Strip a leading "highlights/" so we don't end up with
+          // highlights/<sub>/highlights/<key>.
+          const rel = key.startsWith('highlights/') ? key.slice('highlights/'.length) : key;
+          perUserKey = `highlights/${sub}/${rel}`;
+        }
+      } catch {}
+    }
   }
 
   if (request.method === 'HEAD') {
-    return handleHead(env, key);
+    return handleHead(env, key, perUserKey);
   }
 
-  return serveR2Object(request, env, key, { fallbackHighlightsPrefix: true });
+  return serveR2Object(request, env, key, {
+    fallbackHighlightsPrefix: true,
+    fallbackKey: perUserKey,
+    // Per-user fallback responses are owner-scoped; opt out of edge cache.
+    private: perUserKey != null,
+  });
 }
 
 // Serve an R2 object as an HTTP response. Handles range requests, ?dl=1,
@@ -125,6 +153,15 @@ async function serveR2Object(request, env, key, opts = {}) {
       !key.startsWith('highlights/') && !key.startsWith('uploads/')) {
     try {
       obj = await env.BUCKET.get('highlights/' + key, getOpts);
+    } catch {}
+  }
+
+  // Per-user fallback (auth-resolved). Used when neither the literal
+  // path nor highlights/<key> exist on the public layout — the asset
+  // probably lives under highlights/<sub>/...
+  if (!obj && opts.fallbackKey) {
+    try {
+      obj = await env.BUCKET.get(opts.fallbackKey, getOpts);
     } catch {}
   }
 
@@ -271,10 +308,13 @@ function isAdminUser(env, userHash) {
   return raw.split(',').map((s) => s.trim()).filter(Boolean).includes(userHash);
 }
 
-async function handleHead(env, key) {
+async function handleHead(env, key, perUserKey) {
   let obj = await env.BUCKET.head(key);
   if (!obj && !key.startsWith('highlights/') && !key.startsWith('uploads/')) {
     obj = await env.BUCKET.head('highlights/' + key);
+  }
+  if (!obj && perUserKey) {
+    obj = await env.BUCKET.head(perUserKey);
   }
   if (!obj) {
     return new Response(null, { status: 404 });
