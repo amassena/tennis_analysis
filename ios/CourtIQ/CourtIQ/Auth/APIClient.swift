@@ -77,6 +77,10 @@ struct APIClient {
             throw APIError.badStatus(-1, body: "non-HTTP response")
         }
         if http.statusCode == 401 {
+            // Broadcast so AuthCoordinator can drop us back to the sign-in
+            // screen instead of every call site re-implementing the same
+            // "session expired" toast.
+            NotificationCenter.default.post(name: .apiSessionExpired, object: nil)
             throw APIError.unauthorized
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -89,4 +93,10 @@ struct APIClient {
             throw APIError.decodingFailed(underlying: error)
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted whenever any APIClient request returns 401. AuthCoordinator
+    /// listens and forces signOut so the UI returns to AuthGateView.
+    static let apiSessionExpired = Notification.Name("APIClient.sessionExpired")
 }

@@ -248,9 +248,19 @@ private struct PermissionDeniedView: View {
                 .foregroundColor(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 36)
-            Button("OK", action: onClose)
+            HStack(spacing: 12) {
+                Button("Open Settings") {
+                    // Deep-links into the Tennis Uploader entry in iOS Settings.
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
                 .buttonStyle(.borderedProminent)
-                .padding(.top, 12)
+                Button("Close", action: onClose)
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+            }
+            .padding(.top, 12)
         }
     }
 }

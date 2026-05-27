@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import UserNotifications
 
 /// One row in `GET /api/u/<hash>/recent`.
 struct RecentUpload: Codable, Identifiable, Equatable {
@@ -64,13 +65,67 @@ final class RecentUploadsModel: ObservableObject {
             let resp: RecentResponse = try await APIClient.get(
                 path: "api/u/\(userHash)/recent?limit=25",
             )
-            // Avoid spurious view churn when nothing actually changed.
+            let previous = items
             if resp.items != items { items = resp.items }
             lastError = nil
+            // Fire a local notification for every video that just
+            // transitioned to "complete" since the last poll. iOS
+            // delivers banners even when the app is foregrounded if we
+            // opt in via UNUserNotificationCenterDelegate (set up in
+            // CourtIQApp).
+            notifyReadyTransitions(from: previous, to: resp.items)
         } catch APIClient.APIError.unauthorized {
             lastError = "Session expired"
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    private func notifyReadyTransitions(from prev: [RecentUpload], to next: [RecentUpload]) {
+        // First-ever load: don't fire notifications for items that were
+        // already complete before the app launched.
+        if prev.isEmpty && !firedFirstLoad {
+            firedFirstLoad = true
+            return
+        }
+        let prevByID = Dictionary(uniqueKeysWithValues: prev.map { ($0.video_id, $0) })
+        for item in next {
+            guard item.isComplete else { continue }
+            let wasComplete = prevByID[item.video_id]?.isComplete ?? false
+            if wasComplete { continue }
+            scheduleReadyNotification(for: item)
+        }
+    }
+    private var firedFirstLoad = false
+
+    private func scheduleReadyNotification(for item: RecentUpload) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .authorized, .provisional:
+                Self.fire(item: item)
+            case .notDetermined:
+                UNUserNotificationCenter.current().requestAuthorization(
+                    options: [.alert, .sound]
+                ) { granted, _ in
+                    if granted { Self.fire(item: item) }
+                }
+            default:
+                break  // denied/ephemeral — respect the user's choice
+            }
+        }
+    }
+
+    nonisolated private static func fire(item: RecentUpload) {
+        let content = UNMutableNotificationContent()
+        content.title = "Session ready"
+        content.body = "\(item.filename ?? item.video_id) finished processing — tap to view."
+        content.sound = .default
+        content.userInfo = ["video_id": item.video_id]
+        let req = UNNotificationRequest(
+            identifier: "ready.\(item.video_id)",
+            content: content,
+            trigger: nil,
+        )
+        UNUserNotificationCenter.current().add(req)
     }
 }

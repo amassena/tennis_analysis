@@ -35,6 +35,7 @@ private struct LoadingScreen: View {
 private struct SignedInTabs: View {
     let userHash: String
     @EnvironmentObject var nav: AppNavigation
+    @State private var showingWelcome = !WelcomeFlag.didShow
 
     var body: some View {
         TabView(selection: $nav.selectedTab) {
@@ -49,6 +50,9 @@ private struct SignedInTabs: View {
                     Label("Gallery", systemImage: "play.rectangle.on.rectangle")
                 }
                 .tag(AppNavigation.Tab.gallery)
+        }
+        .sheet(isPresented: $showingWelcome, onDismiss: { WelcomeFlag.didShow = true }) {
+            WelcomeSheet(isPresented: $showingWelcome, userHash: userHash)
         }
     }
 }

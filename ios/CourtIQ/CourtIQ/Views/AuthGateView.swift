@@ -31,6 +31,17 @@ struct AuthGateView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
+                    if auth.sessionExpiredBanner {
+                        Text("Your session expired. Please sign in again.")
+                            .font(.footnote.weight(.medium))
+                            .foregroundColor(.white)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .background(Color.orange.opacity(0.85))
+                            .cornerRadius(8)
+                            .padding(.horizontal, 28)
+                    }
+
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.email]
                     } onCompletion: { result in

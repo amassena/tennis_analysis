@@ -22,8 +22,39 @@ final class AuthCoordinator: NSObject, ObservableObject {
     @Published private(set) var state: AuthState = .unknown
     @Published private(set) var lastError: String?
     @Published private(set) var isSigningIn = false
+    /// One-shot banner shown on the sign-in screen after a 401 forces
+    /// the user back out mid-session ("Your session expired — sign in
+    /// again"). Cleared on next successful sign-in.
+    @Published var sessionExpiredBanner: Bool = false
 
     private var signInContinuation: CheckedContinuation<Void, Error>?
+    private var sessionExpiredObserver: NSObjectProtocol?
+
+    override init() {
+        super.init()
+        // APIClient broadcasts on 401. Force the user back to AuthGateView
+        // so they can re-sign-in instead of seeing silent failures
+        // throughout the app.
+        sessionExpiredObserver = NotificationCenter.default.addObserver(
+            forName: .apiSessionExpired,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                guard case .signedIn = self.state else { return }
+                TokenStore.clear()
+                self.state = .signedOut
+                self.sessionExpiredBanner = true
+            }
+        }
+    }
+
+    deinit {
+        if let obs = sessionExpiredObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+    }
 
     /// Call once on app launch. If we have a stored JWT, hit /api/me to
     /// confirm it still works; otherwise drop to .signedOut.
@@ -65,6 +96,7 @@ final class AuthCoordinator: NSObject, ObservableObject {
         TokenStore.clear()
         state = .signedOut
         lastError = nil
+        sessionExpiredBanner = false
     }
 
     /// Apple App Review requires this. Calls DELETE /api/account, then
