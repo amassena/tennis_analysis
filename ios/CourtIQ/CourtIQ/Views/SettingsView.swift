@@ -11,6 +11,17 @@ struct SettingsView: View {
     @State private var showingDeleteFinal = false
     @State private var deletingInFlight = false
     @State private var deleteError: String?
+    @State private var showCopiedToast = false
+    @State private var laptopShareItem: LaptopShareItem?
+
+    /// Bootstrap URL the worker recognises via its `?t=<jwt>` query
+    /// param: it verifies, returns 302 with Set-Cookie, then redirects
+    /// to the clean per-user URL. Cookie is HttpOnly + 30-day so the
+    /// laptop stays signed in.
+    private var laptopSignInLink: String? {
+        guard let jwt = TokenStore.load() else { return nil }
+        return "https://tennis.playfullife.com/u/\(userHash)?t=\(jwt)"
+    }
 
     var body: some View {
         NavigationView {
@@ -24,6 +35,22 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                             .textSelection(.enabled)
                     }
+                    if let link = laptopSignInLink {
+                        Button {
+                            UIPasteboard.general.string = link
+                            showCopiedToast = true
+                        } label: {
+                            Label("Copy laptop sign-in link", systemImage: "doc.on.doc")
+                        }
+                        Button {
+                            laptopShareItem = LaptopShareItem(url: link)
+                        } label: {
+                            Label("Share laptop sign-in link", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    Text("The link signs your laptop in for 30 days. Don't share it with anyone else.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     Button("Sign out") {
                         auth.signOut()
                         isPresented = false
@@ -99,6 +126,14 @@ struct SettingsView: View {
             } message: {
                 Text("All your uploaded videos will be permanently deleted from the server. This cannot be undone.")
             }
+            .alert("Copied", isPresented: $showCopiedToast) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Sign-in link is on your clipboard. Paste it into Safari or Chrome on your laptop.")
+            }
+            .sheet(item: $laptopShareItem) { item in
+                ShareSheet(activityItems: [item.url])
+            }
         }
     }
 
@@ -126,6 +161,13 @@ struct SettingsView: View {
                 // preference is read on next configure().)
             }
         }
+    }
+
+    /// Wraps a one-time bootstrap URL so SwiftUI's `.sheet(item:)` can
+    /// drive a Share Sheet from it (Identifiable conformance).
+    struct LaptopShareItem: Identifiable {
+        let id = UUID()
+        let url: String
     }
 
     private func performDelete() {

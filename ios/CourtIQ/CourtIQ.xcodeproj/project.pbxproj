@@ -32,6 +32,7 @@
 		A1A1A1A1A1A1A1A1A1A1A1A1 /* RecentUploads.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A1A1A1A1A1A1A1A1A2 /* RecentUploads.swift */; };
 		A2A2A2A2A2A2A2A2A2A2A2A1 /* RecentUploadsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A2A2A2A2A2A2A2A2A2A2A2 /* RecentUploadsSection.swift */; };
 		A3A3A3A3A3A3A3A3A3A3A3A1 /* WelcomeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3A3A3A3A3A3A3A3A3A3A3A2 /* WelcomeSheet.swift */; };
+		A4A4A4A4A4A4A4A4A4A4A4A1 /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A4A4A4A4A4A4A4A4A4A4A2 /* ShareSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +68,7 @@
 		A1A1A1A1A1A1A1A1A1A1A1A2 /* RecentUploads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentUploads.swift; sourceTree = "<group>"; };
 		A2A2A2A2A2A2A2A2A2A2A2A2 /* RecentUploadsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentUploadsSection.swift; sourceTree = "<group>"; };
 		A3A3A3A3A3A3A3A3A3A3A3A2 /* WelcomeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeSheet.swift; sourceTree = "<group>"; };
+		A4A4A4A4A4A4A4A4A4A4A4A2 /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -92,6 +94,7 @@
 				F0F1F2F3F4F5F6F7F8F9FB02 /* SettingsView.swift */,
 				A2A2A2A2A2A2A2A2A2A2A2A2 /* RecentUploadsSection.swift */,
 				A3A3A3A3A3A3A3A3A3A3A3A2 /* WelcomeSheet.swift */,
+				A4A4A4A4A4A4A4A4A4A4A4A2 /* ShareSheet.swift */,
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
 				5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */,
 				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
@@ -282,6 +285,7 @@
 				A1A1A1A1A1A1A1A1A1A1A1A1 /* RecentUploads.swift in Sources */,
 				A2A2A2A2A2A2A2A2A2A2A2A1 /* RecentUploadsSection.swift in Sources */,
 				A3A3A3A3A3A3A3A3A3A3A3A1 /* WelcomeSheet.swift in Sources */,
+				A4A4A4A4A4A4A4A4A4A4A4A1 /* ShareSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -300,7 +304,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				MARKETING_VERSION = 1.1;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
@@ -386,7 +390,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				MARKETING_VERSION = 1.1;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";

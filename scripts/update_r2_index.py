@@ -18,8 +18,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def generate_thumbnail(vid):
-    """Generate a thumbnail for a video if it doesn't exist. Returns True if available."""
+def generate_thumbnail(vid, user_hash=None):
+    """Generate a thumbnail for a video if it doesn't exist. Returns True if available.
+
+    user_hash: when set, also probe the per-user R2 location
+    highlights/<user_hash>/thumbs/<vid>.jpg as a fallback — that's where
+    backfilled thumbs live post per-user refactor.
+    """
     thumb_dir = os.path.join(PROJECT_ROOT, 'exports', 'thumbs')
     os.makedirs(thumb_dir, exist_ok=True)
     thumb = os.path.join(thumb_dir, f'{vid}.jpg')
@@ -27,13 +32,20 @@ def generate_thumbnail(vid):
     if os.path.exists(thumb):
         return True
 
-    # Try downloading from R2 (try both locations — worker uploads to thumbs/,
-    # index uploads to highlights/thumbs/)
+    # Try downloading from R2. Probe the per-user location first because
+    # that's where the post-refactor backfill puts thumbs; legacy flat
+    # paths are kept as a second-pass fallback for any pre-refactor video.
     import urllib.request
-    for r2_url in [
+    candidate_urls = []
+    if user_hash:
+        candidate_urls.append(
+            f'https://tennis.playfullife.com/highlights/{user_hash}/thumbs/{vid}.jpg'
+        )
+    candidate_urls += [
         f'https://tennis.playfullife.com/thumbs/{vid}.jpg',
         f'https://tennis.playfullife.com/highlights/thumbs/{vid}.jpg',
-    ]:
+    ]
+    for r2_url in candidate_urls:
         try:
             req = urllib.request.Request(r2_url, headers={'User-Agent': 'tennis-index/1.0'})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -79,8 +91,15 @@ def upload_thumbnail(client, vid, user_hash=None):
         client.upload(thumb, key, content_type='image/jpeg')
 
 
-def get_video_metadata(vid, r2_client=None):
-    """Gather metadata for a video from detection JSON, R2 meta.json, or raw MOV."""
+def get_video_metadata(vid, r2_client=None, user_hash=None):
+    """Gather metadata for a video from detection JSON, R2 meta.json, or raw MOV.
+
+    user_hash: when set, look up the meta.json at the per-user path
+    (highlights/<user_hash>/<vid>/meta.json) first, then fall back to
+    the legacy flat path for any video that predates the per-user refactor.
+    Without this, every backfilled video falls through to "Unknown Date"
+    because the legacy flat meta.json was moved during backfill.
+    """
     info = {}
 
     # 1. Local detection JSON
@@ -103,25 +122,28 @@ def get_video_metadata(vid, r2_client=None):
 
     # 2. R2 meta.json (uploaded by GPU worker — has metadata even when local files missing)
     if r2_client:
-        meta_key = f'highlights/{vid}/meta.json'
-        try:
-            obj = r2_client.client.get_object(
-                Bucket=r2_client.bucket_name, Key=meta_key)
-            meta = json.loads(obj['Body'].read())
-            # Fill in any fields not already set by local detection JSON
-            if not info.get('shots'):
-                info['duration'] = meta.get('duration', 0)
-                info['shots'] = meta.get('shots', 0)
-                info['breakdown'] = meta.get('breakdown', {})
-            if meta.get('created') and 'created' not in info:
-                info['created'] = meta['created']
-            # Always pull ball/speed/line-call stats (only live on R2 meta)
-            for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate',
-                        'avg_speed_mph', 'max_speed_mph', 'in_count', 'out_count'):
-                if meta.get(bk) is not None:
-                    info[bk] = meta[bk]
-        except Exception:
-            pass
+        meta_candidates = []
+        if user_hash:
+            meta_candidates.append(f'highlights/{user_hash}/{vid}/meta.json')
+        meta_candidates.append(f'highlights/{vid}/meta.json')  # legacy flat
+        for meta_key in meta_candidates:
+            try:
+                obj = r2_client.client.get_object(
+                    Bucket=r2_client.bucket_name, Key=meta_key)
+                meta = json.loads(obj['Body'].read())
+                if not info.get('shots'):
+                    info['duration'] = meta.get('duration', 0)
+                    info['shots'] = meta.get('shots', 0)
+                    info['breakdown'] = meta.get('breakdown', {})
+                if meta.get('created') and 'created' not in info:
+                    info['created'] = meta['created']
+                for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate',
+                            'avg_speed_mph', 'max_speed_mph', 'in_count', 'out_count'):
+                    if meta.get(bk) is not None:
+                        info[bk] = meta[bk]
+                break  # found one — don't probe the legacy path
+            except Exception:
+                continue
 
     # 3. Creation date from raw MOV
     if 'created' not in info:
@@ -1879,10 +1901,10 @@ def update_index(mode='production', user_hash=None):
     # Gather metadata + ensure thumbnails
     all_meta = {}
     for vid in videos:
-        meta = get_video_metadata(vid, r2_client=c)
+        meta = get_video_metadata(vid, r2_client=c, user_hash=user_hash)
         meta['files'] = sorted(videos[vid])
         meta['features'] = sorted(video_features.get(vid, set()))
-        has_thumb = generate_thumbnail(vid)
+        has_thumb = generate_thumbnail(vid, user_hash=user_hash)
         if has_thumb:
             upload_thumbnail(c, vid, user_hash=user_hash)
         meta['has_thumb'] = has_thumb
