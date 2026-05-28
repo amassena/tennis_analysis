@@ -31,37 +31,37 @@ struct FilterablePlayerView: View {
     @State private var totalDuration: Double = 0
     @State private var showControls = true
     @State private var controlsHideTask: Task<Void, Never>? = nil
+    @State private var isFullscreen = false
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(title.isEmpty ? (videoId ?? "") : title)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.title3)
+            if !isFullscreen {
+                HStack {
+                    Text(title.isEmpty ? (videoId ?? "") : title)
+                        .font(.subheadline)
                         .foregroundColor(.white)
-                        .padding(8)
+                        .lineLimit(1)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.title3)
+                            .foregroundColor(.white)
+                            .padding(8)
+                    }
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Color.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.black)
 
-            // Always render the chip row so the UI is discoverable.
-            // Until shots.json loads, only [All] and [Slo] are interactive;
-            // type chips populate once the fetch completes.
-            FilterChipRow(
-                shots: shots,
-                variant: variant ?? "timeline",
-                currentFilter: $currentFilter,
-                sloMo: $sloMo,
-                onFilterChange: applyFilter,
-                onSloToggle: applySlo,
-            )
+                FilterChipRow(
+                    shots: shots,
+                    variant: variant ?? "timeline",
+                    currentFilter: $currentFilter,
+                    sloMo: $sloMo,
+                    onFilterChange: applyFilter,
+                    onSloToggle: applySlo,
+                )
+            }
 
             ZStack {
                 PlayerLayerContainer(player: player)
@@ -74,6 +74,8 @@ struct FilterablePlayerView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.black.ignoresSafeArea())
+        .ignoresSafeArea(edges: isFullscreen ? .all : [])
+        .statusBarHidden(isFullscreen)
         .onAppear(perform: setup)
         .onDisappear(perform: teardown)
     }
@@ -122,6 +124,17 @@ struct FilterablePlayerView: View {
                     Text(timeString(totalDuration))
                         .font(.caption.monospacedDigit())
                         .foregroundColor(.white)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { isFullscreen.toggle() }
+                        scheduleControlsHide()
+                    } label: {
+                        Image(systemName: isFullscreen
+                            ? "arrow.down.right.and.arrow.up.left"
+                            : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(6)
+                    }
                 }
                 .padding(.horizontal, 14)
             }

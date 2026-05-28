@@ -258,12 +258,15 @@ struct WebViewWrapper: UIViewRepresentable {
     }
 }
 
-/// Locks the hosted SwiftUI view (FilterablePlayerView) to portrait so
-/// AVPlayerViewController inside it doesn't auto-flip into Apple's
-/// landscape system fullscreen UI (which would hide the chip overlay).
-/// User can still trigger fullscreen explicitly via the corner ⤢ button.
+/// Hosts FilterablePlayerView. Since build 19 the player uses a custom
+/// AVPlayerLayer (not AVPlayerViewController), there's no system
+/// fullscreen takeover to defend against — so this hosting controller
+/// allows landscape rotation. The SwiftUI body re-flows naturally,
+/// and a dedicated fullscreen-toggle button in the custom controls
+/// owns the "fill the screen" experience.
 final class PortraitHostingController<Content: View>: UIHostingController<Content> {
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
-    override var shouldAutorotate: Bool { false }
-    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        .allButUpsideDown
+    }
+    override var shouldAutorotate: Bool { true }
 }
