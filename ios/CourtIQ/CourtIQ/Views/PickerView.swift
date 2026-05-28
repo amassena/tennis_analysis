@@ -2,18 +2,20 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
-/// PHPickerViewController wrapper that picks a single video and hands
-/// us a local file URL we can hand to `UploadManager`.
+/// PHPickerViewController wrapper that picks one or more videos.
 ///
 /// We don't request photo-library auth — PHPicker is privacy-mediated,
-/// the user explicitly chose this asset, that's enough. We don't get a
-/// stable PHAsset identifier without that auth, but we generate our
-/// own asset_id (user_hash + UUID) so dedup still works for the
-/// "same file picked twice" case.
+/// the user explicitly chose these assets. We don't get stable PHAsset
+/// identifiers without that auth, but we generate our own asset_id
+/// (user_hash + UUID) so dedup still works for the "same file picked
+/// twice" case.
 struct PickerView: UIViewControllerRepresentable {
     let userHash: String
-    /// Called with a staged local file URL + original filename.
-    /// Called on the main actor.
+    /// Maximum number of videos selectable. 0 = unlimited (Apple's spec).
+    var selectionLimit: Int = 0
+    /// Called once per successfully staged video. Fires on the main actor
+    /// in arrival order — videos appear in UploadManager as their data
+    /// becomes available.
     var onPicked: (URL, String) -> Void
     var onCancelled: () -> Void
     var onError: (String) -> Void
@@ -21,8 +23,8 @@ struct PickerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration()
         config.filter = .videos
-        config.selectionLimit = 1
-        config.preferredAssetRepresentationMode = .current  // original quality
+        config.selectionLimit = selectionLimit
+        config.preferredAssetRepresentationMode = .current
         let vc = PHPickerViewController(configuration: config)
         vc.delegate = context.coordinator
         return vc
@@ -41,37 +43,42 @@ struct PickerView: UIViewControllerRepresentable {
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             picker.dismiss(animated: true)
 
-            guard let result = results.first else {
+            guard !results.isEmpty else {
                 parent.onCancelled()
                 return
             }
 
             let typeId = UTType.movie.identifier
-            guard result.itemProvider.hasItemConformingToTypeIdentifier(typeId) else {
-                parent.onError("Selected item isn't a video")
-                return
-            }
-
-            // loadFileRepresentation gives us a temporary URL that we MUST
-            // copy out of before the closure returns — iOS reclaims it.
-            result.itemProvider.loadFileRepresentation(forTypeIdentifier: typeId) { url, error in
-                if let error {
-                    DispatchQueue.main.async { self.parent.onError(error.localizedDescription) }
-                    return
+            for result in results {
+                guard result.itemProvider.hasItemConformingToTypeIdentifier(typeId) else {
+                    DispatchQueue.main.async { self.parent.onError("Selected item isn't a video") }
+                    continue
                 }
-                guard let url else {
-                    DispatchQueue.main.async { self.parent.onError("No file URL returned") }
-                    return
-                }
-                let dest = UploadStaging.stagingURL(for: url.lastPathComponent)
-                do {
-                    try FileManager.default.copyItem(at: url, to: dest)
-                } catch {
-                    DispatchQueue.main.async { self.parent.onError("Copy failed: \(error.localizedDescription)") }
-                    return
-                }
-                DispatchQueue.main.async {
-                    self.parent.onPicked(dest, url.lastPathComponent)
+                // Each loadFileRepresentation call is async; we fire them
+                // in parallel and report each on the main thread as it
+                // lands. The UploadManager handles dedupe + queuing so
+                // out-of-order arrival is fine.
+                result.itemProvider.loadFileRepresentation(forTypeIdentifier: typeId) { url, error in
+                    if let error {
+                        DispatchQueue.main.async { self.parent.onError(error.localizedDescription) }
+                        return
+                    }
+                    guard let url else {
+                        DispatchQueue.main.async { self.parent.onError("No file URL returned") }
+                        return
+                    }
+                    let dest = UploadStaging.stagingURL(for: url.lastPathComponent)
+                    do {
+                        try FileManager.default.copyItem(at: url, to: dest)
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.parent.onError("Copy failed: \(error.localizedDescription)")
+                        }
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        self.parent.onPicked(dest, url.lastPathComponent)
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import UIKit
+import AVFoundation
 
 /// Owns the active upload list and orchestrates the chunked-upload
 /// protocol against `/api/upload/iphone/{init,part,complete}`.
@@ -57,16 +58,41 @@ final class UploadManager: ObservableObject {
         userHash: String
     ) {
         let size = (try? FileManager.default.attributesOfItem(atPath: localFileURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        // Extract the real recording timestamp from the video's
+        // metadata — falls back to "now" if unavailable so we never
+        // block the upload. The server pipeline also re-extracts the
+        // date from the source MOV; this just makes the date correct
+        // for the in-app surfaces BEFORE processing finishes.
+        let recordedAt = videoCreationDate(at: localFileURL)
+            ?? Date()
         let state = UploadState.make(
             assetId: assetId,
             filename: filename,
             sourcePath: localFileURL.path,
             totalBytes: size,
-            chunkSize: chunkSize
+            chunkSize: chunkSize,
+            recordedAt: recordedAt
         )
         uploads.insert(state, at: 0)
         UploadStore.save(state)
         Task { await self.run(stateId: state.id) }
+    }
+
+    /// Reads `creationDate` from the AVURLAsset metadata. iPhone Camera
+    /// embeds it in the .mov/.mp4 (com.apple.quicktime.creationdate);
+    /// returns nil for files without it.
+    private func videoCreationDate(at url: URL) -> Date? {
+        let asset = AVURLAsset(url: url)
+        if let d = asset.creationDate?.dateValue { return d }
+        for fmt in asset.availableMetadataFormats {
+            for item in asset.metadata(forFormat: fmt) {
+                if item.commonKey == .commonKeyCreationDate,
+                   let d = item.dateValue {
+                    return d
+                }
+            }
+        }
+        return nil
     }
 
     func retry(id: String) {

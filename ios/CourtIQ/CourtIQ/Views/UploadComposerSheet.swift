@@ -76,14 +76,20 @@ struct UploadComposerSheet: View {
             .fullScreenCover(isPresented: $showingPicker) {
                 PickerView(
                     userHash: userHash,
+                    selectionLimit: 0,  // 0 = unlimited (Apple-defined sentinel)
                     onPicked: { url, filename in
-                        showingPicker = false
+                        // Each picked video enqueues independently as
+                        // its file representation resolves. The picker
+                        // dismisses itself; we dismiss this composer
+                        // once we've enqueued at least one (the dialog
+                        // doesn't need to stay open while uploads run).
                         UploadManager.shared.enqueue(
                             localFileURL: url,
                             assetId: "\(userHash)_\(UUID().uuidString)",
                             filename: filename,
                             userHash: userHash
                         )
+                        showingPicker = false
                         isPresented = false
                     },
                     onCancelled: {

@@ -107,7 +107,15 @@ struct CoachSummarySheet: View {
                         Button {
                             if let t = ex.t {
                                 dismiss()
-                                onTapExample?(t)
+                                // The sheet dismissal is async — wait
+                                // for it to clear so the new AVPlayer
+                                // can present from the gallery VC
+                                // (not from the dismissing sheet, which
+                                // silently drops the present call).
+                                Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(420))
+                                    onTapExample?(t)
+                                }
                             }
                         } label: {
                             Text(formattedExample(ex))

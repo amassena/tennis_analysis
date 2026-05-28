@@ -59,14 +59,15 @@ struct UploadState: Codable, Identifiable, Equatable {
         filename: String,
         sourcePath: String,
         totalBytes: Int64,
-        chunkSize: Int64
+        chunkSize: Int64,
+        recordedAt: Date? = nil
     ) -> UploadState {
         UploadState(
             uploadId: "",
             assetId: assetId,
             filename: filename,
             sourcePath: sourcePath,
-            createdAtISO: ISO8601DateFormatter().string(from: Date()),
+            createdAtISO: ISO8601DateFormatter().string(from: recordedAt ?? Date()),
             totalBytes: totalBytes,
             chunkSize: chunkSize,
             partsDone: [],
