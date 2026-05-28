@@ -64,7 +64,6 @@ struct TodayHeroCard: View {
             .fullScreenCover(item: $presentingPlayer) { p in
                 NativePlayerView(url: p.url, title: p.title)
             }
-        }
     }
 
     private var latestReadyItem: RecentUpload? {

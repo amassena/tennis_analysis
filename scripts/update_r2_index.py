@@ -476,23 +476,30 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .coach-modal .close{{position:absolute;top:20px;right:24px;background:none;
   border:none;color:#999;font-size:1.8em;cursor:pointer;line-height:1}}
 .coach-modal .close:hover{{color:#fff}}
-.card-links{{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
-.link-row{{display:flex;align-items:center;gap:6px}}
-.link-row a.play-btn{{flex:1;color:#fff;text-decoration:none;font-size:0.74em;font-weight:600;
-  padding:5px 10px;border-radius:5px;opacity:.9;transition:opacity .15s;
-  display:flex;justify-content:space-between;align-items:center;gap:8px}}
-.link-row a.play-btn:hover{{opacity:1}}
-.link-row a.play-btn .ct{{font-weight:500;opacity:.75;font-size:.9em}}
-.link-row a.slow-btn{{color:#aaa;text-decoration:none;font-size:.65em;font-weight:600;
-  padding:3px 8px;border-radius:4px;background:#2a2a2a;border:1px solid #333;
-  text-transform:uppercase;letter-spacing:.05em;transition:all .15s}}
-.link-row a.slow-btn:hover{{color:#fff;background:#3a3a3a;border-color:#555}}
-.dl-btn{{display:inline-block;padding:4px 6px;font-size:.68em;color:#888;cursor:pointer;
-  text-decoration:none;opacity:.6;transition:opacity .15s;vertical-align:middle}}
-.dl-btn:hover{{opacity:1;color:#fff}}
-.del-btn{{display:inline-block;padding:6px 10px;font-size:.78em;color:#666;cursor:pointer;
-  text-align:center;border-top:1px solid #222;margin-top:4px;opacity:.5;transition:all .15s}}
-.del-btn:hover{{opacity:1;color:#E74C3C}}
+/* Redesigned card actions — compact horizontal strip + slim footer */
+.card-links{{margin-top:10px;padding-top:8px;border-top:1px solid #222;
+  display:flex;flex-direction:column;gap:8px}}
+.play-strip{{display:flex;flex-wrap:wrap;gap:4px}}
+.play-chip{{color:#fff;text-decoration:none;font-size:0.72em;font-weight:600;
+  padding:5px 10px;border-radius:999px;opacity:.92;transition:opacity .15s;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}}
+.play-chip:hover{{opacity:1}}
+.play-chip .ch-ct{{font-weight:500;opacity:.85;font-size:.85em;
+  padding:1px 6px;background:rgba(0,0,0,.22);border-radius:8px}}
+.play-chip-slow{{color:#bbb;text-decoration:none;font-size:.7em;font-weight:600;
+  padding:5px 9px;border-radius:999px;background:#222;border:1px solid #2f2f2f;
+  transition:all .15s}}
+.play-chip-slow:hover{{color:#fff;background:#2c2c2c;border-color:#444}}
+.card-footer{{display:flex;align-items:center;gap:0;border-top:1px solid #1c1c1c;
+  margin-top:4px;padding-top:6px}}
+.card-footer .foot-btn{{flex:1;text-align:center;padding:6px 4px;font-size:.78em;
+  color:#888;cursor:pointer;opacity:.7;transition:all .15s;background:none;border:0;
+  text-decoration:none}}
+.card-footer .foot-btn:hover{{opacity:1;color:#fff}}
+.card-footer .foot-btn.danger:hover{{color:#E74C3C}}
+.card-footer .foot-btn.share:hover{{color:#C7FF00}}
+/* Hide-but-keep for legacy CSS callers (so older referenced classes don't NPE) */
+.del-btn{{}}.dl-btn{{}}.link-row{{}}
 
 /* ── Upload Modal ── */
 .modal-overlay{{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
@@ -1611,30 +1618,33 @@ function renderGallery() {{
         return v.shots || 0;
       }};
 
-      var linksHtml = '';
+      // Compact play strip — one chip per video type. The regular-speed
+      // variant is the primary action. Slow-mo lives behind a tiny "·1/2"
+      // button only when a slow variant exists; download is reached
+      // through the player itself, not on the card (cleans up clutter).
+      var linksHtml = '<div class="play-strip">';
       groupOrder.forEach(function(baseKey) {{
         var g = groups[baseKey];
         var primary = g.normal || g.slow;
+        if (!primary) return;
         var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
         var cnt = countFor(baseKey);
-        var countBadge = cnt > 0 ? ' <span class="ct">('+cnt+')</span>' : '';
-        linksHtml += '<div class="link-row">';
-        linksHtml += '<a href="'+primaryUrl+'" class="play-btn" data-title="'+g.label+' \\u2014 '+v.id+'" '
-          +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-          +'style="background:'+g.color+'">'+g.label+countBadge+'</a>';
-        if(g.normal) {{
-          var nUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.normal.file;
-          linksHtml += '<span class="dl-btn" data-action="download" data-url="'+nUrl+'" title="Download">&#8681;</span>';
-        }}
-        if(g.slow) {{
+        linksHtml += '<a href="'+primaryUrl+'" class="play-chip" '
+          + 'data-title="'+g.label+' \\u2014 '+v.id+'" '
+          + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
+          + 'style="background:'+g.color+'">'
+          + '<span class="ch-lbl">'+g.label+'</span>'
+          + (cnt > 0 ? '<span class="ch-ct">'+cnt+'</span>' : '')
+          + '</a>';
+        if(g.slow && g.normal) {{
           var sUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.slow.file;
-          linksHtml += '<a href="'+sUrl+'" class="slow-btn" data-title="'+g.label+' (Slow-Mo) \\u2014 '+v.id+'" '
-            +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-            +'title="Slow Motion">slow</a>';
-          linksHtml += '<span class="dl-btn" data-action="download" data-url="'+sUrl+'" title="Download Slow-Mo">&#8681;</span>';
+          linksHtml += '<a href="'+sUrl+'" class="play-chip-slow" '
+            + 'data-title="'+g.label+' (Slow-Mo) \\u2014 '+v.id+'" '
+            + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
+            + 'title="Slow motion">\\u00BD\\u00D7</a>';
         }}
-        linksHtml += '</div>';
       }});
+      linksHtml += '</div>';
 
       html += '<div class="card">';
       html += thumbHtml;
@@ -1657,9 +1667,11 @@ function renderGallery() {{
         +'<div class="coach-summary-label"><span>Coach</span><span class="more">Details &rsaquo;</span></div>'
         +'<div class="coach-summary-text"></div></div>';
       html += '<div class="card-links">'+linksHtml
-        +'<span class="seq-btn" data-action="sequences" data-vid="'+v.id+'">&#127910; Sequences</span>'
-        +'<span class="del-btn" data-action="share-link" data-vid="'+v.id+'" title="Get a share link">&#128279;</span>'
-        +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
+        +'<div class="card-footer">'
+        +'<span class="foot-btn" data-action="sequences" data-vid="'+v.id+'" title="Swing sequences">&#127910; Sequences</span>'
+        +'<span class="foot-btn share" data-action="share-link" data-vid="'+v.id+'" title="Get a share link">&#128279; Share</span>'
+        +'<span class="foot-btn danger" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
+        +'</div>'
         +'</div>';
       html += '</div></div>';
     }});
