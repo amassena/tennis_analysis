@@ -16,6 +16,10 @@ import SwiftUI
 struct CoachSummarySheet: View {
     let videoId: String
     let payload: CoachPayload
+    /// Called when the user taps an example timestamp chip. The host
+    /// (WebViewWrapper) routes this back into the gallery's JS
+    /// `jumpToExample(vid, t)` which opens the player at that moment.
+    var onTapExample: ((Double) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -100,13 +104,21 @@ struct CoachSummarySheet: View {
             if let examples = item.examples, !examples.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(examples) { ex in
-                        Text(formattedExample(ex))
-                            .font(.caption.weight(.medium))
-                            .foregroundColor(.brandBackground)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color.brandAccent.opacity(0.85))
-                            .clipShape(Capsule())
+                        Button {
+                            if let t = ex.t {
+                                dismiss()
+                                onTapExample?(t)
+                            }
+                        } label: {
+                            Text(formattedExample(ex))
+                                .font(.caption.weight(.medium))
+                                .foregroundColor(.brandBackground)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(Color.brandAccent.opacity(0.85))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.top, 2)

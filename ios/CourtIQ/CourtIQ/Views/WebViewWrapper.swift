@@ -101,17 +101,25 @@ struct WebViewWrapper: UIViewRepresentable {
             }
         }
 
+        /// Last WebView we received a message from. Saved so the native
+        /// CoachSummarySheet can call back into the WebView's JS
+        /// (jumpToExample) when the user taps an example timestamp.
+        weak var lastWebView: WKWebView?
+
         func userContentController(
             _ userContentController: WKUserContentController,
             didReceive message: WKScriptMessage,
         ) {
+            lastWebView = message.webView
             switch message.name {
             case "openVideo":
                 guard let body = message.body as? [String: Any],
                       let urlStr = body["url"] as? String,
                       let url = URL(string: urlStr) else { return }
                 let title = body["title"] as? String ?? ""
-                presentNativePlayer(url: url, title: title)
+                let startTime = (body["startTime"] as? NSNumber)?.doubleValue
+                    ?? (body["startTime"] as? Double)
+                presentNativePlayer(url: url, title: title, startTime: startTime)
             case "openCoach":
                 guard let body = message.body as? [String: Any],
                       let vid = body["vid"] as? String,
@@ -123,17 +131,26 @@ struct WebViewWrapper: UIViewRepresentable {
         }
 
         private func presentNativeCoach(videoId: String, coachingRaw: Any) {
-            // Re-encode the JS-side payload to JSON, then decode as our
-            // strongly-typed CoachPayload. This is the cleanest bridge —
-            // works regardless of how JSONSerialization typed the nested
-            // values.
             guard JSONSerialization.isValidJSONObject(coachingRaw),
                   let data = try? JSONSerialization.data(withJSONObject: coachingRaw),
                   let payload = try? JSONDecoder().decode(CoachPayload.self, from: data)
             else { return }
             guard let top = topPresentedVC() else { return }
+            // Capture the WebView at presentation-time so the chip-tap
+            // closure can dispatch JS back into the gallery.
+            let webView = lastWebView
             let host = UIHostingController(
-                rootView: CoachSummarySheet(videoId: videoId, payload: payload),
+                rootView: CoachSummarySheet(
+                    videoId: videoId,
+                    payload: payload,
+                    onTapExample: { t in
+                        let escaped = videoId.replacingOccurrences(of: "'", with: "\\'")
+                        webView?.evaluateJavaScript(
+                            "jumpToExample('\(escaped)', \(t))",
+                            completionHandler: nil,
+                        )
+                    },
+                ),
             )
             host.modalPresentationStyle = .pageSheet
             if let sheet = host.sheetPresentationController {
@@ -153,14 +170,29 @@ struct WebViewWrapper: UIViewRepresentable {
             return top
         }
 
-        private func presentNativePlayer(url: URL, title: String) {
+        private func presentNativePlayer(url: URL, title: String, startTime: Double? = nil) {
             guard let top = topPresentedVC() else { return }
             let player = AVPlayer(url: url)
             let vc = AVPlayerViewController()
             vc.player = player
             vc.modalPresentationStyle = .fullScreen
             vc.allowsPictureInPicturePlayback = true
-            top.present(vc, animated: true) { player.play() }
+            // Seek before play; ready-to-play observer keeps the seek
+            // sticky in case load is still in progress.
+            if let t = startTime, t > 0 {
+                let target = CMTime(seconds: t, preferredTimescale: 600)
+                player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+            top.present(vc, animated: true) {
+                if let t = startTime, t > 0 {
+                    let target = CMTime(seconds: t, preferredTimescale: 600)
+                    player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                        player.play()
+                    }
+                } else {
+                    player.play()
+                }
+            }
         }
     }
 }

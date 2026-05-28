@@ -728,15 +728,18 @@ var currentVariant = null; // e.g. "timeline" / "rally_slowmo" — derived from 
 
 function openPlayer(url, title) {{
   // PR-J: if we're inside the iOS WebView wrapper, hand the URL off
-  // to native AVPlayerViewController. WKWebView exposes a message
-  // handler at window.webkit.messageHandlers.openVideo; if it's
-  // present we post and bail before opening the HTML5 player.
+  // to native AVPlayerViewController. We forward `pendingTime` (set
+  // by jumpToExample / deep links) so the native player seeks to the
+  // same starting point the HTML5 player would.
   try {{
     if (window.webkit && window.webkit.messageHandlers
         && window.webkit.messageHandlers.openVideo) {{
-      window.webkit.messageHandlers.openVideo.postMessage(
-        {{url: url, title: title || ''}}
-      );
+      var msg = {{url: url, title: title || ''}};
+      if (pendingTime !== null && pendingTime > 0) {{
+        msg.startTime = pendingTime;
+      }}
+      pendingTime = null;
+      window.webkit.messageHandlers.openVideo.postMessage(msg);
       return;
     }}
   }} catch (e) {{}}
