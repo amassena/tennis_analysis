@@ -1984,11 +1984,56 @@ async function handleAuthApple(request, env, cors) {
 //   - Mints our JWT (sub = email-hash), sets cookie, 302 → /u/<hash>
 const MAGIC_TOKEN_TTL_SEC = 15 * 60;
 
+// Per-email rate limit: 30s minimum gap between magic-link requests
+// and at most 5 in any 1-hour window. Blocks trivial email-bomb abuse.
+const MAGIC_MIN_GAP_SEC = 30;
+const MAGIC_HOURLY_LIMIT = 5;
+
+async function magicRateLimit(env, email) {
+  const hashBuf = await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(email),
+  );
+  const key = `magic_rate/${[...new Uint8Array(hashBuf)]
+    .slice(0, 16).map((b) => b.toString(16).padStart(2, '0')).join('')}.json`;
+  let record = { sends: [] };
+  try {
+    const obj = await env.BUCKET.get(key);
+    if (obj) record = await obj.json();
+  } catch {}
+  const nowSec = Math.floor(Date.now() / 1000);
+  // Drop entries older than 1 hour.
+  record.sends = (record.sends || []).filter((t) => nowSec - t < 3600);
+  const last = record.sends[record.sends.length - 1] || 0;
+  if (last && nowSec - last < MAGIC_MIN_GAP_SEC) {
+    return { ok: false, reason: 'gap', waitSec: MAGIC_MIN_GAP_SEC - (nowSec - last) };
+  }
+  if (record.sends.length >= MAGIC_HOURLY_LIMIT) {
+    return { ok: false, reason: 'hourly' };
+  }
+  record.sends.push(nowSec);
+  await env.BUCKET.put(key, JSON.stringify(record), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  return { ok: true };
+}
+
 async function handleMagicRequest(request, env, cors) {
   const body = await request.json().catch(() => ({}));
   const rawEmail = (body.email || '').toString().trim().toLowerCase();
   if (!rawEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rawEmail)) {
     return jsonResponse({ error: 'Valid email required' }, 400, cors);
+  }
+
+  // Rate limit BEFORE the allowlist check so an attacker can't probe
+  // which emails are allowed by timing the response.
+  const rl = await magicRateLimit(env, rawEmail);
+  if (!rl.ok) {
+    // Always return 200 so we don't leak existence either; just tell
+    // the user we're throttling them.
+    const message = rl.reason === 'gap'
+      ? `Just sent one — try again in ${rl.waitSec || MAGIC_MIN_GAP_SEC}s.`
+      : 'Too many sign-in requests. Try again in an hour.';
+    return jsonResponse({ ok: true, sent: false, message }, 200, cors);
   }
 
   // Allowlist (same rules as Apple flow): open mode, email match, or

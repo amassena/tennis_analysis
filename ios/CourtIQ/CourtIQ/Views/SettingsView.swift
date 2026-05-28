@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var deleteError: String?
     @State private var showCopiedToast = false
     @State private var laptopShareItem: LaptopShareItem?
+    @State private var showingWelcome = false
 
     /// Bootstrap URL the worker recognises via its `?t=<jwt>` query
     /// param: it verifies, returns 302 with Set-Cookie, then redirects
@@ -72,6 +73,9 @@ struct SettingsView: View {
                 }
 
                 Section("About") {
+                    Button("Show app tour") {
+                        showingWelcome = true
+                    }
                     Link("Privacy policy", destination: URL(string: "https://tennis.playfullife.com/privacy")!)
                     LabeledContent("Version", value: appVersionString)
                     Link("Support",
@@ -133,6 +137,9 @@ struct SettingsView: View {
             }
             .sheet(item: $laptopShareItem) { item in
                 ShareSheet(activityItems: [item.url])
+            }
+            .sheet(isPresented: $showingWelcome) {
+                WelcomeSheet(isPresented: $showingWelcome, userHash: userHash)
             }
         }
     }
