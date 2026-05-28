@@ -258,6 +258,13 @@ def build_index_html(videos_meta):
                 label, color = label_map.get(key, (key, '#5DADE2'))
                 links.append({'key': key, 'file': f, 'label': label, 'color': color})
 
+        # Hide non-tennis uploads: pipeline ran to export (has files) but the
+        # shot detector (F1=96.5%) found 0 swings. Files stay in R2 — admin
+        # can recover via direct API if a false negative ever shows up.
+        if m.get('shots', 0) == 0 and links:
+            print(f'  skip {vid}: 0 shots detected (probably not tennis)')
+            continue
+
         video_data.append({
             'id': vid,
             'created': m.get('created', ''),
