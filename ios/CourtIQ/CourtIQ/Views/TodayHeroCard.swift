@@ -16,12 +16,24 @@ struct TodayHeroCard: View {
 
     var body: some View {
         if let item = latestReadyItem {
-            Button {
-                presentingPlayer = PresentablePlayer(
-                    url: timelineURL(for: item),
-                    title: item.filename ?? item.video_id,
-                )
-            } label: {
+            heroButton(for: item)
+        } else if recent.items.isEmpty && recent.isLoading {
+            loadingPlaceholder
+        } else if recent.items.contains(where: { !$0.isComplete }) {
+            // Recent has data but no completed videos yet — show
+            // "processing" placeholder rather than nothing.
+            processingPlaceholder
+        }
+    }
+
+    @ViewBuilder
+    private func heroButton(for item: RecentUpload) -> some View {
+        Button {
+            presentingPlayer = PresentablePlayer(
+                url: timelineURL(for: item),
+                title: item.filename ?? item.video_id,
+            )
+        } label: {
                 VStack(alignment: .leading, spacing: 0) {
                     thumbnail(for: item)
                         .overlay(alignment: .topLeading) { tagPill }
@@ -57,6 +69,46 @@ struct TodayHeroCard: View {
 
     private var latestReadyItem: RecentUpload? {
         recent.items.first(where: { $0.isComplete })
+    }
+
+    private var loadingPlaceholder: some View {
+        HStack {
+            ProgressView().tint(.brandAccent)
+            Text("Loading your sessions…")
+                .font(.subheadline)
+                .foregroundColor(.brandTextSecondary)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 28)
+        .frame(maxWidth: .infinity)
+        .background(Color.brandSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
+    private var processingPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "gearshape.2")
+                .font(.system(size: 36))
+                .foregroundColor(.brandAccent)
+            Text("Your first session is processing")
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(.brandText)
+            Text("We'll show it here once the GPU is done.")
+                .font(.caption)
+                .foregroundColor(.brandTextSecondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 22)
+        .frame(maxWidth: .infinity)
+        .background(Color.brandSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 8, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 
     private func thumbnail(for item: RecentUpload) -> some View {

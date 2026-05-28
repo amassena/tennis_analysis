@@ -17,14 +17,21 @@ struct UploadTabView: View {
     var body: some View {
         NavigationView {
             Group {
-                if manager.uploads.isEmpty && recent.items.isEmpty {
+                // Only ACTIVE locals show in the "Uploading" section —
+                // completed locals are silently dropped because the
+                // Recent section (server-driven) is the source of truth
+                // for "did my video make it". This mirrors the YouTube
+                // upload UX: in-progress only on the upload surface,
+                // history elsewhere.
+                let activeUploads = manager.uploads.filter { $0.status != .completed }
+                if activeUploads.isEmpty && recent.items.isEmpty {
                     EmptyUploadsView { showingComposer = true }
                 } else {
                     List {
                         TodayHeroCard(userHash: userHash, recent: recent)
-                        if !manager.uploads.isEmpty {
+                        if !activeUploads.isEmpty {
                             Section("Uploading") {
-                                ForEach(manager.uploads) { upload in
+                                ForEach(activeUploads) { upload in
                                     UploadRowView(
                                         state: upload,
                                         onRetry: { manager.retry(id: upload.id) },
