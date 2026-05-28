@@ -323,10 +323,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				MARKETING_VERSION = 1.2;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
@@ -411,10 +411,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				MARKETING_VERSION = 1.2;
-				CURRENT_PROJECT_VERSION = 23;
+				CURRENT_PROJECT_VERSION = 24;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";

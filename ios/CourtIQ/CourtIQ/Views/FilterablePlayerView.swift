@@ -193,16 +193,18 @@ struct FilterablePlayerView: View {
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive })
         else { return }
-        let mask: UIInterfaceOrientationMask = landscape
-            ? .landscapeRight
-            : .portrait
+        // Open the app-level gate BEFORE requesting the geometry change.
+        // requestGeometryUpdate is clamped to the intersection of the
+        // Info.plist orientations and what the app delegate currently
+        // permits — so the delegate lock must be widened first, else the
+        // request silently no-ops (the bug in builds 22/23).
+        let mask: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
+        AppDelegate.orientationLock = mask
         scene.requestGeometryUpdate(
-            .iOS(interfaceOrientations: mask),
+            .iOS(interfaceOrientations: landscape ? .landscapeRight : .portrait),
         ) { error in
             print("[FilterablePlayer] orientation request failed: \(error)")
         }
-        // Force a re-evaluation of supportedInterfaceOrientations on the
-        // hosting controller so iOS honors the request immediately.
         scene.keyWindow?.rootViewController?
             .setNeedsUpdateOfSupportedInterfaceOrientations()
     }
@@ -267,6 +269,18 @@ struct FilterablePlayerView: View {
         controlsHideTask = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
+        // Restore portrait lock when leaving the player so closing while
+        // in fullscreen doesn't strand the rest of the app in landscape.
+        if AppDelegate.orientationLock != .portrait {
+            AppDelegate.orientationLock = .portrait
+            if let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) {
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+                scene.keyWindow?.rootViewController?
+                    .setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+        }
     }
 
     private func fetchShots(from url: URL) {

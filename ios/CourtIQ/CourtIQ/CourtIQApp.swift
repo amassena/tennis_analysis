@@ -1,8 +1,10 @@
 import SwiftUI
 import UserNotifications
+import UIKit
 
 @main
 struct CourtIQApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var auth = AuthCoordinator()
     @StateObject private var nav = AppNavigation()
     private let notifDelegate = NotificationDelegate()
@@ -65,4 +67,21 @@ private final class NotificationDelegate: NSObject, UNUserNotificationCenterDele
 
 extension Notification.Name {
     static let didTapReadyNotification = Notification.Name("ready.notification.tapped")
+}
+
+/// App-level orientation gate. The app is portrait-only everywhere
+/// EXCEPT the fullscreen video player, which flips `orientationLock`
+/// to `.landscape` while active so `requestGeometryUpdate` can rotate
+/// the device. The Info.plist must permit landscape (it's the hard
+/// ceiling) — this delegate is what keeps every *other* screen portrait
+/// despite that. FilterablePlayerView owns flipping this flag.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    static var orientationLock: UIInterfaceOrientationMask = .portrait
+
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?,
+    ) -> UIInterfaceOrientationMask {
+        AppDelegate.orientationLock
+    }
 }
