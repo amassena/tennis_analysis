@@ -32,6 +32,7 @@ struct FilterablePlayerView: View {
     @State private var showControls = true
     @State private var controlsHideTask: Task<Void, Never>? = nil
     @State private var isFullscreen = false
+    @State private var lastAutoSeekAt: TimeInterval = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -300,21 +301,34 @@ struct FilterablePlayerView: View {
 
     private func handleTimeUpdate(_ now: Double) {
         guard currentFilter != "all", let variant = variant else { return }
+        // Don't auto-seek while the player is buffering / mid-seek.
+        // Re-issuing seeks during stalls compounds them — that's what
+        // produced the "stuck at 33s, manual skip unblocks" report.
+        guard player.timeControlStatus == .playing else { return }
         let segs = buildSegments(filter: currentFilter, variant: variant)
         if segs.isEmpty { return }
+        // Already inside an active segment → nothing to do.
         for s in segs where now >= s.start && now <= s.end { return }
+        // Throttle auto-seeks to at most one per 1.5s. Periodic time
+        // observer fires at 4 Hz; without a throttle we'd kick a second
+        // seek while the first is still in flight, again causing stutter.
+        let mono = ProcessInfo.processInfo.systemUptime
+        guard mono - lastAutoSeekAt > 1.5 else { return }
+        lastAutoSeekAt = mono
         // Default tolerance (not .zero) for segment-boundary seeks.
         // Exact-frame seek takes 200-500ms during which AVPlayer drops
-        // rate to 0 — which is what produced the Rally chip stutter.
-        // Default tolerance lands within ~1 keyframe of target (<100ms)
-        // and lets playback continue without dropping.
+        // rate to 0 — produces visible stutter. Default tolerance lands
+        // within ~1 keyframe (<100ms) and keeps playback flowing.
         for s in segs where s.start > now {
             player.seek(to: CMTime(seconds: s.start, preferredTimescale: 600))
             return
         }
-        if let first = segs.first {
-            player.seek(to: CMTime(seconds: first.start, preferredTimescale: 600))
-        }
+        // Past the last segment. Pause instead of looping back so the
+        // user sees a deliberate end-of-playlist state rather than the
+        // playhead snapping to the beginning.
+        player.pause()
+        isPlaying = false
+        showControls = true
     }
 
     private func buildSegments(filter: String, variant: String) -> [(start: Double, end: Double)] {
