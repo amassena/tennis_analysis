@@ -60,9 +60,13 @@ load_dotenv(PROJECT_ROOT / '.env')
 
 from storage.r2_client import R2Client  # noqa: E402
 
-# Variants we keep. Anything else under highlights/<hash>/<vid>/ ending
-# in .mp4 is fair game for the cleanup.
-KEEP_VARIANTS = {'timeline', 'rally', 'tracked'}
+# Variants we keep unconditionally. Anything else under
+# highlights/<hash>/<vid>/ ending in .mp4 is candidate for cleanup,
+# EXCEPT for `rally` which we only delete from videos that *also* have
+# a timeline.mp4 (since the card's Watch button falls back through
+# timeline → rally for legacy videos that never got timeline exported).
+KEEP_VARIANTS = {'timeline', 'tracked'}
+RALLY_DELETE_REQUIRES_TIMELINE = True
 
 USER_HASH_RE = re.compile(r'^u_[a-f0-9]{8}$')
 
@@ -74,9 +78,18 @@ def list_legacy_keys(c: R2Client, user_hash: str) -> list[tuple[str, int]]:
     We use the parent directory as the canonical <vid> (since the video
     ID itself can contain underscores like `IMG_0991` or `iphone_9ca0a615`)
     and strip that prefix from the filename to extract the variant.
+
+    Two-pass:
+      1. Gather every (vid, variant, key, size) tuple.
+      2. For each video, decide what's safe to delete:
+         - Variant in KEEP_VARIANTS → keep
+         - Variant == 'rally' → delete only if a `timeline` variant exists
+           for the same vid (otherwise Watch button has nothing to play).
+         - Anything else → delete.
     """
     prefix = f'highlights/{user_hash}/'
-    out: list[tuple[str, int]] = []
+    # vid → { variant: (key, size) }
+    by_vid: dict[str, dict[str, tuple[str, int]]] = {}
     paginator = c.client.get_paginator('list_objects_v2')
     for page in paginator.paginate(Bucket=c.bucket_name, Prefix=prefix):
         for obj in page.get('Contents', []):
@@ -86,19 +99,24 @@ def list_legacy_keys(c: R2Client, user_hash: str) -> list[tuple[str, int]]:
                 continue
             rel = key[len(prefix):]
             parts = rel.split('/')
-            # Skip nested folders (sequences/, comparisons/) and the
-            # bare-prefix thumbs/ directory.
             if len(parts) != 2:
                 continue
             vid, fname = parts
-            stem = fname[:-4]  # strip .mp4
+            stem = fname[:-4]
             expected_prefix = f'{vid}_'
             if not stem.startswith(expected_prefix):
-                # Defensive: file doesn't follow <vid>_<variant>.mp4 — leave it alone.
                 continue
             variant = stem[len(expected_prefix):]
+            by_vid.setdefault(vid, {})[variant] = (key, size)
+    out: list[tuple[str, int]] = []
+    for vid, variants in by_vid.items():
+        has_timeline = 'timeline' in variants
+        for variant, (key, size) in variants.items():
             if variant in KEEP_VARIANTS:
-                continue  # timeline / rally / tracked stay
+                continue
+            if variant == 'rally':
+                if RALLY_DELETE_REQUIRES_TIMELINE and not has_timeline:
+                    continue  # keep rally as fallback for this video
             out.append((key, size))
     return out
 
