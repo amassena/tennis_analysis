@@ -1646,7 +1646,7 @@ function renderGallery() {{
           linksHtml += '<a href="'+sUrl+'" class="play-chip-slow" '
             + 'data-title="'+g.label+' (Slow-Mo) \\u2014 '+v.id+'" '
             + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-            + 'title="Slow motion">\\u00BD\\u00D7</a>';
+            + 'title="Slow motion">Slo</a>';
         }}
       }});
       linksHtml += '</div>';
