@@ -880,6 +880,34 @@ function dlFile(url) {{
   f.src = url + (url.includes('?')?'&':'?') + 'dl=1';
 }}
 
+// PR-F — generate a public share link for one video. Worker stores
+// `shares/<token>.json`, returns the URL. We try the iOS native share
+// sheet first; otherwise we put the URL on the clipboard.
+function createShareLink(vid) {{
+  fetch('/api/video/'+vid+'/share', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    credentials:'include',
+    body:'{{}}',
+  }}).then(function(r){{
+    return r.json().then(function(j){{ return {{status:r.status, json:j}}; }});
+  }}).then(function(res){{
+    if(res.status !== 200) throw new Error(res.json.error || ('failed: '+res.status));
+    var url = res.json.url;
+    // Native iOS share sheet via Web Share API where available.
+    if (navigator.share) {{
+      navigator.share({{title: vid, url: url}}).catch(function(){{}});
+      return;
+    }}
+    if (navigator.clipboard) {{
+      navigator.clipboard.writeText(url).then(function(){{
+        alert('Share link copied:\\n' + url);
+      }}, function(){{ prompt('Share link:', url); }});
+      return;
+    }}
+    prompt('Share link:', url);
+  }}).catch(function(e){{ alert('Error: '+e.message); }});
+}}
+
 function deleteVideo(vid) {{
   if(!confirm('Permanently delete '+vid+' and all its files?')) return;
   // Per-user gallery is cookie-authenticated. Worker validates the JWT
@@ -1591,6 +1619,7 @@ function renderGallery() {{
         +'<div class="coach-summary-text"></div></div>';
       html += '<div class="card-links">'+linksHtml
         +'<span class="seq-btn" data-action="sequences" data-vid="'+v.id+'">&#127910; Sequences</span>'
+        +'<span class="del-btn" data-action="share-link" data-vid="'+v.id+'" title="Get a share link">&#128279;</span>'
         +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
         +'</div>';
       html += '</div></div>';
@@ -1842,6 +1871,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'share') shareSession(dk);
   else if(action === 'download') dlFile(el.dataset.url);
   else if(action === 'delete') deleteVideo(el.dataset.vid);
+  else if(action === 'share-link') createShareLink(el.dataset.vid);
   else if(action === 'play') openPlayer(el.dataset.url, el.dataset.title);
   else if(action === 'coach') openCoachModal(el.dataset.vid);
   else if(action === 'sequences') openSeqModal(el.dataset.vid);

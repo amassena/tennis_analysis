@@ -69,6 +69,21 @@ export default {
       return handleUserAsset(request, env, userMatch[1], userMatch[2] || '/');
     }
 
+    // PR-F: public share-link viewer at /v/<token>. No auth — the token
+    // IS the bearer. Serves a tiny HTML player page that embeds the
+    // owner's timeline.mp4 (resolved via the share record).
+    const shareViewMatch = path.match(/^\/v\/([A-Za-z0-9_-]+)$/);
+    if (shareViewMatch && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handleViewShare(request, env, shareViewMatch[1]);
+    }
+    // Streamed source for the share-page <video src=…> tag, served
+    // without the per-user auth gate (because the token already
+    // authenticated the watcher). Path: /v/<token>/video
+    const shareMediaMatch = path.match(/^\/v\/([A-Za-z0-9_-]+)\/video$/);
+    if (shareMediaMatch && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handleShareMedia(request, env, shareMediaMatch[1]);
+    }
+
     // Static assets from R2
     if (request.method === 'GET' || request.method === 'HEAD') {
       return handleAsset(request, env, path);
@@ -446,6 +461,13 @@ async function handleApi(request, env, path) {
     const deleteMatch = path.match(/^\/api\/video\/([^/]+)\/delete$/);
     if (deleteMatch && request.method === 'POST') {
       return await handleDeleteVideo(request, env, cors, deleteMatch[1]);
+    }
+
+    // PR-F: per-video share link. POST mints a token for the caller's
+    // video; GET /v/<token> serves a public player page.
+    const shareMatch = path.match(/^\/api\/video\/([^/]+)\/share$/);
+    if (shareMatch && request.method === 'POST') {
+      return await handleCreateShare(request, env, cors, shareMatch[1]);
     }
 
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
@@ -1125,6 +1147,199 @@ async function handleUserRecent(request, env, cors, userHash) {
     200,
     { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' },
   );
+}
+
+// ---------------------------------------------------------------------------
+// PR-F — per-video share links
+// ---------------------------------------------------------------------------
+//
+// shares/<token>.json:
+//   { token, vid, owner, created_at, click_count, last_seen_at? }
+//
+// Flow:
+//   1. Owner taps Share in the gallery → POST /api/video/<vid>/share
+//   2. Worker mints a 16-byte token, stores the record, returns the URL.
+//   3. Anyone with the URL hits GET /v/<token> → tiny HTML player page.
+//   4. The page's <video> tag fetches GET /v/<token>/video which streams
+//      the timeline.mp4 from highlights/<owner>/<vid>/<vid>_timeline.mp4
+//      without requiring the watcher to be signed in.
+//
+// Tokens don't expire — the owner can revoke by listing/deleting the
+// `shares/<token>.json` record (TODO: revoke UI). They're 22 chars of
+// base64url so brute force is infeasible.
+const SHARE_TOKEN_BYTES = 16;
+
+async function handleCreateShare(request, env, cors, vid) {
+  if (!/^[A-Za-z0-9_-]+$/.test(vid)) {
+    return jsonResponse({ error: 'Invalid video id' }, 400, cors);
+  }
+  // Auth: owner JWT or admin JWT.
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  // Marker → owner.
+  let owner = null;
+  try {
+    const markerObj = await env.BUCKET.get(`uploads/${vid}.json`);
+    if (markerObj) {
+      const marker = await markerObj.json();
+      owner = marker.user_hash || marker.uploaded_by || null;
+    }
+  } catch {}
+  if (!owner) {
+    return jsonResponse({ error: 'Video not found' }, 404, cors);
+  }
+  const isOwner = claims.sub === owner;
+  const isAdmin = isAdminUser(env, claims.sub);
+  if (!isOwner && !isAdmin) {
+    return jsonResponse({ error: 'Only the video owner can share it' }, 403, cors);
+  }
+
+  // Existing share? Reuse so repeated taps don't generate new tokens.
+  const existing = await findExistingShareForVid(env, vid);
+  if (existing) {
+    return jsonResponse(
+      { url: `https://tennis.playfullife.com/v/${existing.token}`,
+        token: existing.token, vid, owner, reused: true },
+      200, cors,
+    );
+  }
+
+  const tok = base64urlEncodeBytes(crypto.getRandomValues(new Uint8Array(SHARE_TOKEN_BYTES)));
+  const record = {
+    token: tok,
+    vid,
+    owner,
+    created_by: claims.sub,
+    created_at: new Date().toISOString(),
+    click_count: 0,
+  };
+  await env.BUCKET.put(`shares/${tok}.json`, JSON.stringify(record), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  return jsonResponse(
+    { url: `https://tennis.playfullife.com/v/${tok}`, token: tok, vid, owner },
+    200, cors,
+  );
+}
+
+// Linear scan — there shouldn't be many shares. Could index later.
+async function findExistingShareForVid(env, vid) {
+  let cursor;
+  do {
+    const page = await env.BUCKET.list({ prefix: 'shares/', cursor });
+    for (const obj of page.objects) {
+      try {
+        const r = await env.BUCKET.get(obj.key);
+        if (!r) continue;
+        const rec = await r.json();
+        if (rec.vid === vid) return rec;
+      } catch {}
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return null;
+}
+
+async function loadShareRecord(env, tok) {
+  if (!tok || !/^[A-Za-z0-9_-]+$/.test(tok)) return null;
+  try {
+    const obj = await env.BUCKET.get(`shares/${tok}.json`);
+    if (!obj) return null;
+    return await obj.json();
+  } catch { return null; }
+}
+
+async function bumpShareClick(env, tok, rec) {
+  rec.click_count = (rec.click_count || 0) + 1;
+  rec.last_seen_at = new Date().toISOString();
+  await env.BUCKET.put(`shares/${tok}.json`, JSON.stringify(rec), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+}
+
+async function handleViewShare(request, env, tok) {
+  const rec = await loadShareRecord(env, tok);
+  if (!rec) {
+    return new Response('Share link not found or expired.', { status: 404 });
+  }
+  // Don't count HEAD as a click (link-preview pings etc.).
+  if (request.method === 'GET') {
+    request.ctx?.waitUntil?.(bumpShareClick(env, tok, rec));
+  }
+
+  const title = rec.vid || 'Tennis Uploader';
+  const videoUrl = `/v/${tok}/video`;
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta property="og:title" content="${escapeHtml(title)} — Tennis Uploader" />
+  <meta property="og:type" content="video.other" />
+  <meta property="og:video" content="https://tennis.playfullife.com${videoUrl}" />
+  <meta property="og:video:type" content="video/mp4" />
+  <title>${escapeHtml(title)} — Tennis Uploader</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin:0; padding:0; background:#0A0A0B; color:#F5F5F7;
+      font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: env(safe-area-inset-top) 0 0; }
+    video { width:100%; max-height: 80vh; background:#000; display:block; }
+    .meta { padding: 16px 18px; }
+    h1 { font-size: 20px; margin: 0 0 6px; letter-spacing:-0.01em; }
+    .sub { color:#9AA0A6; font-size:13px; }
+    .footer { padding: 14px 18px 28px; color:#9AA0A6; font-size:13px; }
+    .footer a { color:#C7FF00; text-decoration: none; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <video controls playsinline preload="metadata" src="${videoUrl}"></video>
+    <div class="meta">
+      <h1>${escapeHtml(title)}</h1>
+      <div class="sub">Shared from Tennis Uploader</div>
+    </div>
+  </div>
+  <div class="footer">
+    Want your own swing breakdowns?
+    <a href="https://apps.apple.com/us/app/tennis-uploader/id6772337106">Get the app</a>.
+  </div>
+</body>
+</html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'cdn-cache-control': 'no-store',
+      'x-frame-options': 'SAMEORIGIN',
+    },
+  });
+}
+
+async function handleShareMedia(request, env, tok) {
+  const rec = await loadShareRecord(env, tok);
+  if (!rec) {
+    return new Response('Not Found', { status: 404 });
+  }
+  const key = `highlights/${rec.owner}/${rec.vid}/${rec.vid}_timeline.mp4`;
+  return serveR2Object(request, env, key, { private: true });
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 }
 
 // Delete every R2 key associated with one video — gallery outputs,

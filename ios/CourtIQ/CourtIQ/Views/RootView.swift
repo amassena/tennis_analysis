@@ -62,16 +62,31 @@ private struct GalleryTabView: View {
     @EnvironmentObject var nav: AppNavigation
     @State private var filter = FilterState()
     @State private var pendingScript: String?
+    @State private var showingSettings = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            GalleryFilterBar(state: $filter) { newState in
-                pendingScript = "applyNativeFilter(\(newState.toJSObject()))"
+        NavigationView {
+            VStack(spacing: 0) {
+                GalleryFilterBar(state: $filter) { newState in
+                    pendingScript = "applyNativeFilter(\(newState.toJSObject()))"
+                }
+                WebViewWrapper(url: galleryURL, pendingScript: $pendingScript)
+                    .ignoresSafeArea(edges: .bottom)
             }
-            WebViewWrapper(url: galleryURL, pendingScript: $pendingScript)
-                .ignoresSafeArea(edges: .bottom)
+            .background(Color.brandBackground)
+            .navigationTitle("Gallery")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
         }
-        .background(Color.brandBackground)
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(userHash: userHash, isPresented: $showingSettings)
+        }
         .onChange(of: nav.selectedTab) { newValue in
             if newValue == .gallery && nav.pendingGalleryAnchor != nil {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
