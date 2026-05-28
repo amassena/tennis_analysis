@@ -5,12 +5,12 @@ import SwiftUI
 /// the cached payload over the openCoach JS bridge; we present this in
 /// a SwiftUI sheet on top of the WebView.
 ///
-/// The payload shape mirrors the gallery's `coachCache` content:
+/// The payload shape matches the GPU pipeline's actual coaching.json:
 /// {
 ///   headline: String,
-///   working: [Section]?,
-///   improve: [Section]?,
-///   focus:   [Section]?
+///   strengths: [Section],
+///   work_on:   [Section],
+///   drill:     String     // single suggested-drill blurb
 /// }
 /// Section = { point, detail, examples?: [{ t, type, note? }] }
 struct CoachSummarySheet: View {
@@ -21,7 +21,7 @@ struct CoachSummarySheet: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 22) {
                     Text(videoId)
                         .font(.caption.monospaced())
                         .foregroundColor(.brandTextSecondary)
@@ -33,9 +33,26 @@ struct CoachSummarySheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    sectionView(title: "What's working", items: payload.working)
-                    sectionView(title: "What to improve", items: payload.improve)
-                    sectionView(title: "Focus on", items: payload.focus)
+                    sectionView(title: "What's working", items: payload.strengths)
+                    sectionView(title: "What to work on", items: payload.work_on)
+
+                    if let drill = payload.drill, !drill.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("SUGGESTED DRILL")
+                                .font(.caption.weight(.heavy))
+                                .tracking(0.8)
+                                .foregroundColor(.brandAccent)
+                            Text(drill)
+                                .font(.subheadline)
+                                .foregroundColor(.brandText)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.brandSurface)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -116,12 +133,13 @@ struct CoachSummarySheet: View {
     }
 }
 
-// Wire-types. Codable so we can decode the WebView JS payload directly.
+// Wire-types matching scripts/claude_coach.py output schema.
+// `drill` is a single text suggestion, not an array.
 struct CoachPayload: Codable, Equatable {
     let headline: String?
-    let working: [CoachItem]?
-    let improve: [CoachItem]?
-    let focus: [CoachItem]?
+    let strengths: [CoachItem]?
+    let work_on: [CoachItem]?
+    let drill: String?
 }
 
 struct CoachItem: Codable, Equatable, Identifiable {

@@ -320,7 +320,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				MARKETING_VERSION = 1.2;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
@@ -406,7 +406,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Tennis Uploader";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				MARKETING_VERSION = 1.2;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
