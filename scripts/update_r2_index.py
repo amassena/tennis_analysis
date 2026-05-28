@@ -396,16 +396,21 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
 .card-breakdown{{font-size:0.75em;color:#999;margin-top:3px}}
 /* Compact coach summary on card (always visible when coaching exists) */
-.card-coach-summary{{margin-top:8px;padding:8px 10px;background:#161a17;
+/* Compact coach pill — just a label that opens the full sheet/modal.
+   Headline text is hidden by default; available via the modal only. */
+.card-coach-summary{{margin-top:8px;padding:6px 10px;background:#161a17;
   border-left:3px solid #5ed694;border-radius:3px;cursor:pointer;
   transition:background .15s;display:none}}
-.card-coach-summary.loaded{{display:block}}
+.card-coach-summary.loaded{{display:flex;align-items:center;
+  justify-content:space-between;gap:8px}}
 .card-coach-summary:hover{{background:#1c211d}}
-.coach-summary-label{{color:#5ed694;font-size:.65em;font-weight:700;
-  text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;display:flex;
-  justify-content:space-between;align-items:center}}
-.coach-summary-label .more{{color:#8ae6ae;font-size:.9em;opacity:.8}}
-.coach-summary-text{{color:#eaeaea;font-size:.82em;line-height:1.35;font-weight:500}}
+.coach-summary-label{{color:#5ed694;font-size:.66em;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px}}
+.coach-summary-label .more{{color:#8ae6ae;font-size:.92em;opacity:.85;
+  font-weight:600;text-transform:none;letter-spacing:0}}
+/* Headline text is kept in the DOM (the click handler reads it) but
+   visually hidden so the card stays compact. */
+.coach-summary-text{{display:none}}
 
 /* Sequences button on card */
 .seq-btn{{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;
@@ -1664,8 +1669,9 @@ function renderGallery() {{
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
       html += '<div class="card-coach-summary" id="coachSum-'+v.id+'" data-action="coach" data-vid="'+v.id+'">'
-        +'<div class="coach-summary-label"><span>Coach</span><span class="more">Details &rsaquo;</span></div>'
-        +'<div class="coach-summary-text"></div></div>';
+        +'<span class="coach-summary-label">Coach summary</span>'
+        +'<span class="more">View &rsaquo;</span>'
+        +'<span class="coach-summary-text" hidden></span></div>';
       html += '<div class="card-links">'+linksHtml
         +'<div class="card-footer">'
         +'<span class="foot-btn" data-action="sequences" data-vid="'+v.id+'" title="Swing sequences">&#127910; Sequences</span>'
