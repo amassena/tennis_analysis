@@ -29,7 +29,7 @@
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: 2026-05-22</p>
+  <p class="updated">Last updated: 2026-05-27</p>
 
   <h2>What this app does</h2>
   <p>
@@ -42,11 +42,17 @@
   <h2>What we collect</h2>
   <ul>
     <li>
-      <strong>Your Apple ID (subject identifier only):</strong> when
-      you sign in with Apple, we receive a stable identifier — not
-      your name or email unless you explicitly share them. We use it
-      only to recognize you across sessions and to scope your uploads
-      to your account.
+      <strong>Your email address:</strong> either supplied directly
+      (web sign-in via emailed magic link) or relayed by Apple when
+      you sign in with Apple. Your account identifier on our side is
+      a one-way hash of this email so the same email always resolves
+      to the same private gallery regardless of which sign-in method
+      you use.
+    </li>
+    <li>
+      <strong>Your Apple subject identifier</strong> (if you signed
+      in with Apple) — a stable per-app identifier. We use it only
+      to recognize you across sessions; it isn't shared or sold.
     </li>
     <li>
       <strong>Videos you choose to upload:</strong> the original file
@@ -58,6 +64,12 @@
       <strong>Upload metadata:</strong> the byte size, upload time,
       and processing status — needed to show progress and surface
       failures.
+    </li>
+    <li>
+      <strong>Share links you create:</strong> when you tap "Share"
+      on a video, we store an opaque token that lets viewers of that
+      link play that single video without signing in. The mapping is
+      removed when you delete your account.
     </li>
   </ul>
 
@@ -71,11 +83,16 @@
 
   <h2>Who sees your videos</h2>
   <p>
-    The gallery is private by sign-in. People without an invited Apple
-    ID cannot see your videos. Among invited users, gallery contents
-    are shared — anyone in the invite list can see anyone else's
-    processed videos. If that's not what you want, contact the
-    administrator before uploading.
+    Each account has a private gallery at a per-user URL
+    (<code>/u/&lt;hash&gt;</code>). Only you can view it while signed
+    in; other invited users cannot see your videos and you cannot
+    see theirs.
+  </p>
+  <p>
+    If you generate a share link for a specific video, anyone with
+    that link can view that one video (without signing in) until you
+    revoke it by deleting the link or the video. Don't share the link
+    in public channels if you want it kept private.
   </p>
 
   <h2>How to delete your account and data</h2>
@@ -98,9 +115,13 @@
   <h2>Security</h2>
   <p>
     All traffic between the app and the server is over HTTPS. Server-
-    side files are stored in Cloudflare R2 (or equivalent) and
-    authenticated by a Bearer token bound to your Apple ID. We do
-    not share your data with third parties.
+    side files live in Cloudflare R2, scoped by your per-user prefix
+    so other users can't read them. Sessions use a short-lived JWT
+    cookie set after sign-in, and any 401/403 response from the
+    server bypasses CDN caches so an unauthenticated probe can't
+    poison a signed-in session. Magic-link emails are throttled and
+    consumed once. We don't share your data with third parties beyond
+    Resend (the email-delivery service that sends sign-in links).
   </p>
 
   <h2>Children</h2>
