@@ -1862,9 +1862,13 @@ function renderGallery() {{
       var linksHtml = '';
       if (primary) {{
         var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
+        // Compose a human-friendly player title from the recorded
+        // date/time (falling back to the raw video id). Beats showing
+        // `iphone_9ca0a615` as the modal header.
+        var humanTitle = time ? (time + ' \\u2014 ' + v.id) : v.id;
         linksHtml = '<div class="play-strip">'
           + '<a href="'+primaryUrl+'" class="play-chip play-chip-primary" '
-          + 'data-title="'+v.id+'" '
+          + 'data-title="'+humanTitle+'" '
           + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false">'
           + '<span class="ch-lbl">&#9654; Watch</span>'
           + (v.shots ? '<span class="ch-ct">'+v.shots+'</span>' : '')
