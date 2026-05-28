@@ -126,7 +126,11 @@ struct FilterablePlayerView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundColor(.white)
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { isFullscreen.toggle() }
+                        let goingFullscreen = !isFullscreen
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isFullscreen = goingFullscreen
+                        }
+                        requestOrientation(landscape: goingFullscreen)
                         scheduleControlsHide()
                     } label: {
                         Image(systemName: isFullscreen
@@ -178,6 +182,29 @@ struct FilterablePlayerView: View {
                 withAnimation(.easeInOut(duration: 0.2)) { showControls = false }
             }
         }
+    }
+
+    /// YouTube-style: when entering fullscreen, force the device UI to
+    /// landscape so a landscape video fills the entire screen. When
+    /// exiting, snap back to portrait. Requires iOS 16+ which is fine
+    /// since the project deployment target is iOS 17.
+    private func requestOrientation(landscape: Bool) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })
+        else { return }
+        let mask: UIInterfaceOrientationMask = landscape
+            ? .landscapeRight
+            : .portrait
+        scene.requestGeometryUpdate(
+            .iOS(interfaceOrientations: mask),
+        ) { error in
+            print("[FilterablePlayer] orientation request failed: \(error)")
+        }
+        // Force a re-evaluation of supportedInterfaceOrientations on the
+        // hosting controller so iOS honors the request immediately.
+        scene.keyWindow?.rootViewController?
+            .setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 
     private func timeString(_ seconds: Double) -> String {
