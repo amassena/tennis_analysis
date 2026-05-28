@@ -26,6 +26,11 @@ struct FilterablePlayerView: View {
     @State private var sloMo: Bool = false
     @State private var timeObserver: Any?
     @State private var statusObs: NSKeyValueObservation?
+    @State private var isPlaying = false
+    @State private var currentTime: Double = 0
+    @State private var totalDuration: Double = 0
+    @State private var showControls = true
+    @State private var controlsHideTask: Task<Void, Never>? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,12 +63,115 @@ struct FilterablePlayerView: View {
                 onSloToggle: applySlo,
             )
 
-            AVPlayerVCContainer(player: player)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack {
+                PlayerLayerContainer(player: player)
+                    .onTapGesture { toggleControls() }
+                if showControls {
+                    customControlsOverlay
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.black.ignoresSafeArea())
         .onAppear(perform: setup)
         .onDisappear(perform: teardown)
+    }
+
+    private var customControlsOverlay: some View {
+        VStack {
+            Spacer()
+            VStack(spacing: 8) {
+                HStack(spacing: 24) {
+                    Button { skip(-10) } label: {
+                        Image(systemName: "gobackward.10")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                    }
+                    Button { togglePlayPause() } label: {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 38, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 64, height: 64)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(Circle())
+                    }
+                    Button { skip(10) } label: {
+                        Image(systemName: "goforward.10")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.vertical, 8)
+
+                HStack(spacing: 10) {
+                    Text(timeString(currentTime))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.white)
+                    Slider(
+                        value: Binding(
+                            get: { currentTime },
+                            set: { newValue in
+                                currentTime = newValue
+                                player.seek(to: CMTime(seconds: newValue, preferredTimescale: 600))
+                            },
+                        ),
+                        in: 0...(max(totalDuration, 0.1)),
+                    )
+                    .tint(Color(red: 1.0, green: 0.549, blue: 0.0))
+                    Text(timeString(totalDuration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 14)
+            }
+            .padding(.bottom, 16)
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0), Color.black.opacity(0.55)],
+                    startPoint: .top, endPoint: .bottom,
+                ),
+            )
+        }
+    }
+
+    private func togglePlayPause() {
+        if isPlaying {
+            player.pause()
+        } else {
+            player.play()
+        }
+        isPlaying.toggle()
+        scheduleControlsHide()
+    }
+
+    private func skip(_ seconds: Double) {
+        let target = max(0, currentTime + seconds)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+        scheduleControlsHide()
+    }
+
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+        if showControls { scheduleControlsHide() }
+    }
+
+    private func scheduleControlsHide() {
+        controlsHideTask?.cancel()
+        controlsHideTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.2)) { showControls = false }
+            }
+        }
+    }
+
+    private func timeString(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let total = Int(seconds)
+        let m = total / 60
+        let s = total % 60
+        return String(format: "%d:%02d", m, s)
     }
 
     private func setup() {
@@ -77,13 +185,20 @@ struct FilterablePlayerView: View {
         statusObs = item.observe(\.status, options: [.new]) { item, _ in
             guard item.status == .readyToPlay else { return }
             DispatchQueue.main.async {
+                totalDuration = item.duration.seconds
                 if let t = startTime, t > 0 {
                     player.seek(
                         to: CMTime(seconds: t, preferredTimescale: 600),
                         toleranceBefore: .zero, toleranceAfter: .zero,
-                    ) { _ in player.play() }
+                    ) { _ in
+                        player.play()
+                        isPlaying = true
+                        scheduleControlsHide()
+                    }
                 } else {
                     player.play()
+                    isPlaying = true
+                    scheduleControlsHide()
                 }
             }
         }
@@ -94,6 +209,8 @@ struct FilterablePlayerView: View {
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: interval, queue: .main,
         ) { time in
+            currentTime = time.seconds
+            isPlaying = player.rate > 0
             handleTimeUpdate(time.seconds)
         }
     }
@@ -105,6 +222,8 @@ struct FilterablePlayerView: View {
         }
         statusObs?.invalidate()
         statusObs = nil
+        controlsHideTask?.cancel()
+        controlsHideTask = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
@@ -171,18 +290,17 @@ struct FilterablePlayerView: View {
         let segs = buildSegments(filter: currentFilter, variant: variant)
         if segs.isEmpty { return }
         for s in segs where now >= s.start && now <= s.end { return }
+        // Default tolerance (not .zero) for segment-boundary seeks.
+        // Exact-frame seek takes 200-500ms during which AVPlayer drops
+        // rate to 0 — which is what produced the Rally chip stutter.
+        // Default tolerance lands within ~1 keyframe of target (<100ms)
+        // and lets playback continue without dropping.
         for s in segs where s.start > now {
-            player.seek(
-                to: CMTime(seconds: s.start, preferredTimescale: 600),
-                toleranceBefore: .zero, toleranceAfter: .zero,
-            )
+            player.seek(to: CMTime(seconds: s.start, preferredTimescale: 600))
             return
         }
         if let first = segs.first {
-            player.seek(
-                to: CMTime(seconds: first.start, preferredTimescale: 600),
-                toleranceBefore: .zero, toleranceAfter: .zero,
-            )
+            player.seek(to: CMTime(seconds: first.start, preferredTimescale: 600))
         }
     }
 
@@ -229,19 +347,33 @@ struct FilterablePlayerView: View {
     }
 }
 
-// Wraps AVPlayerViewController so we keep Apple's playback chrome
-// (scrubber, AirPlay, PiP) while owning the layout around it.
-struct AVPlayerVCContainer: UIViewControllerRepresentable {
+// Custom AVPlayerLayer-backed view (no AVPlayerViewController).
+// We dropped AVPlayerViewController in build 19 because its system
+// fullscreen UI took over the screen on landscape rotation, hiding the
+// chip overlay AND occasionally landing in a blank/uncontrollable
+// state. With our own layer + SwiftUI controls there's no fullscreen
+// button at all and orientation is fully under PortraitHostingController.
+struct PlayerLayerContainer: UIViewRepresentable {
     let player: AVPlayer
-    func makeUIViewController(context: Context) -> AVPlayerViewController {
-        let vc = AVPlayerViewController()
-        vc.player = player
-        vc.allowsPictureInPicturePlayback = true
-        vc.entersFullScreenWhenPlaybackBegins = false
-        vc.view.backgroundColor = .black
-        return vc
+    func makeUIView(context: Context) -> PlayerContainerUIView {
+        let v = PlayerContainerUIView()
+        v.backgroundColor = .black
+        v.playerLayer.player = player
+        v.playerLayer.videoGravity = .resizeAspect
+        return v
     }
-    func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {}
+    func updateUIView(_ uiView: PlayerContainerUIView, context: Context) {
+        if uiView.playerLayer.player !== player {
+            uiView.playerLayer.player = player
+        }
+    }
+}
+
+/// UIView whose backing layer is AVPlayerLayer. Avoids the
+/// AVPlayerViewController fullscreen problem entirely.
+final class PlayerContainerUIView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
 
 struct FilterChipRow: View {

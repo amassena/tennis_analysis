@@ -177,6 +177,31 @@ def cmd_create_app(args):
     return app_id
 
 
+INTERNAL_BETA_GROUP_ID = 'd6ca3aa0-b120-4158-8ff9-cb71c1b1bcf9'  # 'Internal'
+
+
+def _attach_build_to_internal(build_id: str) -> None:
+    """Post a build to the 'Internal' beta group so it actually shows up on
+    testers' phones. Should be unnecessary if the group has
+    `hasAccessToAllBuilds=True` (configurable only in the ASC web UI),
+    but it's been off for this app, so do it explicitly. 204 = success.
+    """
+    payload = {'data': [{'type': 'builds', 'id': build_id}]}
+    r = api(
+        'POST',
+        f'/v1/betaGroups/{INTERNAL_BETA_GROUP_ID}/relationships/builds',
+        data=json.dumps(payload),
+    )
+    if r.status_code in (200, 204):
+        print(f'  build {build_id} attached to Internal beta group')
+    else:
+        print(
+            f'WARN: Internal attach returned {r.status_code} — '
+            f'phone may not see this build until manually attached.\n{r.text[:300]}',
+            file=sys.stderr,
+        )
+
+
 def cmd_archive_and_upload(args):
     project_path = "ios/CourtIQ/CourtIQ.xcodeproj"
     scheme = "CourtIQ"
