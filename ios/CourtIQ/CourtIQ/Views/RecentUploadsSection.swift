@@ -5,6 +5,7 @@ import SwiftUI
 /// "queued / processing / ready" without having to switch to the Gallery
 /// tab and look for the card.
 struct RecentUploadsSection: View {
+    let userHash: String
     @ObservedObject var model: RecentUploadsModel
     let onTapReady: (RecentUpload) -> Void
 
@@ -12,7 +13,7 @@ struct RecentUploadsSection: View {
         if !model.items.isEmpty {
             Section {
                 ForEach(model.items) { item in
-                    RecentRow(item: item, onTapReady: onTapReady)
+                    RecentRow(item: item, userHash: userHash, onTapReady: onTapReady)
                 }
             } header: {
                 HStack {
@@ -29,15 +30,19 @@ struct RecentUploadsSection: View {
 
 private struct RecentRow: View {
     let item: RecentUpload
+    let userHash: String
     let onTapReady: (RecentUpload) -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            statusDot
+        HStack(spacing: 12) {
+            thumbnail
             VStack(alignment: .leading, spacing: 2) {
-                Text(displayName)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    statusDot
+                    Text(displayName)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                }
                 Text(subtitle)
                     .font(.caption)
                     .foregroundColor(item.isFailed ? .red : .secondary)
@@ -54,6 +59,27 @@ private struct RecentRow: View {
         .onTapGesture {
             if item.isComplete { onTapReady(item) }
         }
+    }
+
+    private var thumbnail: some View {
+        let url = URL(string:
+            "https://tennis.playfullife.com/u/\(userHash)/thumbs/\(item.video_id).jpg",
+        )!
+        return AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().aspectRatio(contentMode: .fill)
+            default:
+                ZStack {
+                    Color.brandSurfaceElevated
+                    Image(systemName: "play.rectangle")
+                        .font(.system(size: 18))
+                        .foregroundColor(.brandTextSecondary)
+                }
+            }
+        }
+        .frame(width: 64, height: 40)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var displayName: String {

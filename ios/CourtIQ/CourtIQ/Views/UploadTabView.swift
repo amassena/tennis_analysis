@@ -34,7 +34,7 @@ struct UploadTabView: View {
                                 }
                             }
                         }
-                        RecentUploadsSection(model: recent) { item in
+                        RecentUploadsSection(userHash: userHash, model: recent) { item in
                             nav.openGallery(anchor: item.video_id)
                         }
                     }
