@@ -889,20 +889,20 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     stage("clips", 0, "Exporting video formats + uploading to R2")
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # As of Phase 2 of the playlist refactor: the gallery's in-player chip
-    # row derives per-type playback from timeline.mp4 + shots.json, and a
-    # playbackRate=0.5 toggle replaces the *_slowmo.mp4 files. So we no
-    # longer emit `bytype` (forehands / backhands / serves / volleys /
-    # *_slowmo) nor `--slow-motion`. Saves ~6 ffmpeg passes (~10 min GPU
-    # time) and ~300 MB R2 per session.
-    # Rally stays for now — it's a different cut (skips dead time between
-    # points) and can become a chip filter in a future pass.
+    # Phase 4b: timeline.mp4 is now the only mp4 we emit. Everything the
+    # gallery used to need a separate file for — per-type, slo-mo, and
+    # now rally — is derived in-player from timeline + shots.json:
+    #   - Per-shot-type filter: chip row picks segments by shot.type
+    #   - Slo-mo: playbackRate = 0.5
+    #   - Rally:  chip groups shots within 8s into one segment
+    # Saves the rally encode pass (~2-3 min GPU + ~150 MB R2 per session)
+    # on top of Phase 2's bytype/slowmo cuts.
     result = subprocess.run(
         [
             python,
             str(PROJECT_ROOT / "scripts" / "export_videos.py"),
             str(preprocessed),
-            "--types", "timeline", "rally",
+            "--types", "timeline",
             "--upload",
         ],
         cwd=PROJECT_ROOT,

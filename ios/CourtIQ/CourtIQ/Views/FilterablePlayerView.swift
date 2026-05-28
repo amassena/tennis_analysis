@@ -167,6 +167,7 @@ struct FilterablePlayerView: View {
     }
 
     private func buildSegments(filter: String, variant: String) -> [(start: Double, end: Double)] {
+        if filter == "rally" { return buildRallySegments(variant: variant) }
         let types = PlayerFilter.typeMap[filter]
         var raw: [(Double, Double)] = []
         for s in shots {
@@ -184,6 +185,27 @@ struct FilterablePlayerView: View {
             }
         }
         return merged.map { (start: $0.0, end: $0.1) }
+    }
+
+    /// Rally = shots within 8s of each other grouped into one continuous
+    /// "point" segment (3.5s before first shot through 4.5s after last).
+    /// Matches the server-side rally.mp4 generation algorithm, derived
+    /// here so the GPU pipeline can stop emitting rally.mp4 entirely.
+    func buildRallySegments(variant: String) -> [(start: Double, end: Double)] {
+        let times = shots.compactMap { $0.positions?[variant] }.sorted()
+        guard !times.isEmpty else { return [] }
+        let pointGap = 8.0, before = 3.5, after = 4.5
+        var points: [[Double]] = [[times[0]]]
+        for t in times.dropFirst() {
+            if let last = points.last?.last, t - last > pointGap {
+                points.append([t])
+            } else {
+                points[points.count - 1].append(t)
+            }
+        }
+        return points.map { p in
+            (start: max(0, p.first! - before), end: p.last! + after)
+        }
     }
 }
 
@@ -215,6 +237,12 @@ struct FilterChipRow: View {
             HStack(spacing: 6) {
                 chip(label: "All", count: totalCount, isActive: currentFilter == "all") {
                     onFilterChange("all")
+                }
+                let rallyCount = PlayerFilter.rallyPointCount(shots: shots, variant: variant)
+                if rallyCount > 0 {
+                    chip(label: "Rally", count: rallyCount, isActive: currentFilter == "rally") {
+                        onFilterChange("rally")
+                    }
                 }
                 ForEach(PlayerFilter.categories, id: \.key) { cat in
                     let c = countFor(cat.key)
@@ -299,6 +327,18 @@ enum PlayerFilter {
         ("volley",   "Volley"),
         ("overhead", "OH"),
     ]
+
+    /// Rally segment count for the given variant — used to decide whether
+    /// to render the Rally chip and what number to display.
+    static func rallyPointCount(shots: [PlayerShot], variant: String) -> Int {
+        let times = shots.compactMap { $0.positions?[variant] }.sorted()
+        guard !times.isEmpty else { return 0 }
+        var count = 1
+        for i in 1..<times.count {
+            if times[i] - times[i - 1] > 8.0 { count += 1 }
+        }
+        return count
+    }
 }
 
 struct PlayerShot: Decodable {

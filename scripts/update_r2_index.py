@@ -636,10 +636,10 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 <div class="filter-toggle" id="filterToggle" onclick="toggleFilters()">
   <span>Filter &amp; Sort</span>
   <span class="filter-badge" id="filterBadge"></span>
-  <span class="filter-arrow" id="filterArrow">&#9660;</span>
+  <span class="filter-arrow open" id="filterArrow">&#9660;</span>
 </div>
-<div class="filters collapsed" id="filters"></div>
-<div class="filters collapsed" style="padding-top:0" id="filtersRow2">
+<div class="filters" id="filters"></div>
+<div class="filters" style="padding-top:0" id="filtersRow2">
   <div class="active-filter" id="activeFilter"><span id="activeFilterText"></span><button class="clear" onclick="clearFilter()">&times;</button></div>
   <select class="sort-select" id="sortSelect" onchange="changeSort(this.value)">
     <option value="recorded-desc">Date Recorded (newest)</option>
@@ -889,7 +889,11 @@ vid.addEventListener('timeupdate', updateActiveShotChip);
 // roughly what export_videos.py's bytype path produces (it uses
 // before=2.0, after=2.0), tightened slightly so the playlist feels
 // snappy rather than padded.
-var currentFilter = 'all';
+//
+// Named playerFilter (not currentFilter) because the gallery's older
+// session-level filter chip code also uses `currentFilter` at top-scope
+// and `var` would merge them.
+var playerFilter = 'all';
 var SEGMENT_PRE = 1.5;
 var SEGMENT_POST = 2.5;
 var FILTER_TYPE_MAP = {{
@@ -900,7 +904,34 @@ var FILTER_TYPE_MAP = {{
   'overhead': ['overhead'],
 }};
 
+function buildRallySegments() {{
+  // Rally = group shots into "points" (consecutive within 8s of each
+  // other) and play each point as a single longer segment. Matches the
+  // logic that used to produce rally.mp4 server-side (point_gap=8.0,
+  // before=3.5, after=4.5).
+  if (!currentShots || !currentVariant) return [];
+  var ts = [];
+  currentShots.shots.forEach(function(s) {{
+    if (s.positions && s.positions[currentVariant] !== undefined) {{
+      ts.push(s.positions[currentVariant]);
+    }}
+  }});
+  ts.sort(function(a,b){{ return a-b; }});
+  if (ts.length === 0) return [];
+  var POINT_GAP = 8.0, BEFORE = 3.5, AFTER = 4.5;
+  var points = [[ts[0]]];
+  for (var i = 1; i < ts.length; i++) {{
+    var prev = points[points.length-1];
+    if (ts[i] - prev[prev.length-1] > POINT_GAP) points.push([ts[i]]);
+    else prev.push(ts[i]);
+  }}
+  return points.map(function(p) {{
+    return {{start: Math.max(0, p[0] - BEFORE), end: p[p.length-1] + AFTER}};
+  }});
+}}
+
 function buildSegmentList(filter) {{
+  if (filter === 'rally') return buildRallySegments();
   if (!currentShots || !currentVariant) return [];
   var types = FILTER_TYPE_MAP[filter];  // undefined → 'all' / no filter
   var segs = [];
@@ -944,13 +975,19 @@ function renderTypeFilter() {{
       }}
     }});
   }});
-  var html = '<span class="type-filter-chip ' + (currentFilter==='all'?'active':'')
+  var html = '<span class="type-filter-chip ' + (playerFilter==='all'?'active':'')
     + '" data-f="all">All <span class="ct">'+total+'</span></span>';
+  // Rally chip — group-by-point segment view. Count = number of points.
+  var rallySegs = buildRallySegments();
+  if (rallySegs.length > 0) {{
+    html += '<span class="type-filter-chip ' + (playerFilter==='rally'?'active':'')
+      + '" data-f="rally">Rally <span class="ct">'+rallySegs.length+'</span></span>';
+  }}
   [['serve','Serve'],['forehand','FH'],['backhand','BH'],['volley','Volley'],['overhead','OH']].forEach(function(p) {{
     var key = p[0], label = p[1];
     var c = counts[key] || 0;
     if (c === 0) return;
-    html += '<span class="type-filter-chip ' + (currentFilter===key?'active':'')
+    html += '<span class="type-filter-chip ' + (playerFilter===key?'active':'')
       + '" data-f="'+key+'">'+label+' <span class="ct">'+c+'</span></span>';
   }});
   var sloActive = vid.playbackRate <= 0.6;
@@ -970,7 +1007,7 @@ function applyTypeFilter(f) {{
     renderTypeFilter();
     return;
   }}
-  currentFilter = f;
+  playerFilter = f;
   renderTypeFilter();
   var segs = buildSegmentList(f);
   if (segs.length > 0) {{
@@ -989,8 +1026,8 @@ document.getElementById('typeFilter').addEventListener('click', function(e) {{
 // is active. Cheap: runs on every timeupdate (~4Hz) and only mutates
 // currentTime when we're actually in a gap.
 function segmentAutoSeek() {{
-  if (currentFilter === 'all') return;
-  var segs = buildSegmentList(currentFilter);
+  if (playerFilter === 'all') return;
+  var segs = buildSegmentList(playerFilter);
   if (segs.length === 0) return;
   var now = vid.currentTime;
   for (var i = 0; i < segs.length; i++) {{
@@ -1041,7 +1078,7 @@ function closePlayer() {{
   vid.pause(); vid.removeAttribute('src'); vid.load();
   overlay.style.display = 'none'; document.body.style.overflow = '';
   history.replaceState(null,'',location.pathname);
-  currentFilter = 'all';  // reset so the next-opened player starts unfiltered
+  playerFilter = 'all';  // reset so the next-opened player starts unfiltered
   document.getElementById('typeFilter').classList.remove('show');
 }}
 
