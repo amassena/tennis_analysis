@@ -342,12 +342,22 @@ struct FilterablePlayerView: View {
         let mono = ProcessInfo.processInfo.systemUptime
         guard mono - lastAutoSeekAt > 1.5 else { return }
         lastAutoSeekAt = mono
-        // Default tolerance (not .zero) for segment-boundary seeks.
-        // Exact-frame seek takes 200-500ms during which AVPlayer drops
-        // rate to 0 — produces visible stutter. Default tolerance lands
-        // within ~1 keyframe (<100ms) and keeps playback flowing.
+        // Tolerance: forbid backwards drift, allow forwards drift. With
+        // the default (.invalid / .invalid) AVPlayer is free to snap to
+        // a keyframe ON EITHER SIDE of the seek target. On videos where
+        // the nearest keyframe lands a few seconds BEFORE the requested
+        // time, we'd seek to 1:34.5, AVPlayer would snap to 1:32, we'd
+        // see we were outside the segment again, the throttle would
+        // elapse, and we'd loop forever between 1:32 and the next seek
+        // attempt. toleranceBefore: .zero prevents the backwards snap;
+        // toleranceAfter: .positiveInfinity keeps the seek cheap (no
+        // forced exact-frame decode).
         for s in segs where s.start > now {
-            player.seek(to: CMTime(seconds: s.start, preferredTimescale: 600))
+            player.seek(
+                to: CMTime(seconds: s.start, preferredTimescale: 600),
+                toleranceBefore: .zero,
+                toleranceAfter: .positiveInfinity,
+            )
             return
         }
         // Past the last segment. Pause instead of looping back so the
