@@ -444,8 +444,15 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .seq-fullscreen{{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.95);
   display:flex;align-items:center;justify-content:center;cursor:zoom-out}}
 .seq-fullscreen img{{max-width:100vw;max-height:100vh;object-fit:contain}}
-@media(max-width:600px){{.seq-item .seq-img-wrap{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
-  .seq-item .seq-img-wrap img{{width:auto;height:180px;min-width:100%}}}}
+@media(max-width:600px){{
+  /* Filmstrip used to overflow horizontally on mobile (180px tall, intrinsic
+     wide aspect), which detached it from its label below. Fit to width
+     instead so the label always sits directly under the image. */
+  .seq-item .seq-img-wrap{{overflow:visible}}
+  .seq-item .seq-img-wrap img{{width:100%;height:auto;min-width:0}}
+  .seq-item .seq-label{{padding:8px 12px;font-size:.78em;color:#ccc;
+    background:#1a1a1a;border-top:1px solid #222}}
+}}
 
 /* Coach modal filmstrip inline */
 .coach-filmstrip{{margin-top:8px;border-radius:4px;overflow:hidden;display:none}}
@@ -488,6 +495,12 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .coach-modal .close{{position:absolute;top:20px;right:24px;background:none;
   border:none;color:#999;font-size:1.8em;cursor:pointer;line-height:1}}
 .coach-modal .close:hover{{color:#fff}}
+@media(max-width:600px){{
+  .coach-modal-overlay{{padding:20px 12px}}
+  .coach-modal{{padding:20px 18px;font-size:.92em}}
+  .coach-modal .headline{{font-size:1.1em;margin-bottom:16px}}
+  .coach-modal .close{{top:14px;right:16px}}
+}}
 /* Redesigned card actions — compact horizontal strip + slim footer */
 .card-links{{margin-top:10px;padding-top:8px;border-top:1px solid #222;
   display:flex;flex-direction:column;gap:8px}}
