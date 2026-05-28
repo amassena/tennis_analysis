@@ -1024,8 +1024,16 @@ function applyTypeFilter(f) {{
   renderTypeFilter();
   var segs = buildSegmentList(f);
   if (segs.length > 0) {{
+    // Wait for the seek to commit before play(), otherwise the browser
+    // can drop the play() call mid-seek and the player ends up paused.
+    // Reproduced on iphone_9ca0a615 Rally: needed 3 taps before
+    // anything started.
+    var onSeeked = function() {{
+      vid.removeEventListener('seeked', onSeeked);
+      vid.play().catch(function(){{}});
+    }};
+    vid.addEventListener('seeked', onSeeked);
     vid.currentTime = segs[0].start;
-    vid.play().catch(function(){{}});
   }}
 }}
 

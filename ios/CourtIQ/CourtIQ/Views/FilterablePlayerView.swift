@@ -25,6 +25,7 @@ struct FilterablePlayerView: View {
     @State private var currentFilter: String = "all"
     @State private var sloMo: Bool = false
     @State private var timeObserver: Any?
+    @State private var statusObs: NSKeyValueObservation?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -66,13 +67,27 @@ struct FilterablePlayerView: View {
     }
 
     private func setup() {
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        if let t = startTime, t > 0 {
-            player.seek(
-                to: CMTime(seconds: t, preferredTimescale: 600),
-                toleranceBefore: .zero, toleranceAfter: .zero,
-            )
+        let item = AVPlayerItem(url: url)
+        // Calling player.play() before the item is .readyToPlay is the
+        // cause of the "tap play, nothing happens, tap again, nothing,
+        // third tap works" pattern reported on iphone_9ca0a615. AVPlayer
+        // silently drops the rate-change request until the item finishes
+        // loading. Observe status and fire play() (and the optional
+        // start seek) only once the item is genuinely ready.
+        statusObs = item.observe(\.status, options: [.new]) { item, _ in
+            guard item.status == .readyToPlay else { return }
+            DispatchQueue.main.async {
+                if let t = startTime, t > 0 {
+                    player.seek(
+                        to: CMTime(seconds: t, preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero,
+                    ) { _ in player.play() }
+                } else {
+                    player.play()
+                }
+            }
         }
+        player.replaceCurrentItem(with: item)
         let shotsUrl = url.deletingLastPathComponent().appendingPathComponent("shots.json")
         fetchShots(from: shotsUrl)
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
@@ -81,7 +96,6 @@ struct FilterablePlayerView: View {
         ) { time in
             handleTimeUpdate(time.seconds)
         }
-        player.play()
     }
 
     private func teardown() {
@@ -89,6 +103,8 @@ struct FilterablePlayerView: View {
             player.removeTimeObserver(obs)
             timeObserver = nil
         }
+        statusObs?.invalidate()
+        statusObs = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
     }
@@ -126,11 +142,15 @@ struct FilterablePlayerView: View {
         guard let variant = variant else { return }
         let segs = buildSegments(filter: f, variant: variant)
         if let first = segs.first {
+            // Use the completion-handler seek so play() only fires once
+            // the playhead is actually at the target. Plain seek+play()
+            // back-to-back races and AVPlayer silently drops the rate
+            // change while the seek is in flight, which produced the
+            // "need to tap play 3 times to start" report.
             player.seek(
                 to: CMTime(seconds: first.start, preferredTimescale: 600),
                 toleranceBefore: .zero, toleranceAfter: .zero,
-            )
-            player.play()
+            ) { _ in player.play() }
         }
     }
 
