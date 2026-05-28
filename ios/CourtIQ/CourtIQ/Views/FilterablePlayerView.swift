@@ -45,16 +45,17 @@ struct FilterablePlayerView: View {
             .padding(.vertical, 8)
             .background(Color.black)
 
-            if !shots.isEmpty, variant != nil {
-                FilterChipRow(
-                    shots: shots,
-                    variant: variant!,
-                    currentFilter: $currentFilter,
-                    sloMo: $sloMo,
-                    onFilterChange: applyFilter,
-                    onSloToggle: applySlo,
-                )
-            }
+            // Always render the chip row so the UI is discoverable.
+            // Until shots.json loads, only [All] and [Slo] are interactive;
+            // type chips populate once the fetch completes.
+            FilterChipRow(
+                shots: shots,
+                variant: variant ?? "timeline",
+                currentFilter: $currentFilter,
+                sloMo: $sloMo,
+                onFilterChange: applyFilter,
+                onSloToggle: applySlo,
+            )
 
             AVPlayerVCContainer(player: player)
         }
@@ -95,12 +96,27 @@ struct FilterablePlayerView: View {
         var req = URLRequest(url: url)
         if let jwt = TokenStore.load() {
             req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        } else {
+            print("[FilterablePlayer] no JWT to attach to shots fetch")
         }
-        URLSession.shared.dataTask(with: req) { data, _, _ in
-            guard let data = data,
-                  let resp = try? JSONDecoder().decode(ShotsResponse.self, from: data)
-            else { return }
-            DispatchQueue.main.async { self.shots = resp.shots }
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                print("[FilterablePlayer] shots fetch error: \(error)")
+                return
+            }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard let data = data else {
+                print("[FilterablePlayer] shots fetch returned no data (status \(status))")
+                return
+            }
+            do {
+                let resp = try JSONDecoder().decode(ShotsResponse.self, from: data)
+                print("[FilterablePlayer] loaded \(resp.shots.count) shots for \(resp.video) (status \(status))")
+                DispatchQueue.main.async { self.shots = resp.shots }
+            } catch {
+                let preview = String(data: data.prefix(120), encoding: .utf8) ?? "<binary>"
+                print("[FilterablePlayer] decode failed (status \(status)): \(error) — body[0..120]=\(preview)")
+            }
         }.resume()
     }
 
