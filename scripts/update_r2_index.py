@@ -498,6 +498,11 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .play-chip:hover{{opacity:1}}
 .play-chip .ch-ct{{font-weight:500;opacity:.85;font-size:.85em;
   padding:1px 6px;background:rgba(0,0,0,.22);border-radius:8px}}
+.play-chip-primary{{width:100%;justify-content:center;background:#FF8C00;
+  padding:9px 14px;font-size:.86em;letter-spacing:.02em;
+  box-shadow:0 1px 0 rgba(0,0,0,0.25) inset}}
+.play-chip-primary:hover{{background:#ff9b1f}}
+.play-chip-primary .ch-ct{{background:rgba(0,0,0,0.32)}}
 .play-chip-slow{{color:#bbb;text-decoration:none;font-size:.7em;font-weight:600;
   padding:5px 9px;border-radius:999px;background:#222;border:1px solid #2f2f2f;
   transition:all .15s}}
@@ -1780,33 +1785,35 @@ function renderGallery() {{
         return v.shots || 0;
       }};
 
-      // Compact play strip — one chip per video type. The regular-speed
-      // variant is the primary action. Slow-mo lives behind a tiny "·1/2"
-      // button only when a slow variant exists; download is reached
-      // through the player itself, not on the card (cleans up clutter).
-      var linksHtml = '<div class="play-strip">';
-      groupOrder.forEach(function(baseKey) {{
-        var g = groups[baseKey];
-        var primary = g.normal || g.slow;
-        if (!primary) return;
-        var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
-        var cnt = countFor(baseKey);
-        linksHtml += '<a href="'+primaryUrl+'" class="play-chip" '
-          + 'data-title="'+g.label+' \\u2014 '+v.id+'" '
-          + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-          + 'style="background:'+g.color+'">'
-          + '<span class="ch-lbl">'+g.label+'</span>'
-          + (cnt > 0 ? '<span class="ch-ct">'+cnt+'</span>' : '')
-          + '</a>';
-        if(g.slow && g.normal) {{
-          var sUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.slow.file;
-          linksHtml += '<a href="'+sUrl+'" class="play-chip-slow" '
-            + 'data-title="'+g.label+' (Slow-Mo) \\u2014 '+v.id+'" '
-            + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-            + 'title="Slow motion">Slo</a>';
+      // Single Play action per card. The in-player chip row handles
+      // shot-type filtering and slo-mo, so the card stays clean even
+      // as we add more shot types (slice FH/BH, overhead, etc.). Falls
+      // back through timeline → rally → highlights → grouped → first
+      // available so older videos without a timeline still play.
+      var preferKeys = ['timeline','rally','highlights','grouped'];
+      var primary = null;
+      for (var pi = 0; pi < preferKeys.length && !primary; pi++) {{
+        var g = groups[preferKeys[pi]];
+        if (g && (g.normal || g.slow)) primary = g.normal || g.slow;
+      }}
+      if (!primary) {{
+        // Last resort: first available variant in groupOrder
+        for (var gi = 0; gi < groupOrder.length && !primary; gi++) {{
+          var g2 = groups[groupOrder[gi]];
+          primary = g2.normal || g2.slow;
         }}
-      }});
-      linksHtml += '</div>';
+      }}
+      var linksHtml = '';
+      if (primary) {{
+        var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
+        linksHtml = '<div class="play-strip">'
+          + '<a href="'+primaryUrl+'" class="play-chip play-chip-primary" '
+          + 'data-title="'+v.id+'" '
+          + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false">'
+          + '<span class="ch-lbl">&#9654; Watch</span>'
+          + (v.shots ? '<span class="ch-ct">'+v.shots+'</span>' : '')
+          + '</a></div>';
+      }}
 
       html += '<div class="card">';
       html += thumbHtml;
