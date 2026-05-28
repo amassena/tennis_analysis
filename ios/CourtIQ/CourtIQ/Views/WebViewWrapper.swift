@@ -42,6 +42,11 @@ struct WebViewWrapper: UIViewRepresentable {
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
         webView.navigationDelegate = context.coordinator
+        // WKWebView silently no-ops alert/confirm/prompt unless we
+        // implement WKUIDelegate. The gallery's deleteVideo() relies on
+        // confirm() to gate the destructive POST — without this it
+        // appears to do nothing on phone.
+        webView.uiDelegate = context.coordinator
         // PR-L: disable WKWebView's left-edge swipe-back so it can't
         // collide with horizontal filmstrip / sequence-strip scrolling
         // inside the gallery.
@@ -87,7 +92,7 @@ struct WebViewWrapper: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if let host = navigationAction.request.url?.host,
                host.contains("playfullife.com") || host.contains("localhost") {
@@ -168,6 +173,50 @@ struct WebViewWrapper: UIViewRepresentable {
             var top = root
             while let presented = top.presentedViewController { top = presented }
             return top
+        }
+
+        // MARK: WKUIDelegate — bridge JS alert/confirm/prompt to native UIAlerts
+
+        func webView(
+            _ webView: WKWebView,
+            runJavaScriptAlertPanelWithMessage message: String,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping () -> Void,
+        ) {
+            guard let top = topPresentedVC() else { completionHandler(); return }
+            let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+            top.present(a, animated: true)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            runJavaScriptConfirmPanelWithMessage message: String,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping (Bool) -> Void,
+        ) {
+            guard let top = topPresentedVC() else { completionHandler(false); return }
+            let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+            a.addAction(UIAlertAction(title: "OK", style: .destructive) { _ in completionHandler(true) })
+            top.present(a, animated: true)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            runJavaScriptTextInputPanelWithPrompt prompt: String,
+            defaultText: String?,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping (String?) -> Void,
+        ) {
+            guard let top = topPresentedVC() else { completionHandler(nil); return }
+            let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+            a.addTextField { tf in tf.text = defaultText }
+            a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+                completionHandler(a.textFields?.first?.text)
+            })
+            top.present(a, animated: true)
         }
 
         private func presentNativePlayer(url: URL, title: String, startTime: Double? = nil) {
