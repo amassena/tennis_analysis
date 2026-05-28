@@ -768,6 +768,12 @@ function openPlayer(url, title) {{
       if (pendingTime !== null && pendingTime > 0) {{
         msg.startTime = pendingTime;
       }}
+      // Phase 3: extract <vid> + <variant> from the URL so the native
+      // side can fetch shots.json and surface the same chip filter
+      // that the web player has. Swift owns the fetch (no JS-to-Swift
+      // data payload needed) — keeps the bridge surface area small.
+      var nm = url.match(/\\/([A-Za-z0-9_]+)\\/\\1_(\\w+)\\.mp4$/);
+      if (nm) {{ msg.videoId = nm[1]; msg.variant = nm[2]; }}
       pendingTime = null;
       window.webkit.messageHandlers.openVideo.postMessage(msg);
       return;

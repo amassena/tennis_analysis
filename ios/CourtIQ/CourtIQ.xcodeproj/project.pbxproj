@@ -37,6 +37,7 @@
 		A6A6A6A6A6A6A6A6A6A6A6A1 /* TodayHeroCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A6A6A6A6A6A6A6A6A6A6A2 /* TodayHeroCard.swift */; };
 		A7A7A7A7A7A7A7A7A7A7A7A1 /* CoachSummarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A7A7A7A7A7A7A7A7A7A7A2 /* CoachSummarySheet.swift */; };
 		A8A8A8A8A8A8A8A8A8A8A8A1 /* GalleryFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8A8A8A8A8A8A8A8A8A8A8A2 /* GalleryFilterBar.swift */; };
+		A9A9A9A9A9A9A9A9A9A9A9A1 /* FilterablePlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9A9A9A9A9A9A9A9A9A9A9A2 /* FilterablePlayerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,6 +78,7 @@
 		A6A6A6A6A6A6A6A6A6A6A6A2 /* TodayHeroCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayHeroCard.swift; sourceTree = "<group>"; };
 		A7A7A7A7A7A7A7A7A7A7A7A2 /* CoachSummarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachSummarySheet.swift; sourceTree = "<group>"; };
 		A8A8A8A8A8A8A8A8A8A8A8A2 /* GalleryFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryFilterBar.swift; sourceTree = "<group>"; };
+		A9A9A9A9A9A9A9A9A9A9A9A2 /* FilterablePlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterablePlayerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -106,6 +108,7 @@
 				A6A6A6A6A6A6A6A6A6A6A6A2 /* TodayHeroCard.swift */,
 				A7A7A7A7A7A7A7A7A7A7A7A2 /* CoachSummarySheet.swift */,
 				A8A8A8A8A8A8A8A8A8A8A8A2 /* GalleryFilterBar.swift */,
+				A9A9A9A9A9A9A9A9A9A9A9A2 /* FilterablePlayerView.swift */,
 				DB29C472F8C615C04C04C14C /* ContentView.swift */,
 				5E3872BE69A357F5E8C8BA70 /* SessionReviewView.swift */,
 				59C4903DB32D09B6D925EB6B /* WebViewWrapper.swift */,
@@ -302,6 +305,7 @@
 				A6A6A6A6A6A6A6A6A6A6A6A1 /* TodayHeroCard.swift in Sources */,
 				A7A7A7A7A7A7A7A7A7A7A7A1 /* CoachSummarySheet.swift in Sources */,
 				A8A8A8A8A8A8A8A8A8A8A8A1 /* GalleryFilterBar.swift in Sources */,
+				A9A9A9A9A9A9A9A9A9A9A9A1 /* FilterablePlayerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -322,7 +326,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				MARKETING_VERSION = 1.2;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";
@@ -410,7 +414,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown";
 				MARKETING_VERSION = 1.2;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Record tennis videos to upload to your gallery.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Capture audio alongside your tennis videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Optionally save uploaded videos to your Photos library.";

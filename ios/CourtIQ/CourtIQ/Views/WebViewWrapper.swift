@@ -124,7 +124,13 @@ struct WebViewWrapper: UIViewRepresentable {
                 let title = body["title"] as? String ?? ""
                 let startTime = (body["startTime"] as? NSNumber)?.doubleValue
                     ?? (body["startTime"] as? Double)
-                presentNativePlayer(url: url, title: title, startTime: startTime)
+                let videoId = body["videoId"] as? String
+                let variant = body["variant"] as? String
+                presentNativePlayer(
+                    url: url, title: title,
+                    videoId: videoId, variant: variant,
+                    startTime: startTime,
+                )
             case "openCoach":
                 guard let body = message.body as? [String: Any],
                       let vid = body["vid"] as? String,
@@ -219,29 +225,29 @@ struct WebViewWrapper: UIViewRepresentable {
             top.present(a, animated: true)
         }
 
-        private func presentNativePlayer(url: URL, title: String, startTime: Double? = nil) {
+        private func presentNativePlayer(
+            url: URL, title: String,
+            videoId: String? = nil, variant: String? = nil,
+            startTime: Double? = nil,
+        ) {
             guard let top = topPresentedVC() else { return }
-            let player = AVPlayer(url: url)
-            let vc = AVPlayerViewController()
-            vc.player = player
-            vc.modalPresentationStyle = .fullScreen
-            vc.allowsPictureInPicturePlayback = true
-            // Seek before play; ready-to-play observer keeps the seek
-            // sticky in case load is still in progress.
-            if let t = startTime, t > 0 {
-                let target = CMTime(seconds: t, preferredTimescale: 600)
-                player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-            }
-            top.present(vc, animated: true) {
-                if let t = startTime, t > 0 {
-                    let target = CMTime(seconds: t, preferredTimescale: 600)
-                    player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-                        player.play()
-                    }
-                } else {
-                    player.play()
-                }
-            }
+            // Phase 3: wrap AVPlayerViewController in FilterablePlayerView
+            // so the chip filter row + slo-mo toggle live in native too.
+            // The SwiftUI view owns the AVPlayer lifecycle, fetches
+            // shots.json with the user's JWT, and seeks past gaps when a
+            // non-'all' filter is active.
+            let host = UIHostingController(
+                rootView: FilterablePlayerView(
+                    url: url,
+                    title: title,
+                    videoId: videoId,
+                    variant: variant,
+                    startTime: startTime,
+                ),
+            )
+            host.modalPresentationStyle = .fullScreen
+            host.view.backgroundColor = .black
+            top.present(host, animated: true)
         }
     }
 }
