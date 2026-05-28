@@ -58,6 +58,7 @@ struct FilterablePlayerView: View {
             )
 
             AVPlayerVCContainer(player: player)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.black.ignoresSafeArea())
         .onAppear(perform: setup)

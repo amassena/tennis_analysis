@@ -236,7 +236,13 @@ struct WebViewWrapper: UIViewRepresentable {
             // The SwiftUI view owns the AVPlayer lifecycle, fetches
             // shots.json with the user's JWT, and seeks past gaps when a
             // non-'all' filter is active.
-            let host = UIHostingController(
+            //
+            // PortraitHostingController locks the view to portrait so
+            // device rotation doesn't trigger AVPlayerViewController's
+            // system landscape-fullscreen takeover (which would drop the
+            // chip overlay). User can still tap the corner ⤢ button to
+            // explicitly request fullscreen.
+            let host = PortraitHostingController(
                 rootView: FilterablePlayerView(
                     url: url,
                     title: title,
@@ -250,4 +256,14 @@ struct WebViewWrapper: UIViewRepresentable {
             top.present(host, animated: true)
         }
     }
+}
+
+/// Locks the hosted SwiftUI view (FilterablePlayerView) to portrait so
+/// AVPlayerViewController inside it doesn't auto-flip into Apple's
+/// landscape system fullscreen UI (which would hide the chip overlay).
+/// User can still trigger fullscreen explicitly via the corner ⤢ button.
+final class PortraitHostingController<Content: View>: UIHostingController<Content> {
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+    override var shouldAutorotate: Bool { false }
+    override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
 }
