@@ -137,6 +137,8 @@ def get_video_metadata(vid, r2_client=None, user_hash=None):
                     info['breakdown'] = meta.get('breakdown', {})
                 if meta.get('created') and 'created' not in info:
                     info['created'] = meta['created']
+                if meta.get('display_name'):
+                    info['display_name'] = meta['display_name']
                 for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate',
                             'avg_speed_mph', 'max_speed_mph', 'in_count', 'out_count'):
                     if meta.get(bk) is not None:
@@ -880,6 +882,36 @@ function dlFile(url) {{
   f.src = url + (url.includes('?')?'&':'?') + 'dl=1';
 }}
 
+// PR-D — rename a video. Owner JWT (or admin) only; persists to meta.json
+// `display_name`. Empty string clears the rename. Updates the local
+// VIDEOS array so the gallery re-renders without a full reload.
+function renameVideo(vid) {{
+  var current = '';
+  for (var i=0; i<VIDEOS.length; i++) {{
+    if(VIDEOS[i].id === vid) {{ current = VIDEOS[i].display_name || ''; break; }}
+  }}
+  var name = prompt('New name (blank to reset to '+vid+'):', current);
+  if (name === null) return;
+  name = name.trim().slice(0, 80);
+  fetch('/api/video/'+vid+'/rename', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    credentials:'include',
+    body: JSON.stringify({{display_name: name}}),
+  }}).then(function(r){{ return r.json().then(function(j){{ return {{status:r.status, json:j}}; }}); }})
+  .then(function(res){{
+    if(res.status !== 200) throw new Error(res.json.error || ('failed: '+res.status));
+    for (var i=0; i<VIDEOS.length; i++) {{
+      if(VIDEOS[i].id === vid) {{
+        if (res.json.display_name) VIDEOS[i].display_name = res.json.display_name;
+        else delete VIDEOS[i].display_name;
+        break;
+      }}
+    }}
+    renderGallery();
+  }})
+  .catch(function(e){{ alert('Rename failed: '+e.message); }});
+}}
+
 // PR-F — generate a public share link for one video. Worker stores
 // `shares/<token>.json`, returns the URL. We try the iOS native share
 // sheet first; otherwise we put the URL on the clipboard.
@@ -1547,7 +1579,14 @@ function renderGallery() {{
         var thumbUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primaryPlay.file;
         thumbAction = ' data-action="play" data-url="'+thumbUrl+'" data-title="'+primaryPlay.label+' \\u2014 '+v.id+'" style="cursor:pointer"';
       }}
-      var thumbHtml = '<div class="card-thumb-wrap"'+thumbAction+'>'+thumbInner+'<span class="card-id">'+v.id+'</span></div>';
+      // Card label = user-set display_name if present, else vid. The
+      // raw vid stays available via a small subtitle for context.
+      var titleLabel = v.display_name || v.id;
+      var thumbHtml = '<div class="card-thumb-wrap"'+thumbAction+'>'+thumbInner
+        + '<span class="card-id" title="Click to rename" data-action="rename" data-vid="'+v.id+'">'
+        + escapeHtml(titleLabel)
+        + (v.display_name ? ' <span style="opacity:0.6">&#9998;</span>' : '')
+        + '</span></div>';
 
       // Group links by base type (e.g. "rally" + "rally_slowmo" → one row)
       var groups = {{}};
@@ -1872,6 +1911,7 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'download') dlFile(el.dataset.url);
   else if(action === 'delete') deleteVideo(el.dataset.vid);
   else if(action === 'share-link') createShareLink(el.dataset.vid);
+  else if(action === 'rename') renameVideo(el.dataset.vid);
   else if(action === 'play') openPlayer(el.dataset.url, el.dataset.title);
   else if(action === 'coach') openCoachModal(el.dataset.vid);
   else if(action === 'sequences') openSeqModal(el.dataset.vid);

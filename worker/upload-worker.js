@@ -470,6 +470,12 @@ async function handleApi(request, env, path) {
       return await handleCreateShare(request, env, cors, shareMatch[1]);
     }
 
+    // PR-D: rename a video. Owner JWT (or admin) only.
+    const renameMatch = path.match(/^\/api\/video\/([^/]+)\/rename$/);
+    if (renameMatch && request.method === 'POST') {
+      return await handleRenameVideo(request, env, cors, renameMatch[1]);
+    }
+
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
     const recentMatch = path.match(/^\/api\/u\/(u_[a-f0-9]{8})\/recent$/);
     if (recentMatch && request.method === 'GET') {
@@ -1146,6 +1152,68 @@ async function handleUserRecent(request, env, cors, userHash) {
     { user_hash: userHash, count: items.length, items: items.slice(0, limit) },
     200,
     { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PR-D — rename a video (display_name in meta.json)
+// ---------------------------------------------------------------------------
+async function handleRenameVideo(request, env, cors, vid) {
+  if (!/^[A-Za-z0-9_-]+$/.test(vid)) {
+    return jsonResponse({ error: 'Invalid video id' }, 400, cors);
+  }
+  const body = await request.json().catch(() => ({}));
+  const raw = (body.display_name || '').toString().trim();
+  // Empty string clears the display name back to the default (vid).
+  // Cap length to keep gallery cards readable.
+  const displayName = raw.slice(0, 80);
+
+  // Auth: owner JWT or admin.
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) {
+    return jsonResponse({ error: 'Unauthorized' }, 401, cors);
+  }
+
+  // Resolve owner from marker.
+  let owner = null;
+  try {
+    const markerObj = await env.BUCKET.get(`uploads/${vid}.json`);
+    if (markerObj) {
+      const marker = await markerObj.json();
+      owner = marker.user_hash || marker.uploaded_by || null;
+    }
+  } catch {}
+  if (!owner) return jsonResponse({ error: 'Video not found' }, 404, cors);
+  const isOwner = claims.sub === owner;
+  const isAdmin = isAdminUser(env, claims.sub);
+  if (!isOwner && !isAdmin) {
+    return jsonResponse({ error: 'Only the owner can rename this video' }, 403, cors);
+  }
+
+  // Patch meta.json. Falls back to creating one if missing.
+  const metaKey = `highlights/${owner}/${vid}/meta.json`;
+  let meta = {};
+  try {
+    const m = await env.BUCKET.get(metaKey);
+    if (m) meta = await m.json();
+  } catch {}
+  if (displayName) meta.display_name = displayName;
+  else delete meta.display_name;
+  meta.display_name_updated_at = new Date().toISOString();
+  await env.BUCKET.put(metaKey, JSON.stringify(meta), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return jsonResponse(
+    { ok: true, vid, display_name: meta.display_name || null },
+    200, cors,
   );
 }
 
