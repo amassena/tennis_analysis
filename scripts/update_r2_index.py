@@ -1301,6 +1301,43 @@ function toggleFilters() {{
   }}
 }}
 
+// UX-4 — iOS native filter bridge. iOS posts the chosen {{filter, sort}}
+// from a SwiftUI sheet; we set state, hide the desktop UI artefacts,
+// and re-render. Called via webView.evaluateJavaScript from Swift.
+function applyNativeFilter(opts) {{
+  if(!opts || typeof opts !== 'object') return;
+  if(typeof opts.filter === 'string') currentFilter = opts.filter;
+  if(typeof opts.sort === 'string') currentSort = opts.sort;
+  // Sync the inline UI so re-toggling the WebView's own panel reflects
+  // what the native sheet set.
+  document.querySelectorAll('.chip').forEach(function(c){{ c.classList.remove('active'); }});
+  var matching = document.querySelector('.chip[data-filter="'+currentFilter+'"]');
+  if(matching) matching.classList.add('active');
+  var sortSel = document.getElementById('sortSelect');
+  if(sortSel) sortSel.value = currentSort;
+  updateActiveFilter();
+  updateFilterBadge();
+  renderGallery();
+}}
+
+// Hide the WebView's own Filter & Sort row when we detect we're
+// running inside the iOS native shell (where the user gets a native
+// sheet instead). The probe uses the openVideo message bridge as a
+// proxy for "this WebView is our iOS app".
+(function hideInlineFiltersOnIOS() {{
+  try {{
+    if (window.webkit && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.openVideo) {{
+      var t = document.getElementById('filterToggle');
+      var f1 = document.getElementById('filters');
+      var f2 = document.getElementById('filtersRow2');
+      if (t) t.style.display = 'none';
+      if (f1) f1.style.display = 'none';
+      if (f2) f2.style.display = 'none';
+    }}
+  }} catch (e) {{}}
+}})();
+
 function updateFilterBadge() {{
   var badge = document.getElementById('filterBadge');
   if(currentFilter === 'all') {{

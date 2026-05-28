@@ -60,17 +60,25 @@ private struct SignedInTabs: View {
 private struct GalleryTabView: View {
     let userHash: String
     @EnvironmentObject var nav: AppNavigation
+    @State private var filter = FilterState()
+    @State private var pendingScript: String?
 
     var body: some View {
-        WebViewWrapper(url: galleryURL)
-            .ignoresSafeArea(edges: .bottom)
-            .onChange(of: nav.selectedTab) { newValue in
-                if newValue == .gallery && nav.pendingGalleryAnchor != nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        nav.pendingGalleryAnchor = nil
-                    }
+        VStack(spacing: 0) {
+            GalleryFilterBar(state: $filter) { newState in
+                pendingScript = "applyNativeFilter(\(newState.toJSObject()))"
+            }
+            WebViewWrapper(url: galleryURL, pendingScript: $pendingScript)
+                .ignoresSafeArea(edges: .bottom)
+        }
+        .background(Color.brandBackground)
+        .onChange(of: nav.selectedTab) { newValue in
+            if newValue == .gallery && nav.pendingGalleryAnchor != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    nav.pendingGalleryAnchor = nil
                 }
             }
+        }
     }
 
     // Per-user gallery URL. Always carries the JWT as `?t=` so the

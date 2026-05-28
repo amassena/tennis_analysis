@@ -15,6 +15,16 @@ import AVKit
 /// store fixes that.
 struct WebViewWrapper: UIViewRepresentable {
     let url: URL
+    /// One-shot JS snippet the parent SwiftUI can hand down to the
+    /// WebView (e.g. `applyNativeFilter({filter:"all",sort:"recorded-desc"})`).
+    /// When non-nil, we evaluate it and reset the binding to nil so the
+    /// same script doesn't replay on every SwiftUI redraw.
+    @Binding var pendingScript: String?
+
+    init(url: URL, pendingScript: Binding<String?> = .constant(nil)) {
+        self.url = url
+        self._pendingScript = pendingScript
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -39,6 +49,10 @@ struct WebViewWrapper: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {
         if uiView.url != url {
             seedAuthCookieAndLoad(webView: uiView, url: url)
+        }
+        if let script = pendingScript, !script.isEmpty {
+            uiView.evaluateJavaScript(script, completionHandler: nil)
+            DispatchQueue.main.async { self.pendingScript = nil }
         }
     }
 
