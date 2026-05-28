@@ -28,11 +28,11 @@ Drop-anywhere capture for bugs, ideas, and UX papercuts. Add a one-liner the mom
 
 ## UX papercuts
 
-- [ ] Sequences modal labels get cut off when image scrolls horizontally on mobile
+- [x] ~~Sequences modal labels get cut off when image scrolls horizontally on mobile~~ — fixed 2026-05-28: filmstrip now fit-to-width on <600px so the label always sits directly under the visible image
 - [ ] Cards too wide on phone, content overflows
-- [ ] Coach summary text gets clipped on small screens
+- [x] ~~Coach summary text gets clipped on small screens~~ — fixed 2026-05-28: text replaced by pill that opens a modal; modal got mobile padding + font sizing pass
 - [ ] No way to jump back to last-viewed video on gallery reload
-- [ ] Filter & Sort hidden behind a toggle — not discoverable
+- [x] ~~Filter & Sort hidden behind a toggle — not discoverable~~ — fixed 2026-05-28: row now expanded by default (toggle still works to collapse)
 
 ## Ideas (deferred)
 
