@@ -546,6 +546,23 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .player-bar button:hover{{background:#444}}
 .player-bar button.active{{background:#FF8C00;color:#fff}}
 
+/* Shot-type filter row — Phase 1 of the playlist refactor.
+   One chip per detected shot type; tapping plays only those segments
+   back-to-back. Lives inside the player overlay; collapses the per-type
+   buttons that used to spread across each gallery card. */
+.type-filter-row{{display:none;gap:6px;flex-wrap:wrap;padding:8px 4px 4px;
+  border-top:1px solid #222;margin-top:4px}}
+.type-filter-row.show{{display:flex}}
+.type-filter-chip{{padding:5px 11px;background:#1a1a1a;border:1px solid #2a2a2a;
+  border-radius:14px;color:#aaa;font-size:.78em;font-weight:600;cursor:pointer;
+  transition:all .15s;display:inline-flex;align-items:center;gap:5px;letter-spacing:.02em}}
+.type-filter-chip:hover{{border-color:#555;color:#eee}}
+.type-filter-chip.active{{background:#FF8C00;border-color:#FF8C00;color:#fff}}
+.type-filter-chip .ct{{font-size:.85em;opacity:.7;font-variant-numeric:tabular-nums}}
+.type-filter-chip.active .ct{{opacity:.95}}
+.type-filter-chip.slo{{margin-left:auto;background:transparent;border-color:#444}}
+.type-filter-chip.slo.active{{background:#9B59B6;border-color:#9B59B6;color:#fff}}
+
 /* Shot strip */
 .shot-strip{{display:none;gap:6px;overflow-x:auto;padding:8px 4px;margin-top:4px;
   border-top:1px solid #222;max-width:100%;scrollbar-width:thin}}
@@ -707,6 +724,7 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
       <button onclick="copyTimeLink()" class="share-btn" id="shareBtn">Copy link at time</button>
       <button onclick="downloadCurrent()" class="share-btn" style="background:#555!important">Download</button>
     </div>
+    <div class="type-filter-row" id="typeFilter"></div>
     <div class="shot-strip-hdr" id="shotStripHdr">Jump to shot</div>
     <div class="shot-strip" id="shotStrip"></div>
   </div>
@@ -776,7 +794,7 @@ function openPlayer(url, title) {{
   // Parse "<vid>/<vid>_<variant>.mp4" from the URL and load shots.json
   var m = url.match(/\\/([A-Za-z0-9_]+)\\/\\1_(\\w+)\\.mp4$/);
   if (m) loadShotsStrip(m[1], m[2]);
-  else {{ currentShots = null; currentVariant = null; document.getElementById('shotStrip').classList.remove('show'); document.getElementById('shotStripHdr').classList.remove('show'); }}
+  else {{ currentShots = null; currentVariant = null; document.getElementById('shotStrip').classList.remove('show'); document.getElementById('shotStripHdr').classList.remove('show'); document.getElementById('typeFilter').classList.remove('show'); }}
 }}
 
 function loadShotsStrip(vidId, variant) {{
@@ -790,6 +808,7 @@ function loadShotsStrip(vidId, variant) {{
       currentShots = null;
       document.getElementById('shotStrip').classList.remove('show');
       document.getElementById('shotStripHdr').classList.remove('show');
+      document.getElementById('typeFilter').classList.remove('show');
     }});
 }}
 
@@ -818,6 +837,7 @@ function renderShotStrip() {{
   strip.classList.add('show');
   hdr.classList.add('show');
   updateActiveShotChip();
+  renderTypeFilter();
 }}
 
 function fmtShotTime(s) {{
@@ -847,6 +867,131 @@ function updateActiveShotChip() {{
 }}
 
 vid.addEventListener('timeupdate', updateActiveShotChip);
+
+// ── Phase 1 playlist filter ──
+// Replaces the per-type chip-explosion on each gallery card. The card
+// opens the full timeline; the player surfaces a chip row that filters
+// to a single shot type, then auto-seeks the playhead from segment to
+// segment so the user hears/sees only those shots back-to-back.
+//
+// SEGMENT_PRE/POST = 1.5s/2.5s window per detected swing. This matches
+// roughly what export_videos.py's bytype path produces (it uses
+// before=2.0, after=2.0), tightened slightly so the playlist feels
+// snappy rather than padded.
+var currentFilter = 'all';
+var SEGMENT_PRE = 1.5;
+var SEGMENT_POST = 2.5;
+var FILTER_TYPE_MAP = {{
+  'serve':    ['serve'],
+  'forehand': ['forehand'],
+  'backhand': ['backhand'],
+  'volley':   ['forehand_volley','backhand_volley'],
+  'overhead': ['overhead'],
+}};
+
+function buildSegmentList(filter) {{
+  if (!currentShots || !currentVariant) return [];
+  var types = FILTER_TYPE_MAP[filter];  // undefined → 'all' / no filter
+  var segs = [];
+  currentShots.shots.forEach(function(s) {{
+    if (!s.positions || s.positions[currentVariant] === undefined) return;
+    if (types && types.indexOf(s.type) < 0) return;
+    var t = s.positions[currentVariant];
+    segs.push({{start: Math.max(0, t - SEGMENT_PRE), end: t + SEGMENT_POST}});
+  }});
+  segs.sort(function(a,b){{ return a.start - b.start; }});
+  // Merge any adjacent segments so consecutive same-type shots play
+  // as one continuous run rather than micro-seeking between them.
+  var merged = [];
+  segs.forEach(function(s) {{
+    var last = merged[merged.length - 1];
+    if (last && s.start <= last.end + 0.3) {{
+      last.end = Math.max(last.end, s.end);
+    }} else {{
+      merged.push({{start: s.start, end: s.end}});
+    }}
+  }});
+  return merged;
+}}
+
+function renderTypeFilter() {{
+  var row = document.getElementById('typeFilter');
+  if (!currentShots || !currentVariant) {{ row.classList.remove('show'); return; }}
+  // Filter chips only matter on full-session variants. Per-type files
+  // (forehands.mp4 etc.) already filter their own content.
+  var variantOK = currentVariant === 'timeline' || currentVariant === 'rally'
+    || currentVariant === 'grouped' || currentVariant === 'highlights';
+  if (!variantOK) {{ row.classList.remove('show'); return; }}
+  var counts = {{}};
+  var total = 0;
+  currentShots.shots.forEach(function(s) {{
+    if (!s.positions || s.positions[currentVariant] === undefined) return;
+    total++;
+    Object.keys(FILTER_TYPE_MAP).forEach(function(k) {{
+      if (FILTER_TYPE_MAP[k].indexOf(s.type) >= 0) {{
+        counts[k] = (counts[k] || 0) + 1;
+      }}
+    }});
+  }});
+  var html = '<span class="type-filter-chip ' + (currentFilter==='all'?'active':'')
+    + '" data-f="all">All <span class="ct">'+total+'</span></span>';
+  [['serve','Serve'],['forehand','FH'],['backhand','BH'],['volley','Volley'],['overhead','OH']].forEach(function(p) {{
+    var key = p[0], label = p[1];
+    var c = counts[key] || 0;
+    if (c === 0) return;
+    html += '<span class="type-filter-chip ' + (currentFilter===key?'active':'')
+      + '" data-f="'+key+'">'+label+' <span class="ct">'+c+'</span></span>';
+  }});
+  var sloActive = vid.playbackRate <= 0.6;
+  html += '<span class="type-filter-chip slo ' + (sloActive?'active':'')
+    + '" data-f="slo">&#x1F422; Slo</span>';
+  row.innerHTML = html;
+  row.classList.add('show');
+}}
+
+function applyTypeFilter(f) {{
+  if (f === 'slo') {{
+    var newRate = vid.playbackRate <= 0.6 ? 1 : 0.5;
+    vid.playbackRate = newRate;
+    document.querySelectorAll('.speed-group button').forEach(function(b) {{
+      b.classList.toggle('active', parseFloat(b.textContent) === newRate);
+    }});
+    renderTypeFilter();
+    return;
+  }}
+  currentFilter = f;
+  renderTypeFilter();
+  var segs = buildSegmentList(f);
+  if (segs.length > 0) {{
+    vid.currentTime = segs[0].start;
+    vid.play().catch(function(){{}});
+  }}
+}}
+
+document.getElementById('typeFilter').addEventListener('click', function(e) {{
+  var chip = e.target.closest('.type-filter-chip');
+  if (!chip) return;
+  applyTypeFilter(chip.dataset.f);
+}});
+
+// Auto-seek playhead from segment to segment when a non-'all' filter
+// is active. Cheap: runs on every timeupdate (~4Hz) and only mutates
+// currentTime when we're actually in a gap.
+function segmentAutoSeek() {{
+  if (currentFilter === 'all') return;
+  var segs = buildSegmentList(currentFilter);
+  if (segs.length === 0) return;
+  var now = vid.currentTime;
+  for (var i = 0; i < segs.length; i++) {{
+    if (now >= segs[i].start && now <= segs[i].end) return;  // inside
+  }}
+  for (var j = 0; j < segs.length; j++) {{
+    if (segs[j].start > now) {{ vid.currentTime = segs[j].start; return; }}
+  }}
+  // Past the last segment — loop back so filter playback feels continuous.
+  vid.currentTime = segs[0].start;
+}}
+vid.addEventListener('timeupdate', segmentAutoSeek);
 
 document.getElementById('shotStrip').addEventListener('click', function(e) {{
   // Compare button — small "vs pro" pill inside the chip
@@ -885,6 +1030,8 @@ function closePlayer() {{
   vid.pause(); vid.removeAttribute('src'); vid.load();
   overlay.style.display = 'none'; document.body.style.overflow = '';
   history.replaceState(null,'',location.pathname);
+  currentFilter = 'all';  // reset so the next-opened player starts unfiltered
+  document.getElementById('typeFilter').classList.remove('show');
 }}
 
 function setSpeed(s,btn) {{
