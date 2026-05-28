@@ -42,6 +42,10 @@ struct WebViewWrapper: UIViewRepresentable {
         webView.backgroundColor = .black
         webView.scrollView.backgroundColor = .black
         webView.navigationDelegate = context.coordinator
+        // PR-L: disable WKWebView's left-edge swipe-back so it can't
+        // collide with horizontal filmstrip / sequence-strip scrolling
+        // inside the gallery.
+        webView.allowsBackForwardNavigationGestures = false
         seedAuthCookieAndLoad(webView: webView, url: url)
         return webView
     }
