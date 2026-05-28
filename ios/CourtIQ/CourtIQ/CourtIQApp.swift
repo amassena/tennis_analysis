@@ -16,6 +16,35 @@ struct CourtIQApp: App {
         // even when the user has the Upload tab open and is watching
         // the Recent section update.
         UNUserNotificationCenter.current().delegate = notifDelegate
+
+        #if DEBUG
+        // Local-dev auth bootstrap: Sign-in-with-Apple doesn't work in
+        // the iOS Simulator, so to test the gallery/player locally we
+        // accept a JWT passed via the COURTIQ_DEBUG_JWT launch env var
+        // and seed the keychain with it. Never compiled into Release.
+        //   xcrun simctl launch --console booted <bundle> \
+        //     --setenv COURTIQ_DEBUG_JWT=<jwt>
+        // (simctl forwards SIMCTL_CHILD_* env to the app process.)
+        if let debugJWT = ProcessInfo.processInfo.environment["COURTIQ_DEBUG_JWT"],
+           !debugJWT.isEmpty {
+            try? TokenStore.save(debugJWT)
+            // AVURLAsset (video) and the shots.json fetch authenticate via
+            // the shared cookie store, which on a real device is populated
+            // when the gallery WebView loads. Seed it here too so native
+            // playback works in the Simulator without first visiting the
+            // WebView. Matches the cookie the WebViewWrapper pre-seeds.
+            if let cookie = HTTPCookie(properties: [
+                .domain: "tennis.playfullife.com",
+                .path: "/",
+                .name: "tennis_jwt",
+                .value: debugJWT,
+                .secure: "TRUE",
+                .expires: Date(timeIntervalSinceNow: 30 * 24 * 3600),
+            ]) {
+                HTTPCookieStorage.shared.setCookie(cookie)
+            }
+        }
+        #endif
     }
 
     var body: some Scene {
