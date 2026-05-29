@@ -710,9 +710,9 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 <div class="compare-modal-overlay" id="compareModal" onclick="if(event.target===this)closeCompareModal()">
   <div class="compare-modal">
     <button class="close" onclick="closeCompareModal()">&times;</button>
-    <h2 id="compareTitle">Pro Comparison</h2>
-    <img id="compareImg" alt="Compare to pro" onload="document.getElementById('compareErr').style.display='none';this.style.display='block';" onerror="this.style.display='none';document.getElementById('compareErr').style.display='block';">
-    <div class="err" id="compareErr" style="display:none">No pro comparison available for this shot yet. Comparisons are pre-generated for some videos; coverage will expand.</div>
+    <h2 id="compareTitle">You vs Pro</h2>
+    <video id="compareVid" controls playsinline style="display:none;max-width:100%;max-height:78vh;border-radius:4px;background:#000"></video>
+    <div class="err" id="compareErr" style="display:none">No pro comparison available for this shot yet.</div>
   </div>
 </div>
 
@@ -1096,15 +1096,14 @@ function segmentAutoSeek() {{
 vid.addEventListener('timeupdate', segmentAutoSeek);
 
 document.getElementById('shotStrip').addEventListener('click', function(e) {{
-  // Compare button — small "vs pro" pill inside the chip. Plays the
-  // per-shot side-by-side comparison clip (you vs a pro) for this shot.
+  // Compare button — small "vs pro" pill inside the chip. Opens the
+  // per-shot side-by-side comparison clip in an overlay ON TOP of the
+  // timeline player, so closing returns you to the timeline where you
+  // were (not out to the gallery).
   if (e.target.classList.contains('vs')) {{
     var chip = e.target.closest('.shot-chip');
     if (chip && currentShots) {{
-      var gidx = chip.dataset.gidx;
-      var url = 'https://tennis.playfullife.com/' + currentShots.video
-        + '/' + currentShots.video + '_comparison_shot_' + pad3(gidx) + '.mp4';
-      openPlayer(url, 'You vs Pro \\u2014 shot ' + (parseInt(gidx)+1));
+      openCompareModal(currentShots.video, parseInt(chip.dataset.gidx));
     }}
     e.stopPropagation();
     return;
@@ -1119,17 +1118,27 @@ document.getElementById('shotStrip').addEventListener('click', function(e) {{
 }});
 
 function openCompareModal(videoId, shotIdx) {{
-  var img = document.getElementById('compareImg');
+  var cvid = document.getElementById('compareVid');
   var err = document.getElementById('compareErr');
   document.getElementById('compareTitle').textContent =
-    'Pro Comparison — ' + videoId + ' shot ' + shotIdx;
-  // Reset visibility before load attempt
-  img.style.display = 'none'; err.style.display = 'none';
-  img.src = '/compare/' + videoId + '/shot_' + shotIdx + '.png';
+    'You vs Pro \\u2014 shot ' + (shotIdx + 1);
+  // Pause the timeline underneath so two videos don't play at once; it
+  // keeps its position so closing resumes exactly where you were.
+  try {{ vid.pause(); }} catch(e) {{}}
+  err.style.display = 'none';
+  cvid.style.display = 'block';
+  cvid.src = 'https://tennis.playfullife.com/' + videoId
+    + '/' + videoId + '_comparison_shot_' + pad3(shotIdx) + '.mp4';
+  cvid.onerror = function(){{ cvid.style.display='none'; err.style.display='block'; }};
   document.getElementById('compareModal').classList.add('open');
+  cvid.play().catch(function(){{}});
 }}
 function closeCompareModal() {{
+  var cvid = document.getElementById('compareVid');
+  try {{ cvid.pause(); cvid.removeAttribute('src'); cvid.load(); }} catch(e) {{}}
   document.getElementById('compareModal').classList.remove('open');
+  // Return to the timeline player (still open underneath) — resume play.
+  vid.play().catch(function(){{}});
 }}
 
 function closePlayer() {{
