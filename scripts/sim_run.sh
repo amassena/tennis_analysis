@@ -37,7 +37,7 @@ boot_sim() {
 }
 
 do_build() {
-  echo "▶ building for $SIM_NAME…"
+  echo "> building for ${SIM_NAME}..."
   xcodebuild -project "$PROJ" -scheme "$SCHEME" -sdk iphonesimulator \
     -destination "platform=iOS Simulator,name=$SIM_NAME" -configuration Debug build \
     2>&1 | tail -2
