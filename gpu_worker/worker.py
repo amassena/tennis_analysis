@@ -944,6 +944,26 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
         log("Export and R2 upload complete")
     stage("clips", 100, "Export complete")
 
+    # Step 6a: Upload the high-fps source for deep slow-mo (#6). preprocess
+    # already produced a real-time-duration high-fps version of slo-mo
+    # captures (e.g. {vid}_240fps.mp4) but we never uploaded it. The player
+    # switches to this below 1/2 speed so 1/4 stays smooth (240fps @ 1/4 =
+    # effective 60fps) instead of the 60fps timeline's choppy 15fps.
+    # Uploaded as a canonical {vid}_highfps.mp4 (fps-agnostic name) to the
+    # flat path; Step 6b migrates it per-user. Non-fatal.
+    try:
+        hifps_local = None
+        for cand in sorted(PREPROCESSED_DIR.glob(f"{video_name}_*fps.mp4")):
+            hifps_local = cand  # prefer the last (e.g. _240fps over _120fps if both)
+        if hifps_local and hifps_local.exists():
+            key = f"highlights/{video_name}/{video_name}_highfps.mp4"
+            if _upload_file_to_r2(str(hifps_local), key, "video/mp4"):
+                log(f"Step 6a: Uploaded high-fps source ({hifps_local.name})")
+        else:
+            log("Step 6a: no high-fps source (not a slo-mo capture)")
+    except Exception as e:
+        log(f"High-fps upload failed (non-fatal): {e}", "WARN")
+
     # Step 6b: Move outputs to per-user prefix (if marker has user_hash).
     # Pipeline scripts upload flat (highlights/<vid>/...) to keep them
     # decoupled from the auth/sharing model; we re-key here, where we
