@@ -34,31 +34,70 @@ final class UploadManager: ObservableObject {
     private let maxConcurrentParts = 3
 
     /// User-controlled toggle, persisted via UserDefaults.
-    /// Enforced by `currentSession.configuration.allowsCellularAccess`.
+    /// Enforced by each session's `allowsCellularAccess`.
     @Published var wifiOnly: Bool {
         didSet {
             UserDefaults.standard.set(wifiOnly, forKey: "quickUpload_wifiOnly")
-            sessionCache = nil   // force rebuild on next request
+            // Rebuild the control session immediately. The background session
+            // can't be swapped live (one per identifier per process), so it
+            // adopts the new policy on next launch — acceptable for a rarely
+            // flipped setting.
+            controlSessionCache = nil
         }
     }
-
-    /// Lazy-built URLSession; rebuilt when the WiFi-only toggle flips.
-    private var sessionCache: URLSession?
 
     /// stateIds with a run() loop currently executing. Guards against
     /// double-running the same upload when both launch-resume and
     /// foreground-resume (or a manual retry) fire for it.
     private var running = Set<String>()
 
-    var currentSession: URLSession {
-        if let s = sessionCache { return s }
+    /// Foreground session for the small control calls (init + complete).
+    /// Rebuilt when the WiFi-only toggle flips.
+    private var controlSessionCache: URLSession?
+    var controlSession: URLSession {
+        if let s = controlSessionCache { return s }
         let cfg = URLSessionConfiguration.default
         cfg.allowsCellularAccess = !wifiOnly
         cfg.timeoutIntervalForRequest = 60
-        cfg.timeoutIntervalForResource = 60 * 60  // 1 hour per resource (large uploads)
+        cfg.timeoutIntervalForResource = 60 * 60
         let s = URLSession(configuration: cfg)
-        sessionCache = s
+        controlSessionCache = s
         return s
+    }
+
+    /// Background session for the heavy part uploads. Survives app
+    /// suspension/termination so a multi-GB upload keeps going while the
+    /// app is backgrounded or the screen is locked (#21). Delegate-driven:
+    /// parts finish via BackgroundUploadDelegate → handlePartTaskCompletion.
+    /// Built ONCE per process (you can't have two background sessions with
+    /// the same identifier).
+    static let backgroundSessionId = "com.amassena.courtiq.CourtIQ.upload"
+    private let bgDelegate = BackgroundUploadDelegate()
+    private(set) lazy var uploadSession: URLSession = {
+        let cfg = URLSessionConfiguration.background(withIdentifier: Self.backgroundSessionId)
+        cfg.allowsCellularAccess = !wifiOnly
+        cfg.sessionSendsLaunchEvents = true       // relaunch the app for completion events
+        cfg.isDiscretionary = false               // start promptly, don't wait for "ideal" conditions
+        cfg.timeoutIntervalForResource = 7 * 24 * 3600  // a week to finish a huge upload
+        return URLSession(configuration: cfg, delegate: bgDelegate, delegateQueue: nil)
+    }()
+
+    /// "stateId#partNumber" for parts with a background task in flight —
+    /// stops scheduleParts from double-scheduling the same part.
+    private var inFlightParts = Set<String>()
+    /// Transient-failure retry counts, keyed "stateId#partNumber".
+    private var partRetries: [String: Int] = [:]
+    /// stateIds with a /complete call in flight — prevents a double-finalize
+    /// if a foreground-resume fires during the finalize window.
+    private var finalizing = Set<String>()
+
+    /// Stored by AppDelegate.handleEventsForBackgroundURLSession; called once
+    /// the background session has delivered all queued completion callbacks.
+    var backgroundEventsCompletion: (() -> Void)?
+    func finishBackgroundEvents() {
+        let h = backgroundEventsCompletion
+        backgroundEventsCompletion = nil
+        h?()
     }
 
     private init() {
@@ -287,132 +326,70 @@ final class UploadManager: ObservableObject {
             update(stateId: stateId) { $0.status = .uploading }
         }
 
-        // 2) Parts step — uploadAllParts() skips any partNumber that's
-        // already in state.partsDone, so resume just continues.
-        let parts: [UploadState.CompletedPart]
-        do {
-            parts = try await uploadAllParts(stateId: stateId)
-        } catch {
-            if isTransient(error) {
-                // Network blip / app suspended mid-chunk. Keep it resumable
-                // (status stays .uploading) — launch/foreground resume will
-                // continue from the next missing part. Not a terminal fail.
-                update(stateId: stateId) {
-                    $0.status = .uploading
-                    $0.errorMessage = nil
-                }
-            } else {
-                update(stateId: stateId) {
-                    $0.status = .failed
-                    $0.errorMessage = "parts: \(error.localizedDescription)"
-                }
-            }
+        // 2) Parts — hand off to the BACKGROUND session and return. Each part
+        // uploads as a background task; the delegate calls
+        // handlePartTaskCompletion(), which refills the concurrency window and
+        // triggers finalize() once the whole file is up. This is what lets a
+        // multi-GB upload keep running while the app is backgrounded or the
+        // screen is locked (#21).
+        scheduleParts(stateId: stateId)
+    }
+
+    // MARK: - Background part scheduling
+
+    private func totalParts(_ state: UploadState) -> Int {
+        Int((state.totalBytes + state.chunkSize - 1) / state.chunkSize)
+    }
+
+    /// Schedule up to `maxConcurrentParts` not-yet-uploaded, not-in-flight
+    /// parts as background upload tasks. Idempotent — safe to call from run(),
+    /// from each part completion, on resume, and on launch reconnect.
+    private func scheduleParts(stateId: String) {
+        guard let state = uploads.first(where: { $0.id == stateId }) else { return }
+        guard state.status == .uploading, !state.uploadId.isEmpty else { return }
+        let total = totalParts(state)
+        guard total > 0 else { markFailed(id: stateId, reason: "File is empty"); return }
+
+        let done = Set(state.partsDone.map { $0.partNumber })
+        let inFlightForState = inFlightParts.filter { $0.hasPrefix("\(stateId)#") }.count
+
+        // Whole file up → finalize once nothing is still in flight.
+        if done.count >= total {
+            if inFlightForState == 0 { finalize(stateId: stateId) }
             return
         }
 
-        // 3) Complete step
-        update(stateId: stateId) { $0.status = .finalizing }
-        do {
-            _ = try await postComplete(stateId: stateId, parts: parts)
-        } catch {
-            if isTransient(error) {
-                // Parts are all up; just the finalize call got interrupted.
-                // Stay resumable — resume skips the done parts and retries
-                // /complete.
-                update(stateId: stateId) {
-                    $0.status = .uploading
-                    $0.errorMessage = nil
-                }
-            } else {
-                update(stateId: stateId) {
-                    $0.status = .failed
-                    $0.errorMessage = "complete: \(error.localizedDescription)"
-                }
-            }
-            return
-        }
-
-        if let idx = uploads.firstIndex(where: { $0.id == stateId }) {
-            try? FileManager.default.removeItem(atPath: uploads[idx].sourcePath)
-        }
-        update(stateId: stateId) {
-            $0.status = .completed
-            $0.completedAt = Date()
-            $0.bytesUploaded = $0.totalBytes
-        }
-
-        // Kick off server-side status polling so the row can flip from
-        // "uploaded" -> "ready in gallery" once the pipeline finishes.
-        if let videoId = uploads.first(where: { $0.id == stateId })?.uploadId {
-            StatusPoller.shared.start(videoId: videoId) { [weak self] resp in
-                Task { @MainActor in
-                    self?.update(stateId: stateId) {
-                        $0.serverStatus = resp.status
-                    }
-                }
+        var slots = maxConcurrentParts - inFlightForState
+        guard slots > 0 else { return }
+        for pn in 1...total where slots > 0 {
+            if done.contains(pn) { continue }
+            let key = "\(stateId)#\(pn)"
+            if inFlightParts.contains(key) { continue }
+            if enqueuePart(state: state, partNumber: pn) {
+                inFlightParts.insert(key)
+                slots -= 1
             }
         }
     }
 
-    private func uploadAllParts(stateId: String) async throws -> [UploadState.CompletedPart] {
-        guard let state = uploads.first(where: { $0.id == stateId }) else {
-            throw UploadError.stateMissing
-        }
-        let totalParts = Int((state.totalBytes + state.chunkSize - 1) / state.chunkSize)
-        guard totalParts > 0 else { throw UploadError.emptyFile }
-
-        // Seed results with anything we already finished in a prior run.
-        var results: [Int: UploadState.CompletedPart] = [:]
-        for done in state.partsDone {
-            results[done.partNumber] = done
-        }
-        let alreadyDone = Set(state.partsDone.map { $0.partNumber })
-        let remaining = (1...totalParts).filter { !alreadyDone.contains($0) }
-
-        if remaining.isEmpty {
-            return (1...totalParts).compactMap { results[$0] }
-        }
-
-        try await withThrowingTaskGroup(of: UploadState.CompletedPart.self) { group in
-            var nextIdx = 0
-            var inFlight = 0
-
-            func startOne(_ pn: Int) {
-                group.addTask { [weak self] in
-                    guard let self else { throw UploadError.stateMissing }
-                    return try await self.uploadOnePart(stateId: stateId, partNumber: pn, totalParts: totalParts)
-                }
-            }
-
-            while nextIdx < remaining.count && inFlight < maxConcurrentParts {
-                startOne(remaining[nextIdx]); nextIdx += 1; inFlight += 1
-            }
-
-            while inFlight > 0 {
-                guard let part = try await group.next() else { break }
-                results[part.partNumber] = part
-                inFlight -= 1
-                if nextIdx < remaining.count {
-                    startOne(remaining[nextIdx]); nextIdx += 1; inFlight += 1
-                }
-            }
-        }
-
-        return (1...totalParts).compactMap { results[$0] }
-    }
-
-    private func uploadOnePart(stateId: String, partNumber: Int, totalParts: Int) async throws -> UploadState.CompletedPart {
-        guard let state = uploads.first(where: { $0.id == stateId }) else {
-            throw UploadError.stateMissing
-        }
-        let url = URL(fileURLWithPath: state.sourcePath)
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-
+    /// Stage part `partNumber`'s chunk to a temp file and start a background
+    /// upload task for it (background sessions require a file body, not Data).
+    /// Returns false if the chunk couldn't be staged.
+    private func enqueuePart(state: UploadState, partNumber: Int) -> Bool {
         let offset = Int64(partNumber - 1) * state.chunkSize
-        try handle.seek(toOffset: UInt64(offset))
         let want = Int(min(state.chunkSize, state.totalBytes - offset))
-        let chunk = try handle.read(upToCount: want) ?? Data()
+        guard want > 0 else { return false }
+
+        let tempURL = Self.partTempURL(stateId: state.id, partNumber: partNumber)
+        do {
+            let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: state.sourcePath))
+            defer { try? handle.close() }
+            try handle.seek(toOffset: UInt64(offset))
+            let chunk = try handle.read(upToCount: want) ?? Data()
+            try chunk.write(to: tempURL, options: .atomic)
+        } catch {
+            return false
+        }
 
         var req = URLRequest(url: APIClient.baseURL
             .appendingPathComponent("api/upload/iphone/\(state.uploadId)/\(partNumber)"))
@@ -421,36 +398,125 @@ final class UploadManager: ObservableObject {
         if let jwt = TokenStore.load() {
             req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         }
+        let task = uploadSession.uploadTask(with: req, fromFile: tempURL)
+        task.taskDescription = UploadTaskTag(
+            stateId: state.id, partNumber: partNumber, size: Int64(want)).encoded()
+        task.resume()
+        return true
+    }
 
-        // Retry up to 3 times on transient errors
-        var lastError: Error?
-        for attempt in 0..<3 {
+    /// Called by BackgroundUploadDelegate when a part task finishes.
+    /// `statusCode` is 0 on transport error. We DON'T need the response etag —
+    /// the server records each part's etag itself (server-authoritative
+    /// complete), so a 2xx is all that matters here.
+    func handlePartTaskCompletion(tag: UploadTaskTag, statusCode: Int, errored: Bool) {
+        let key = "\(tag.stateId)#\(tag.partNumber)"
+        inFlightParts.remove(key)
+        try? FileManager.default.removeItem(
+            at: Self.partTempURL(stateId: tag.stateId, partNumber: tag.partNumber))
+        guard uploads.contains(where: { $0.id == tag.stateId }) else { return }
+
+        let success = !errored && (200..<300).contains(statusCode)
+        if success {
+            partRetries[key] = nil
+            update(stateId: tag.stateId) {
+                if !$0.partsDone.contains(where: { $0.partNumber == tag.partNumber }) {
+                    $0.partsDone.append(.init(partNumber: tag.partNumber, etag: "", size: tag.size))
+                    $0.bytesUploaded += tag.size
+                }
+            }
+            scheduleParts(stateId: tag.stateId)
+            return
+        }
+
+        // Auth / bad-request style codes are terminal; transport blips and
+        // 5xx are retried a few times, then left for launch/foreground resume.
+        let terminal = [400, 401, 403, 404, 413].contains(statusCode)
+        if terminal {
+            markFailed(id: tag.stateId, reason: "part \(tag.partNumber): HTTP \(statusCode)")
+            return
+        }
+        let count = (partRetries[key] ?? 0) + 1
+        partRetries[key] = count
+        if count <= 5 {
+            scheduleParts(stateId: tag.stateId)   // re-pick this part
+        } else {
+            partRetries[key] = nil                // back off; resume retries later
+        }
+    }
+
+    /// All parts uploaded — POST /complete (server validates the whole file),
+    /// then mark done and clean up. Uses the foreground control session,
+    /// wrapped in a background-task assertion so a finalize landing while the
+    /// app is briefly backgrounded still finishes.
+    private func finalize(stateId: String) {
+        guard !finalizing.contains(stateId) else { return }
+        guard let state = uploads.first(where: { $0.id == stateId }),
+              state.status != .completed, state.status != .failed else { return }
+        finalizing.insert(stateId)
+        update(stateId: stateId) { $0.status = .finalizing }
+        let parts = state.partsDone
+        Task { @MainActor in
+            defer { finalizing.remove(stateId) }
+            var bg = UIApplication.shared.beginBackgroundTask(withName: "finalize-\(stateId)")
+            defer { if bg != .invalid { UIApplication.shared.endBackgroundTask(bg); bg = .invalid } }
             do {
-                let (data, response) = try await self.currentSession.upload(for: req, from: chunk)
-                guard let http = response as? HTTPURLResponse else {
-                    throw UploadError.badResponse
-                }
-                if !(200..<300).contains(http.statusCode) {
-                    let body = String(data: data, encoding: .utf8) ?? ""
-                    throw UploadError.http(status: http.statusCode, body: body)
-                }
-                let resp = try JSONDecoder().decode(PartResponse.self, from: data)
-                await MainActor.run { [self] in
-                    self.update(stateId: stateId) {
-                        $0.partsDone.append(.init(partNumber: resp.partNumber, etag: resp.etag, size: Int64(chunk.count)))
-                        $0.bytesUploaded += Int64(chunk.count)
+                _ = try await postComplete(stateId: stateId, parts: parts)
+            } catch {
+                if case UploadError.http(let status, _) = error, status == 409 {
+                    // Server says incomplete — keep uploading; the next run's
+                    // init-resume reconciles partsDone with the server's list.
+                    update(stateId: stateId) { $0.status = .uploading; $0.errorMessage = nil }
+                    scheduleParts(stateId: stateId)
+                } else if isTransient(error) {
+                    update(stateId: stateId) { $0.status = .uploading; $0.errorMessage = nil }
+                } else {
+                    update(stateId: stateId) {
+                        $0.status = .failed
+                        $0.errorMessage = "complete: \(error.localizedDescription)"
                     }
                 }
-                return .init(partNumber: resp.partNumber, etag: resp.etag, size: Int64(chunk.count))
-            } catch {
-                lastError = error
-                // Exponential backoff: 1s, 3s
-                if attempt < 2 {
-                    try? await Task.sleep(nanoseconds: UInt64(pow(3.0, Double(attempt))) * 1_000_000_000)
+                return
+            }
+            if let s = uploads.first(where: { $0.id == stateId }) {
+                try? FileManager.default.removeItem(atPath: s.sourcePath)
+            }
+            update(stateId: stateId) {
+                $0.status = .completed
+                $0.completedAt = Date()
+                $0.bytesUploaded = $0.totalBytes
+            }
+            if let videoId = uploads.first(where: { $0.id == stateId })?.uploadId {
+                StatusPoller.shared.start(videoId: videoId) { [weak self] resp in
+                    Task { @MainActor in
+                        self?.update(stateId: stateId) { $0.serverStatus = resp.status }
+                    }
                 }
             }
         }
-        throw lastError ?? UploadError.unknown
+    }
+
+    /// On launch, re-attach to the background session: rebuild the in-flight
+    /// set from any tasks still running (so we don't double-schedule), then
+    /// resume. Tasks that finished while we were dead already had their
+    /// completion replayed to the delegate by the system.
+    func reconnectAndResume() {
+        uploadSession.getAllTasks { tasks in
+            Task { @MainActor in
+                for t in tasks {
+                    if let tag = UploadTaskTag.decode(t.taskDescription) {
+                        self.inFlightParts.insert("\(tag.stateId)#\(tag.partNumber)")
+                    }
+                }
+                UploadResumer.resumeOnLaunch()
+            }
+        }
+    }
+
+    /// Temp file backing a single in-flight part upload.
+    static func partTempURL(stateId: String, partNumber: Int) -> URL {
+        let safe = stateId.replacingOccurrences(of: "/", with: "_")
+        return UploadStaging.partsDirectory.appendingPathComponent("\(safe)_\(partNumber).part")
     }
 
     private func postInit(state: UploadState) async throws -> InitResponse {
@@ -467,7 +533,7 @@ final class UploadManager: ObservableObject {
             req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         }
         req.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await self.currentSession.data(for: req)
+        let (data, response) = try await self.controlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw UploadError.badResponse }
         // 200 = new upload, 409 = duplicate (treated as success by caller)
         if http.statusCode == 409 {
@@ -493,7 +559,7 @@ final class UploadManager: ObservableObject {
             req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
         }
         req.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await self.currentSession.data(for: req)
+        let (data, response) = try await self.controlSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw UploadError.badResponse }
         if !(200..<300).contains(http.statusCode) {
             let bodyText = String(data: data, encoding: .utf8) ?? ""
@@ -606,5 +672,77 @@ enum UploadStaging {
     static func stagingURL(for filename: String) -> URL {
         let safe = filename.replacingOccurrences(of: "/", with: "_")
         return directory.appendingPathComponent("\(UUID().uuidString)_\(safe)")
+    }
+
+    /// Temp dir for per-part chunk files backing background upload tasks.
+    /// Also in Application Support (not the OS-purged tmp dir) so a chunk
+    /// survives until its background task completes, even across suspension.
+    static var partsDirectory: URL {
+        let base = try! FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true)
+        let dir = base.appendingPathComponent("QuickUpload/parts", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        var d = dir
+        var rv = URLResourceValues(); rv.isExcludedFromBackup = true
+        try? d.setResourceValues(rv)
+        return dir
+    }
+}
+
+// MARK: - Background upload session
+
+/// Identifies which (upload, part) a background URLSession task belongs to.
+/// Stored in the task's `taskDescription` so it survives app suspension and
+/// relaunch — that's how a delegate callback maps back to an upload even when
+/// the task was started in a previous process.
+struct UploadTaskTag: Codable {
+    let stateId: String
+    let partNumber: Int
+    let size: Int64
+
+    func encoded() -> String {
+        guard let data = try? JSONEncoder().encode(self),
+              let s = String(data: data, encoding: .utf8) else { return "" }
+        return s
+    }
+
+    static func decode(_ s: String?) -> UploadTaskTag? {
+        guard let s, let data = s.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(UploadTaskTag.self, from: data)
+    }
+}
+
+/// Delegate for the background upload URLSession. Background sessions can't use
+/// the async/await convenience methods — part tasks finish via these callbacks,
+/// possibly after the app was suspended and relaunched. Runs on the session's
+/// private delegate queue; every callback hops to the main actor to mutate
+/// UploadManager (the single source of truth).
+final class BackgroundUploadDelegate: NSObject, URLSessionDataDelegate {
+
+    func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    didCompleteWithError error: Error?) {
+        guard let tag = UploadTaskTag.decode(task.taskDescription) else { return }
+        // HTTP error status arrives as a successful task with a non-2xx
+        // response, NOT as `error` (which is transport-level). Check both.
+        let statusCode = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        let errored = error != nil
+        Task { @MainActor in
+            UploadManager.shared.handlePartTaskCompletion(
+                tag: tag, statusCode: statusCode, errored: errored)
+        }
+    }
+
+    /// Fires once the session has delivered all queued completion callbacks
+    /// after a background relaunch. We then call the system-provided
+    /// completion handler (stashed by the AppDelegate) so iOS can snapshot the
+    /// UI and re-suspend us.
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        Task { @MainActor in
+            UploadManager.shared.finishBackgroundEvents()
+        }
     }
 }

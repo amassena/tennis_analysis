@@ -25,13 +25,23 @@ struct APIClient {
         }
     }
 
+    /// Build a request URL from a path that MAY contain a query string.
+    /// `baseURL.appendingPathComponent(path)` percent-encodes a "?" INTO the
+    /// path (".../recent%3Flimit=25"), so the server route never matches and
+    /// silently 404s — that was the empty-Recent / endless-spinner bug.
+    /// Composing the full string lets URL parse the query correctly.
+    private static func makeURL(_ path: String) -> URL {
+        URL(string: baseURL.absoluteString + "/" + path)
+            ?? baseURL.appendingPathComponent(path)
+    }
+
     /// POST JSON, decode JSON response.
     static func post<RequestBody: Encodable, ResponseBody: Decodable>(
         path: String,
         body: RequestBody,
         requireAuth: Bool = true
     ) async throws -> ResponseBody {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        var req = URLRequest(url: makeURL(path))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
@@ -44,7 +54,7 @@ struct APIClient {
         path: String,
         requireAuth: Bool = true
     ) async throws -> ResponseBody {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        var req = URLRequest(url: makeURL(path))
         req.httpMethod = "GET"
         try attachAuth(&req, required: requireAuth)
         return try await execute(req)
@@ -55,7 +65,7 @@ struct APIClient {
         path: String,
         requireAuth: Bool = true
     ) async throws -> ResponseBody {
-        var req = URLRequest(url: baseURL.appendingPathComponent(path))
+        var req = URLRequest(url: makeURL(path))
         req.httpMethod = "DELETE"
         try attachAuth(&req, required: requireAuth)
         return try await execute(req)

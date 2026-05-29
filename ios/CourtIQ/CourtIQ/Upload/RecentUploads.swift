@@ -48,6 +48,24 @@ final class RecentUploadsModel: ObservableObject {
 
     init(userHash: String) {
         self.userHash = userHash
+        // Show the last-known list instantly on launch so there's no
+        // full-screen spinner / loading flicker while the (2–3s) fetch runs,
+        // and so a slow/failed fetch still shows the user's videos. Treat a
+        // cache hit as "loaded once" — the background refresh updates it.
+        if let cached = Self.loadCache(userHash: userHash), !cached.isEmpty {
+            items = cached
+            hasLoadedOnce = true
+        }
+    }
+
+    private static func cacheKey(_ h: String) -> String { "recentCache_\(h)" }
+    private static func loadCache(userHash: String) -> [RecentUpload]? {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey(userHash)) else { return nil }
+        return try? JSONDecoder().decode([RecentUpload].self, from: data)
+    }
+    private func saveCache() {
+        guard let data = try? JSONEncoder().encode(items) else { return }
+        UserDefaults.standard.set(data, forKey: Self.cacheKey(userHash))
     }
 
     func start() {
@@ -75,6 +93,7 @@ final class RecentUploadsModel: ObservableObject {
             if resp.items != items { items = resp.items }
             lastError = nil
             hasLoadedOnce = true
+            saveCache()
             // Fire a local notification for every video that just
             // transitioned to "complete" since the last poll. iOS
             // delivers banners even when the app is foregrounded if we

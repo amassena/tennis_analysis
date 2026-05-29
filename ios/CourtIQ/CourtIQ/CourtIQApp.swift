@@ -55,7 +55,10 @@ struct CourtIQApp: App {
                 .environmentObject(nav)
                 .preferredColorScheme(.dark)
                 .task {
-                    UploadResumer.resumeOnLaunch()
+                    // Re-attach to the background upload session (rebuild the
+                    // in-flight set from tasks still running) BEFORE resuming,
+                    // so we don't double-schedule parts already uploading.
+                    UploadManager.shared.reconnectAndResume()
                 }
                 .onChange(of: scenePhase) { _, phase in
                     // Resume stalled uploads when the app returns to the
@@ -123,5 +126,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         supportedInterfaceOrientationsFor window: UIWindow?,
     ) -> UIInterfaceOrientationMask {
         AppDelegate.orientationLock
+    }
+
+    /// iOS relaunches the app (or wakes it) to deliver background upload
+    /// completion events. Stash the completion handler so the session
+    /// delegate can call it once all events have been processed
+    /// (urlSessionDidFinishEvents), and touch the session so it's recreated
+    /// and starts delivering.
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void,
+    ) {
+        guard identifier == UploadManager.backgroundSessionId else {
+            completionHandler(); return
+        }
+        Task { @MainActor in
+            UploadManager.shared.backgroundEventsCompletion = completionHandler
+            _ = UploadManager.shared.uploadSession   // ensure the session exists
+        }
     }
 }

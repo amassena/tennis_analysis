@@ -70,7 +70,7 @@ struct RecentUploadsSection: View {
                     // toggles on every background poll (every 15s), so
                     // showing it then made the header flicker during
                     // uploads. Once we have items, refreshes are silent.
-                    if model.isLoading && model.items.isEmpty {
+                    if !model.hasLoadedOnce && model.items.isEmpty {
                         ProgressView().scaleEffect(0.6)
                     }
                 }

@@ -17,7 +17,11 @@ struct TodayHeroCard: View {
     var body: some View {
         if let item = latestReadyItem {
             heroButton(for: item)
-        } else if recent.items.isEmpty && recent.isLoading {
+        } else if recent.items.isEmpty && !recent.hasLoadedOnce {
+            // Show the loading card ONLY before the first successful load.
+            // Gating on `isLoading` made it toggle in/out on every 15s poll
+            // (the upload-screen flicker). Once we've loaded once, background
+            // refreshes are silent.
             loadingPlaceholder
         } else if recent.items.contains(where: { !$0.isComplete }) {
             // Recent has data but no completed videos yet — show
