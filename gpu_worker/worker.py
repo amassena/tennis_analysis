@@ -884,6 +884,33 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     except Exception as e:
         log(f"Coaching step failed (non-fatal): {e}", "WARN")
 
+    # Step 5e: Swing-sequence filmstrips (the gallery "Sequences" feature).
+    # Generates one composite per shot (+ skeleton variant) to the flat
+    # highlights/<vid>/sequences/ path; Step 6b migrates them to the
+    # per-user prefix along with everything else. Non-fatal — a missing
+    # filmstrip shouldn't fail the whole job. Was never wired in before,
+    # so iphone_* uploads had no sequences (issue #1).
+    try:
+        log("Step 5e: Generating swing-sequence filmstrips")
+        det_path3 = DETECTIONS_DIR / f"{video_name}_fused_detections.json"
+        if not det_path3.exists():
+            det_path3 = DETECTIONS_DIR / f"{video_name}_fused.json"
+        poses_path3 = POSES_DIR / f"{video_name}.json"
+        if det_path3.exists() and poses_path3.exists():
+            r = subprocess.run(
+                [python, str(PROJECT_ROOT / "scripts" / "swing_composite.py"),
+                 "--video", video_name, "--upload"],
+                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=900,
+            )
+            if r.returncode != 0:
+                log(f"Sequences failed: {r.stderr[-300:]}", "WARN")
+            else:
+                log("Swing-sequence filmstrips uploaded")
+        else:
+            log("Sequences skipped (missing detections or poses)", "WARN")
+    except Exception as e:
+        log(f"Sequences step failed (non-fatal): {e}", "WARN")
+
     # Step 6: Export videos and upload to R2
     log("Step 6: Exporting videos to R2")
     stage("clips", 0, "Exporting video formats + uploading to R2")
