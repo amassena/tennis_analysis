@@ -1225,32 +1225,39 @@ async function handleAdminQueue(request, env, cors) {
   if (!claims) return jsonResponse({ error: 'Unauthorized' }, 401, noCache);
   if (!isAdminUser(env, claims.sub)) return jsonResponse({ error: 'Forbidden' }, 403, noCache);
 
-  const items = [];
+  // Collect candidate keys (cheap list), then GET in PARALLEL. Exclude
+  // _parts_ records (per-part upload tracking) — they live under uploads/ and
+  // would otherwise show as junk "00001" rows and add a GET per chunk.
+  const entries = [];
   let cursor;
   do {
     const page = await env.BUCKET.list({ prefix: 'uploads/', cursor });
     for (const obj of page.objects) {
       if (!obj.key.endsWith('.json')) continue;
+      if (obj.key.includes('_parts_')) continue;
       if (obj.key === 'uploads/_allowlist.json') continue;
-      const inflight = obj.key.includes('_inflight_');
-      try {
-        const m = await (await env.BUCKET.get(obj.key)).json();
-        items.push({
-          video_id: m.id || obj.key.split('/').pop().replace('_inflight_', '').replace('.json', ''),
-          filename: m.filename || m.url || 'Unknown',
-          user_hash: m.user_hash || m.uploaded_by || null,
-          status: inflight ? 'uploading' : (m.status || 'unknown'),
-          stage: m.stage || null,
-          progress: m.progress ?? null,
-          uploaded_at: m.uploaded_at || m.created_at || null,
-          updated_at: m.updated_at || m.completed_at || m.uploaded_at || null,
-          error: m.error || null,
-          inflight,
-        });
-      } catch {}
+      entries.push({ key: obj.key, inflight: obj.key.includes('_inflight_') });
     }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
+
+  const items = (await Promise.all(entries.map(async ({ key, inflight }) => {
+    try {
+      const m = await (await env.BUCKET.get(key)).json();
+      return {
+        video_id: m.id || key.split('/').pop().replace('_inflight_', '').replace('.json', ''),
+        filename: m.filename || m.url || 'Unknown',
+        user_hash: m.user_hash || m.uploaded_by || null,
+        status: inflight ? 'uploading' : (m.status || 'unknown'),
+        stage: m.stage || null,
+        progress: m.progress ?? null,
+        uploaded_at: m.uploaded_at || m.created_at || null,
+        updated_at: m.updated_at || m.completed_at || m.uploaded_at || null,
+        error: m.error || null,
+        inflight,
+      };
+    } catch { return null; }
+  }))).filter(Boolean);
 
   items.sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
 
@@ -1297,41 +1304,52 @@ async function handleUserRecent(request, env, cors, userHash) {
   const url = new URL(request.url);
   const limit = Math.max(1, Math.min(50, parseInt(url.searchParams.get('limit') || '25')));
 
-  // List all markers, parse, filter by owner, sort desc by uploaded_at.
-  const items = [];
+  // Collect candidate marker keys (cheap list), then GET them in PARALLEL.
+  // Sequential GETs made this 2-3s for ~40 markers, which on-device read as a
+  // hang. Also exclude _parts_ records (per-part upload tracking from the
+  // resumable-upload work) — they live under uploads/ and would otherwise add
+  // a GET per 50MB chunk (~140 junk GETs for a 7GB upload).
+  const keys = [];
   let cursor;
   do {
     const page = await env.BUCKET.list({ prefix: 'uploads/', cursor });
     for (const obj of page.objects) {
       if (!obj.key.endsWith('.json')) continue;
       if (obj.key.includes('_inflight_')) continue;
+      if (obj.key.includes('_parts_')) continue;
       if (obj.key === 'uploads/_allowlist.json') continue;
-      try {
-        const m = await env.BUCKET.get(obj.key);
-        if (!m) continue;
-        const marker = await m.json();
-        const owner = marker.user_hash || marker.uploaded_by;
-        if (owner !== userHash) continue;
-        items.push({
-          video_id: marker.video_id || marker.id,
-          filename: marker.filename || '',
-          status: marker.status || 'queued',
-          stage: marker.stage || null,
-          progress: marker.progress != null ? marker.progress : null,
-          uploaded_at: marker.uploaded_at || marker.created_at || null,
-          updated_at: marker.updated_at || marker.completed_at || marker.uploaded_at || null,
-          error: marker.error || null,
-          video_url: marker.video_url || null,
-          // Browser-resolvable URL once processing is done; the app can
-          // tap-through directly into the gallery WebView.
-          gallery_url: marker.status === 'complete'
-            ? `https://tennis.playfullife.com/u/${userHash}#${marker.video_id || marker.id}`
-            : null,
-        });
-      } catch {}
+      keys.push(obj.key);
     }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
+
+  const markers = await Promise.all(keys.map(async (k) => {
+    try { const m = await env.BUCKET.get(k); return m ? await m.json() : null; }
+    catch { return null; }
+  }));
+
+  const items = [];
+  for (const marker of markers) {
+    if (!marker) continue;
+    const owner = marker.user_hash || marker.uploaded_by;
+    if (owner !== userHash) continue;
+    items.push({
+      video_id: marker.video_id || marker.id,
+      filename: marker.filename || '',
+      status: marker.status || 'queued',
+      stage: marker.stage || null,
+      progress: marker.progress != null ? marker.progress : null,
+      uploaded_at: marker.uploaded_at || marker.created_at || null,
+      updated_at: marker.updated_at || marker.completed_at || marker.uploaded_at || null,
+      error: marker.error || null,
+      video_url: marker.video_url || null,
+      // Browser-resolvable URL once processing is done; the app can
+      // tap-through directly into the gallery WebView.
+      gallery_url: marker.status === 'complete'
+        ? `https://tennis.playfullife.com/u/${userHash}#${marker.video_id || marker.id}`
+        : null,
+    });
+  }
 
   items.sort((a, b) => {
     const ta = a.uploaded_at ? Date.parse(a.uploaded_at) : 0;
