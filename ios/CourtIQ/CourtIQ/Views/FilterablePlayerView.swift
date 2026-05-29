@@ -45,6 +45,18 @@ struct FilterablePlayerView: View {
     @State private var controlsHideTask: Task<Void, Never>? = nil
     @State private var isFullscreen = false
     @State private var lastAutoSeekAt: TimeInterval = 0
+    @State private var compareShots: Set<Int> = []   // global shot idxs with a comparison clip
+    @State private var compareItem: CompareClip? = nil   // currently-presented comparison
+
+    /// URL of the per-shot comparison clip for a global shot index,
+    /// derived from the timeline URL (mirrors highFpsURL).
+    private func comparisonURL(for gidx: Int) -> URL? {
+        let s = url.absoluteString
+        guard s.contains("_timeline.mp4") else { return nil }
+        let padded = String(format: "%03d", gidx)
+        return URL(string: s.replacingOccurrences(
+            of: "_timeline.mp4", with: "_comparison_shot_\(padded).mp4"))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -85,12 +97,42 @@ struct FilterablePlayerView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if !isFullscreen, !shots.isEmpty {
+                ShotStripRow(
+                    shots: shots,
+                    variant: variant ?? "timeline",
+                    compareShots: compareShots,
+                    onJump: jumpToShot,
+                    onCompare: presentComparison,
+                )
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .ignoresSafeArea(edges: isFullscreen ? .all : [])
         .statusBarHidden(isFullscreen)
         .onAppear(perform: setup)
         .onDisappear(perform: teardown)
+        .fullScreenCover(item: $compareItem, onDismiss: {
+            player.play()   // resume the timeline where we paused it
+        }) { item in
+            ComparisonClipView(url: item.url, title: item.label)
+        }
+    }
+
+    /// Seek the timeline to a shot's position (in the current variant) and play.
+    private func jumpToShot(_ s: PlayerShot) {
+        let t = s.positions?[variant ?? "timeline"] ?? s.t
+        player.seek(
+            to: CMTime(seconds: max(0, t - 0.3), preferredTimescale: 600),
+        ) { _ in player.play() }
+    }
+
+    /// Present a shot's side-by-side comparison clip on top of the player.
+    private func presentComparison(_ s: PlayerShot) {
+        guard let u = comparisonURL(for: s.idx) else { return }
+        player.pause()
+        compareItem = CompareClip(url: u, label: "You vs Pro — shot \(s.idx + 1)")
     }
 
     private var customControlsOverlay: some View {
@@ -260,6 +302,7 @@ struct FilterablePlayerView: View {
         player.replaceCurrentItem(with: item)
         let shotsUrl = url.deletingLastPathComponent().appendingPathComponent("shots.json")
         fetchShots(from: shotsUrl)
+        fetchComparisonManifest()
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: interval, queue: .main,
@@ -322,6 +365,25 @@ struct FilterablePlayerView: View {
                 let preview = String(data: data.prefix(120), encoding: .utf8) ?? "<binary>"
                 print("[FilterablePlayer] decode failed (status \(status)): \(error) — body[0..120]=\(preview)")
             }
+        }.resume()
+    }
+
+    /// Load the per-shot comparison manifest ({vid}_comparisons_index.json)
+    /// so the shot strip shows the "vs pro" affordance only where a clip
+    /// exists. Best-effort; absence just means no pills.
+    private func fetchComparisonManifest() {
+        let base = url.deletingLastPathComponent()
+        let vid = base.lastPathComponent
+        let manifestURL = base.appendingPathComponent("\(vid)_comparisons_index.json")
+        var req = URLRequest(url: manifestURL)
+        if let jwt = TokenStore.load() {
+            req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        }
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            guard let data = data,
+                  let resp = try? JSONDecoder().decode(ComparisonManifest.self, from: data)
+            else { return }
+            DispatchQueue.main.async { self.compareShots = Set(resp.shots) }
         }.resume()
     }
 
@@ -651,4 +713,120 @@ struct PlayerShot: Decodable {
 struct ShotsResponse: Decodable {
     let video: String
     let shots: [PlayerShot]
+}
+
+struct ComparisonManifest: Decodable {
+    let video: String
+    let shots: [Int]
+}
+
+/// Identifiable wrapper so a comparison clip can drive .fullScreenCover(item:).
+struct CompareClip: Identifiable {
+    let id = UUID()
+    let url: URL
+    let label: String
+}
+
+/// Horizontal per-shot strip below the filter chips (native equivalent of
+/// the web "JUMP TO SHOT" row). Tap a chip → seek to that shot. Shots that
+/// have a pro comparison clip show a "vs pro" button → plays the clip.
+struct ShotStripRow: View {
+    let shots: [PlayerShot]
+    let variant: String
+    let compareShots: Set<Int>
+    let onJump: (PlayerShot) -> Void
+    let onCompare: (PlayerShot) -> Void
+
+    private let typeAbbrev: [String: String] = [
+        "serve": "S", "forehand": "FH", "backhand": "BH",
+        "forehand_volley": "FV", "backhand_volley": "BV",
+        "overhead": "OH", "unknown_shot": "?",
+    ]
+
+    private var visibleShots: [PlayerShot] {
+        shots.filter { $0.positions?[variant] != nil }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("JUMP TO SHOT")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(0.8)
+                .foregroundColor(Color(white: 0.45))
+                .padding(.horizontal, 12)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(visibleShots, id: \.idx) { s in
+                        VStack(spacing: 3) {
+                            Text(timeLabel(s))
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(Color(white: 0.6))
+                            Text(typeAbbrev[s.type] ?? "?")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                            if compareShots.contains(s.idx) {
+                                Text("vs pro")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(Color(red: 1.0, green: 0.55, blue: 0.0))
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .overlay(Capsule().stroke(
+                                        Color(red: 1.0, green: 0.55, blue: 0.0).opacity(0.6),
+                                        lineWidth: 1))
+                                    .onTapGesture { onCompare(s) }
+                            }
+                        }
+                        .padding(.horizontal, 9).padding(.vertical, 6)
+                        .frame(minWidth: 52)
+                        .background(Color(white: 0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                        .onTapGesture { onJump(s) }
+                    }
+                }
+                .padding(.horizontal, 12)
+            }
+        }
+        .padding(.vertical, 6)
+        .background(Color.black)
+    }
+
+    private func timeLabel(_ s: PlayerShot) -> String {
+        let t = Int((s.positions?[variant] ?? s.t).rounded())
+        return String(format: "%d:%02d", t / 60, t % 60)
+    }
+}
+
+/// Fullscreen overlay that plays a single comparison clip on top of the
+/// timeline player. Closing returns to the timeline (parent resumes it via
+/// the cover's onDismiss).
+struct ComparisonClipView: View {
+    let url: URL
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var player = AVPlayer()
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Text(title).font(.subheadline).foregroundColor(.white).lineLimit(1)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.title3).foregroundColor(.white).padding(8)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                PlayerLayerContainer(player: player)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .onAppear {
+            player.replaceCurrentItem(with: AVPlayerItem(url: url))
+            player.play()
+        }
+        .onDisappear {
+            player.pause()
+            player.replaceCurrentItem(with: nil)
+        }
+    }
 }
