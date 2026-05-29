@@ -458,8 +458,11 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                            or "two-handed")
 
     detections = det_data.get("detections", [])
+    # Keep each shot's GLOBAL index (its position in detections == shots.json
+    # `idx`) so per-shot comparison clips are addressable by the gallery's
+    # shot strip, which keys on that same global idx.
     eligible = [
-        d for d in detections
+        (gi, d) for gi, d in enumerate(detections)
         if d.get("shot_type") in COMPARABLE_TYPES
         and (shot_type_filter is None or d.get("shot_type") == shot_type_filter)
     ]
@@ -485,7 +488,8 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     try:
         used_files = set()  # Track used pro clips to rotate through them
 
-        for i, det in enumerate(eligible):
+        comparison_shot_idxs = []  # global shot indices we produced a clip for
+        for i, (gidx, det) in enumerate(eligible):
             shot_type = det["shot_type"]
             timestamp = det["timestamp"]
             idx = i + 1
@@ -527,8 +531,10 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                 print(f"    [ERROR] Failed to extract pro clip")
                 continue
 
-            # Combine side by side
-            output_name = f"{video_name}_comparison_{shot_type}_{idx:02d}.mp4"
+            # Combine side by side. Named by GLOBAL shot index so the
+            # gallery's per-shot "vs pro" pill can address it directly:
+            # {vid}_comparison_shot_{gidx}.mp4.
+            output_name = f"{video_name}_comparison_shot_{gidx:03d}.mp4"
             output_path = str(output_dir / output_name)
 
             # Format pro label
@@ -539,6 +545,7 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                 size_mb = os.path.getsize(output_path) / (1024 * 1024)
                 print(f"    Saved: {output_name} ({size_mb:.1f}MB)")
                 generated.append(output_path)
+                comparison_shot_idxs.append(gidx)
             else:
                 print(f"    [ERROR] Failed to create comparison")
 
@@ -565,6 +572,16 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                 size_mb = os.path.getsize(compiled_path) / (1024 * 1024)
                 print(f"\n  Compiled: {os.path.basename(compiled_path)} ({size_mb:.1f}MB)")
                 generated.append(compiled_path)
+
+        # Manifest of global shot indices with a comparison clip (written
+        # AFTER the concat so it isn't fed into ffmpeg). The gallery loads
+        # this to show the per-shot "vs pro" pill only where a clip exists.
+        if comparison_shot_idxs:
+            manifest_path = str(output_dir / f"{video_name}_comparisons_index.json")
+            with open(manifest_path, "w") as mf:
+                json.dump({"video": video_name,
+                           "shots": sorted(comparison_shot_idxs)}, mf)
+            generated.append(manifest_path)
 
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)

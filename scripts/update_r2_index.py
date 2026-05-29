@@ -833,6 +833,10 @@ function openPlayer(url, title) {{
 function loadShotsStrip(vidId, variant) {{
   currentVariant = variant;
   var doRender = function() {{ renderShotStrip(); }};
+  // Load the per-shot pro-comparison manifest (best-effort): the set of
+  // global shot indices that have a {vid}_comparison_shot_NNN.mp4 clip.
+  // Drives whether the "vs pro" pill shows on each shot chip.
+  loadComparisonIndex(vidId);
   if (currentShots && currentShots.video === vidId) {{ doRender(); return; }}
   fetch('/' + vidId + '/shots.json', {{cache: 'no-store'}})
     .then(function(r) {{ if(!r.ok) throw new Error('404'); return r.json(); }})
@@ -844,6 +848,21 @@ function loadShotsStrip(vidId, variant) {{
       document.getElementById('typeFilter').classList.remove('show');
     }});
 }}
+
+var comparisonShots = null;   // {{video, Set of global shot idxs with a clip}}
+function loadComparisonIndex(vidId) {{
+  if (comparisonShots && comparisonShots.video === vidId) {{ return; }}
+  comparisonShots = null;
+  fetch('/' + vidId + '/' + vidId + '_comparisons_index.json', {{cache:'no-store'}})
+    .then(function(r) {{ if(!r.ok) throw new Error('404'); return r.json(); }})
+    .then(function(d) {{
+      comparisonShots = {{video: vidId, set: {{}}}};
+      (d.shots || []).forEach(function(ix) {{ comparisonShots.set[ix] = true; }});
+      renderShotStrip();  // re-render so pills appear once the manifest lands
+    }})
+    .catch(function() {{ comparisonShots = {{video: vidId, set: {{}}}}; }});
+}}
+function pad3(n) {{ n = String(n); while (n.length < 3) n = '0' + n; return n; }}
 
 function renderShotStrip() {{
   var strip = document.getElementById('shotStrip');
@@ -860,11 +879,16 @@ function renderShotStrip() {{
   var html = '';
   shots.forEach(function(s, i) {{
     var pos = s.positions[currentVariant];
+    var gidx = (s.idx !== undefined) ? s.idx : i;  // global shot index
     var label = ({{'serve':'S','forehand':'FH','backhand':'BH','forehand_volley':'FV','backhand_volley':'BV','overhead':'OH','unknown_shot':'?'}})[s.type] || '?';
-    html += '<div class="shot-chip ' + s.type + '" data-t="' + pos + '" data-idx="' + i + '">'
+    // Show the "vs pro" pill only for shots that actually have a comparison
+    // clip (per the manifest); tapping plays {vid}_comparison_shot_NNN.mp4.
+    var hasCompare = comparisonShots && comparisonShots.set && comparisonShots.set[gidx];
+    html += '<div class="shot-chip ' + s.type + '" data-t="' + pos + '" data-idx="' + i + '" data-gidx="' + gidx + '">'
       + '<span class="t">' + fmtShotTime(pos) + '</span>'
       + '<span class="ty">' + label + '</span>'
-      + '<span class="vs" title="Compare to pro">vs pro</span></div>';
+      + (hasCompare ? '<span class="vs" title="Compare to pro">vs pro</span>' : '')
+      + '</div>';
   }});
   strip.innerHTML = html;
   strip.classList.add('show');
@@ -1072,11 +1096,15 @@ function segmentAutoSeek() {{
 vid.addEventListener('timeupdate', segmentAutoSeek);
 
 document.getElementById('shotStrip').addEventListener('click', function(e) {{
-  // Compare button — small "vs pro" pill inside the chip
+  // Compare button — small "vs pro" pill inside the chip. Plays the
+  // per-shot side-by-side comparison clip (you vs a pro) for this shot.
   if (e.target.classList.contains('vs')) {{
     var chip = e.target.closest('.shot-chip');
     if (chip && currentShots) {{
-      openCompareModal(currentShots.video, parseInt(chip.dataset.idx));
+      var gidx = chip.dataset.gidx;
+      var url = 'https://tennis.playfullife.com/' + currentShots.video
+        + '/' + currentShots.video + '_comparison_shot_' + pad3(gidx) + '.mp4';
+      openPlayer(url, 'You vs Pro \\u2014 shot ' + (parseInt(gidx)+1));
     }}
     e.stopPropagation();
     return;
