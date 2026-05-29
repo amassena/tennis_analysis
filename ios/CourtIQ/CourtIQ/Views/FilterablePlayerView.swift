@@ -44,6 +44,7 @@ struct FilterablePlayerView: View {
     @State private var showControls = true
     @State private var controlsHideTask: Task<Void, Never>? = nil
     @State private var lastAutoSeekAt: TimeInterval = 0
+    @State private var hasHighFps = false   // is a smooth high-fps source available?
     @State private var compareShots: Set<Int> = []   // global shot idxs with a comparison clip
     @State private var compareItem: CompareClip? = nil   // currently-presented comparison
 
@@ -263,6 +264,7 @@ struct FilterablePlayerView: View {
         let shotsUrl = url.deletingLastPathComponent().appendingPathComponent("shots.json")
         fetchShots(from: shotsUrl)
         fetchComparisonManifest()
+        checkHighFpsAvailable()
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: interval, queue: .main,
@@ -347,6 +349,23 @@ struct FilterablePlayerView: View {
         }.resume()
     }
 
+    /// HEAD the high-fps source to see if smooth deep slow-mo is possible
+    /// for THIS video. Mixed capture formats: 120/240fps captures have one,
+    /// plain 60fps captures don't — so the ¼× option is offered only when
+    /// it'll actually be smooth.
+    private func checkHighFpsAvailable() {
+        guard let u = highFpsURL else { return }
+        var req = URLRequest(url: u)
+        req.httpMethod = "HEAD"
+        if let jwt = TokenStore.load() {
+            req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        }
+        URLSession.shared.dataTask(with: req) { _, response, _ in
+            let ok = (response as? HTTPURLResponse)?.statusCode == 200
+            DispatchQueue.main.async { self.hasHighFps = ok }
+        }.resume()
+    }
+
     private func applyFilter(_ f: String) {
         currentFilter = f
         guard let variant = variant else { return }
@@ -364,12 +383,19 @@ struct FilterablePlayerView: View {
         }
     }
 
-    /// Cycle 1× → ½× → ¼× → 1×. ½× plays the 60fps timeline at half speed
-    /// (≈30fps, smooth). ¼× switches to the high-fps source so it stays
-    /// smooth; if that source is absent it falls back to ¼× on the timeline
-    /// (choppy but functional).
+    /// Cycle the speed. With a high-fps source: 1× → ½× → ¼× → 1× (¼×
+    /// switches to the high-fps source so it stays smooth). Without one
+    /// (e.g. a plain 60fps capture): 1× → ½× → 1× — we skip ¼× rather than
+    /// offer a choppy 15fps quarter-speed. Graceful across mixed formats.
     private func applySlo() {
-        let next: Double = (speed == 1.0) ? 0.5 : (speed == 0.5 ? 0.25 : 1.0)
+        let next: Double
+        if speed == 1.0 {
+            next = 0.5
+        } else if speed == 0.5 {
+            next = hasHighFps ? 0.25 : 1.0
+        } else {
+            next = 1.0
+        }
         speed = next
         let wantHighFps = next < 0.5
         if wantHighFps != usingHighFps {
