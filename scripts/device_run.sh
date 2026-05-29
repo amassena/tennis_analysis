@@ -38,7 +38,18 @@ DEV="$(device_id)"
 [ -z "$DEV" ] && { echo "✗ no connected device found (plug in / pair the iPhone)"; exit 1; }
 echo "▶ device: $DEV"
 
+PBXPROJ="$(dirname "$PROJ")/CourtIQ.xcodeproj/project.pbxproj"
 if [ "$CMD" = "build" ]; then
+  # Auto-bump CURRENT_PROJECT_VERSION so the in-app version label climbs on
+  # every device install — otherwise the number only moves on TestFlight
+  # uploads and you can't tell whether the latest code is actually on the
+  # phone. (Device builds aren't uploaded, so the exact number is free.)
+  cur="$(grep -m1 -oE 'CURRENT_PROJECT_VERSION = [0-9]+' "$PBXPROJ" | grep -oE '[0-9]+')"
+  if [ -n "$cur" ]; then
+    nxt=$((cur + 1))
+    sed -i '' "s/CURRENT_PROJECT_VERSION = ${cur};/CURRENT_PROJECT_VERSION = ${nxt};/g" "$PBXPROJ"
+    echo "▶ build number ${cur} → ${nxt}"
+  fi
   echo "▶ building (dev-signed) for device…"
   xcodebuild -project "$PROJ" -scheme "$SCHEME" \
     -destination "platform=iOS,id=$DEV" -configuration Debug \
