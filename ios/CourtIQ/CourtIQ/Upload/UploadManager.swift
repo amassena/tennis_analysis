@@ -167,6 +167,11 @@ final class UploadManager: ObservableObject {
                 return
             }
             if initResult.status == "duplicate" {
+                // Already on the server — drop the staged source so it
+                // doesn't sit in Application Support forever.
+                if let s = uploads.first(where: { $0.id == stateId }) {
+                    try? FileManager.default.removeItem(atPath: s.sourcePath)
+                }
                 update(stateId: stateId) {
                     $0.uploadId = initResult.video_id
                     $0.status = .completed
@@ -445,11 +450,26 @@ enum UploadError: LocalizedError {
 // MARK: - tmp dir helper (used by PickerView / RecordView to stage source files)
 
 enum UploadStaging {
+    // Staged source videos MUST live in Application Support, NOT the temp
+    // dir. iOS purges temporaryDirectory aggressively (on relaunch, memory
+    // pressure, low storage), which for a multi-GB pick that's still
+    // uploading caused "Source file no longer available" — the file got
+    // wiped mid-upload or before a resume. Application Support is persistent
+    // and excluded from that cleanup; we delete staged files ourselves on
+    // upload completion / discard.
     static var directory: URL {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("uploads", isDirectory: true)
+        let base = try! FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true)
+        let dir = base.appendingPathComponent("QuickUpload/sources", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
+        // Exclude from iCloud/iTunes backup (these are transient large
+        // files we can re-pick; no need to back them up).
+        var d = dir
+        var rv = URLResourceValues(); rv.isExcludedFromBackup = true
+        try? d.setResourceValues(rv)
         return dir
     }
 
