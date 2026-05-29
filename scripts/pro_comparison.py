@@ -132,6 +132,14 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
             if clip.get("type") == shot_type:
+                # HARD angle filter: a wrong-angle comparison is worse than
+                # none (you can't compare mechanics across camera angles).
+                # When the user's angle is known, only accept clips whose
+                # angle matches it; skip clips with no/different angle. If
+                # the user's angle is unknown, fall back to scoring.
+                if preferred_angle:
+                    if clip.get("angle") != preferred_angle:
+                        continue
                 score = 0.0
                 # Strong preference for matching angle
                 if preferred_angle and clip.get("angle") == preferred_angle:
