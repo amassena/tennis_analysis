@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ops Dashboard — Tennis Uploader</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0b;color:#f5f5f7;padding:16px 18px 60px}
+h1{font-size:1.2em;font-weight:800;color:#c7ff00;margin-bottom:2px}
+.sub{color:#9aa0a6;font-size:.8em;margin-bottom:18px}
+.sub b{color:#f5f5f7}
+.err{color:#ff6b6b;padding:24px;text-align:center;font-size:.95em}
+section{margin-bottom:22px}
+h2{font-size:.72em;text-transform:uppercase;letter-spacing:.09em;color:#9aa0a6;margin-bottom:8px;display:flex;gap:8px;align-items:center}
+h2 .n{background:#1c1c1e;color:#c7ff00;border-radius:10px;padding:1px 8px;font-size:.95em;font-weight:700}
+.row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#141416;border:1px solid #1f1f22;border-radius:8px;margin-bottom:5px;font-size:.85em}
+.row .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.row .f{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .meta{color:#9aa0a6;font-size:.85em;white-space:nowrap}
+.row .u{color:#7a7f85;font-family:monospace;font-size:.8em}
+.row.err-row{border-color:#5a2020}
+.row .errmsg{color:#ff8888;font-size:.8em}
+.d-up{background:#c7ff00}.d-proc{background:#f5a623}.d-fail{background:#ff4d4d}.d-done{background:#3ddc84}
+table{width:100%;border-collapse:collapse;font-size:.82em}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #1f1f22}
+th{color:#9aa0a6;font-weight:600;font-size:.85em}
+td.n{font-variant-numeric:tabular-nums}
+.empty{color:#5a5f65;font-size:.85em;padding:6px 2px}
+.refresh{position:fixed;bottom:0;left:0;right:0;background:#0a0a0b;border-top:1px solid #1f1f22;padding:8px;text-align:center;color:#9aa0a6;font-size:.75em}
+</style>
+</head><body>
+<h1>Ops Dashboard</h1>
+<div class="sub" id="sub">loading…</div>
+<div id="content"></div>
+<div class="refresh" id="refresh">auto-refresh 10s</div>
+<script>
+function fmtAge(iso){
+  if(!iso) return '—';
+  var s=Math.max(0,(Date.now()-new Date(iso).getTime())/1000);
+  if(s<60) return Math.round(s)+'s ago';
+  if(s<3600) return Math.round(s/60)+'m ago';
+  if(s<86400) return Math.round(s/3600)+'h ago';
+  return Math.round(s/86400)+'d ago';
+}
+function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function row(it){
+  var cls = it.inflight?'d-up':it.status==='failed'?'d-fail':it.status==='complete'?'d-done':'d-proc';
+  var meta = it.inflight ? 'uploading'+(it.progress!=null?' '+it.progress+'%':'')
+    : (it.stage?esc(it.stage):esc(it.status))+(it.progress!=null?' '+it.progress+'%':'');
+  var err = it.error?'<div class="errmsg">'+esc(it.error)+'</div>':'';
+  return '<div class="row '+(it.status==='failed'?'err-row':'')+'">'
+    +'<span class="dot '+cls+'"></span>'
+    +'<span class="f">'+esc(it.filename)+err+'</span>'
+    +'<span class="u">'+esc((it.user_hash||'?').slice(0,10))+'</span>'
+    +'<span class="meta">'+meta+' · '+fmtAge(it.uploaded_at)+'</span></div>';
+}
+function sectionHTML(title,arr){
+  var body = arr.length ? arr.map(row).join('') : '<div class="empty">none</div>';
+  return '<section><h2>'+title+' <span class="n">'+arr.length+'</span></h2>'+body+'</section>';
+}
+async function load(){
+  try{
+    var r=await fetch('/api/admin/queue',{credentials:'include',cache:'no-store'});
+    if(r.status===401||r.status===403){
+      document.getElementById('sub').textContent='';
+      document.getElementById('content').innerHTML='<div class="err">Not authorized. Sign in as an admin on tennis.playfullife.com first, then reload.</div>';
+      return;
+    }
+    var d=await r.json();
+    var items=d.items||[];
+    var uploading=items.filter(function(x){return x.inflight;});
+    var failed=items.filter(function(x){return !x.inflight&&x.status==='failed';});
+    var processing=items.filter(function(x){return !x.inflight&&x.status!=='failed'&&x.status!=='complete';});
+    var complete=items.filter(function(x){return x.status==='complete';}).slice(0,15);
+    document.getElementById('sub').innerHTML='<b>'+items.length+'</b> videos · <b>'+(d.users||[]).length+'</b> users · updated '+fmtAge(d.generated_at);
+    var html='';
+    html+=sectionHTML('Uploading now',uploading);
+    html+=sectionHTML('Processing',processing);
+    html+=sectionHTML('Failed',failed);
+    // per-user rollup
+    var u=(d.users||[]).sort(function(a,b){return b.total-a.total;});
+    html+='<section><h2>By user <span class="n">'+u.length+'</span></h2>';
+    if(u.length){
+      html+='<table><tr><th>user</th><th class="n">up</th><th class="n">proc</th><th class="n">fail</th><th class="n">done</th><th class="n">total</th></tr>';
+      u.forEach(function(x){html+='<tr><td style="font-family:monospace">'+esc(x.user_hash)+'</td><td class="n">'+x.uploading+'</td><td class="n">'+x.processing+'</td><td class="n">'+x.failed+'</td><td class="n">'+x.complete+'</td><td class="n">'+x.total+'</td></tr>';});
+      html+='</table>';
+    } else html+='<div class="empty">none</div>';
+    html+='</section>';
+    html+=sectionHTML('Recent complete',complete);
+    document.getElementById('content').innerHTML=html;
+  }catch(e){
+    document.getElementById('content').innerHTML='<div class="err">Error: '+esc(String(e))+'</div>';
+  }
+}
+load();
+setInterval(load,10000);
+</script>
+</body></html>

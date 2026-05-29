@@ -101,6 +101,8 @@ async function handleAsset(request, env, path) {
   let key;
   if (path === '/' || path === '/index.html') {
     key = 'static/root-landing.html';
+  } else if (path === '/admin' || path === '/admin.html') {
+    key = 'static/admin.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {
@@ -448,6 +450,10 @@ async function handleApi(request, env, path) {
 
     if (path === '/api/queue' && request.method === 'GET') {
       return await handleQueue(env, cors);
+    }
+
+    if (path === '/api/admin/queue' && request.method === 'GET') {
+      return await handleAdminQueue(request, env, cors);
     }
 
     if (path === '/api/tags' && request.method === 'GET') {
@@ -1076,6 +1082,67 @@ async function handleQueue(env, cors) {
   items.sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
 
   return jsonResponse({ queue: items }, 200, cors);
+}
+
+// GET /api/admin/queue — ops dashboard data. Admin-only. Unlike /api/queue
+// this INCLUDES in-flight uploads (_inflight_ markers) and per-user
+// attribution (user_hash), so admins can see what's uploading right now,
+// by whom, and where the pipeline is stuck.
+async function handleAdminQueue(request, env, cors) {
+  const noCache = { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' };
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) return jsonResponse({ error: 'Unauthorized' }, 401, noCache);
+  if (!isAdminUser(env, claims.sub)) return jsonResponse({ error: 'Forbidden' }, 403, noCache);
+
+  const items = [];
+  let cursor;
+  do {
+    const page = await env.BUCKET.list({ prefix: 'uploads/', cursor });
+    for (const obj of page.objects) {
+      if (!obj.key.endsWith('.json')) continue;
+      if (obj.key === 'uploads/_allowlist.json') continue;
+      const inflight = obj.key.includes('_inflight_');
+      try {
+        const m = await (await env.BUCKET.get(obj.key)).json();
+        items.push({
+          video_id: m.id || obj.key.split('/').pop().replace('_inflight_', '').replace('.json', ''),
+          filename: m.filename || m.url || 'Unknown',
+          user_hash: m.user_hash || m.uploaded_by || null,
+          status: inflight ? 'uploading' : (m.status || 'unknown'),
+          stage: m.stage || null,
+          progress: m.progress ?? null,
+          uploaded_at: m.uploaded_at || m.created_at || null,
+          updated_at: m.updated_at || m.completed_at || m.uploaded_at || null,
+          error: m.error || null,
+          inflight,
+        });
+      } catch {}
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  items.sort((a, b) => (b.uploaded_at || '').localeCompare(a.uploaded_at || ''));
+
+  // Per-user rollup
+  const byUser = {};
+  for (const it of items) {
+    const u = it.user_hash || 'unknown';
+    byUser[u] = byUser[u] || { user_hash: u, total: 0, uploading: 0, processing: 0, failed: 0, complete: 0 };
+    byUser[u].total++;
+    if (it.inflight) byUser[u].uploading++;
+    else if (it.status === 'failed') byUser[u].failed++;
+    else if (it.status === 'complete') byUser[u].complete++;
+    else byUser[u].processing++;
+  }
+
+  return jsonResponse({ items, users: Object.values(byUser), generated_at: new Date().toISOString() }, 200, noCache);
 }
 
 // ---------------------------------------------------------------------------
