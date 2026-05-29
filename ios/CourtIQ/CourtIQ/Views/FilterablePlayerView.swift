@@ -23,9 +23,21 @@ struct FilterablePlayerView: View {
     @State private var player = AVPlayer()
     @State private var shots: [PlayerShot] = []
     @State private var currentFilter: String = "all"
-    @State private var sloMo: Bool = false
+    @State private var speed: Double = 1.0          // 1.0 → 0.5 → 0.25 cycle
+    @State private var usingHighFps: Bool = false    // is the current item the high-fps source?
     @State private var timeObserver: Any?
     @State private var statusObs: NSKeyValueObservation?
+    @State private var srcObs: NSKeyValueObservation?  // observes a source-swap item
+
+    /// High-fps source URL, derived from the timeline URL. Used for deep
+    /// slow-mo (< ½×) so 1/4 stays smooth (240fps @ 1/4 = 60fps effective)
+    /// instead of the 60fps timeline's choppy 15fps. Falls back to the
+    /// timeline if this 404s (non-slo-mo capture or not-yet-backfilled).
+    private var highFpsURL: URL? {
+        let s = url.absoluteString
+        guard s.contains("_timeline.mp4") else { return nil }
+        return URL(string: s.replacingOccurrences(of: "_timeline.mp4", with: "_highfps.mp4"))
+    }
     @State private var isPlaying = false
     @State private var currentTime: Double = 0
     @State private var totalDuration: Double = 0
@@ -58,7 +70,7 @@ struct FilterablePlayerView: View {
                     shots: shots,
                     variant: variant ?? "timeline",
                     currentFilter: $currentFilter,
-                    sloMo: $sloMo,
+                    speed: $speed,
                     onFilterChange: applyFilter,
                     onSloToggle: applySlo,
                 )
@@ -265,6 +277,8 @@ struct FilterablePlayerView: View {
         }
         statusObs?.invalidate()
         statusObs = nil
+        srcObs?.invalidate()
+        srcObs = nil
         controlsHideTask?.cancel()
         controlsHideTask = nil
         player.pause()
@@ -328,16 +342,64 @@ struct FilterablePlayerView: View {
         }
     }
 
+    /// Cycle 1× → ½× → ¼× → 1×. ½× plays the 60fps timeline at half speed
+    /// (≈30fps, smooth). ¼× switches to the high-fps source so it stays
+    /// smooth; if that source is absent it falls back to ¼× on the timeline
+    /// (choppy but functional).
     private func applySlo() {
-        sloMo.toggle()
-        // Setting rate alone doesn't always stick if the player is mid-pause;
-        // play() then set rate is the documented way.
-        if sloMo {
-            player.play()
-            player.rate = 0.5
+        let next: Double = (speed == 1.0) ? 0.5 : (speed == 0.5 ? 0.25 : 1.0)
+        speed = next
+        let wantHighFps = next < 0.5
+        if wantHighFps != usingHighFps {
+            switchSource(highFps: wantHighFps)
         } else {
-            player.rate = 1.0
+            player.play()
+            player.rate = Float(next)
         }
+        scheduleControlsHide()
+    }
+
+    /// Swap the AVPlayer's item between the timeline and the high-fps
+    /// source, preserving the playhead. play()+rate fire only once the new
+    /// item is ready (avoids the silent rate-drop race). On failure to load
+    /// the high-fps item, revert to the timeline at the requested rate.
+    private func switchSource(highFps: Bool) {
+        let resumeAt = currentTime
+        let target = highFps ? highFpsURL : url
+        guard let target = target else {
+            player.play(); player.rate = Float(speed); return
+        }
+        let item = AVPlayerItem(url: target)
+        srcObs?.invalidate()
+        srcObs = item.observe(\.status, options: [.new]) { item, _ in
+            if item.status == .readyToPlay {
+                DispatchQueue.main.async {
+                    self.totalDuration = item.duration.seconds
+                    self.usingHighFps = highFps
+                    self.player.seek(
+                        to: CMTime(seconds: resumeAt, preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero,
+                    ) { _ in
+                        self.player.play()
+                        self.player.rate = Float(self.speed)
+                    }
+                }
+            } else if item.status == .failed {
+                DispatchQueue.main.async {
+                    print("[FilterablePlayer] high-fps source failed; falling back to timeline")
+                    if highFps {
+                        // Revert to timeline, keep the slow rate (choppy but works).
+                        self.usingHighFps = false
+                        let fallback = AVPlayerItem(url: self.url)
+                        self.player.replaceCurrentItem(with: fallback)
+                        self.player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600))
+                        self.player.play()
+                        self.player.rate = Float(self.speed)
+                    }
+                }
+            }
+        }
+        player.replaceCurrentItem(with: item)
     }
 
     private func handleTimeUpdate(_ now: Double) {
@@ -458,9 +520,17 @@ struct FilterChipRow: View {
     let shots: [PlayerShot]
     let variant: String
     @Binding var currentFilter: String
-    @Binding var sloMo: Bool
+    @Binding var speed: Double
     let onFilterChange: (String) -> Void
     let onSloToggle: () -> Void
+
+    private var speedLabel: String {
+        switch speed {
+        case 0.5: return "½×"
+        case 0.25: return "¼×"
+        default: return "🐢 Slo"
+        }
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -484,9 +554,9 @@ struct FilterChipRow: View {
                 }
                 Spacer(minLength: 12)
                 chip(
-                    label: "🐢 Slo",
+                    label: speedLabel,
                     count: nil,
-                    isActive: sloMo,
+                    isActive: speed < 1.0,
                     activeColor: Color(red: 0.608, green: 0.349, blue: 0.714),
                 ) {
                     onSloToggle()
