@@ -828,6 +828,29 @@ async function handleIphoneCheck(request, env, cors) {
 //     → { video_id, status: 'queued', r2_key }
 // ---------------------------------------------------------------------------
 
+// Recover the set of already-uploaded parts for an in-flight upload from the
+// discrete uploads/_parts_{vid}/ objects written by handleIphonePart. Reads
+// part metadata from customMetadata (no GET per part) and returns parts sorted
+// by partNumber. Server-authoritative: works even if the client lost its
+// local state (reinstall) — re-picking the same asset resumes from here.
+async function listUploadedParts(env, videoId) {
+  const prefix = `uploads/_parts_${videoId}/`;
+  const out = [];
+  let cursor;
+  do {
+    const res = await env.BUCKET.list({ prefix, include: ['customMetadata'], cursor });
+    for (const obj of res.objects || []) {
+      const m = obj.customMetadata || {};
+      const pn = Number(m.pn);
+      if (!pn) continue;
+      out.push({ partNumber: pn, etag: m.etag, size: Number(m.size) || 0 });
+    }
+    cursor = res.truncated ? res.cursor : undefined;
+  } while (cursor);
+  out.sort((a, b) => a.partNumber - b.partNumber);
+  return out;
+}
+
 async function handleIphoneInit(request, env, cors) {
   const auth = await authenticateIphoneUpload(request, env);
   if (!auth.ok) {
@@ -836,6 +859,7 @@ async function handleIphoneInit(request, env, cors) {
   const body = await request.json().catch(() => ({}));
   const { asset_id: assetId, filename } = body;
   const createdAt = body.created_at || '';
+  const totalBytes = Number(body.total_bytes) || 0;
   if (!assetId || !filename) {
     return jsonResponse({ error: 'asset_id and filename required' }, 400, cors);
   }
@@ -854,6 +878,43 @@ async function handleIphoneInit(request, env, cors) {
         { video_id: videoId, status: 'duplicate', r2_key: r2Key, asset_id: assetId },
         409, cors,
       );
+    }
+  } catch {}
+
+  // Resume: if an in-flight multipart already exists for this video, return it
+  // (plus the parts already uploaded) instead of starting a NEW multipart —
+  // which would orphan the prior progress (the 84% IMG_1291 loss). This makes
+  // re-picking the same asset after a stall/kill/reinstall continue from where
+  // it left off, with no client-side state required.
+  const inflightKey = `uploads/_inflight_${videoId}.json`;
+  try {
+    const existingState = await env.BUCKET.get(inflightKey);
+    if (existingState) {
+      const st = await existingState.json();
+      if (st.r2_upload_id) {
+        const parts = await listUploadedParts(env, videoId);
+        // Backfill total_bytes for markers created before we tracked it, so
+        // complete-time byte validation applies to resumed uploads too.
+        if (!st.total_bytes && totalBytes > 0) {
+          st.total_bytes = totalBytes;
+          try {
+            await env.BUCKET.put(inflightKey, JSON.stringify(st),
+              { httpMetadata: { contentType: 'application/json' } });
+          } catch {}
+        }
+        return jsonResponse(
+          {
+            video_id: videoId,
+            upload_id: videoId,
+            r2_key: st.r2_key,
+            asset_id: assetId,
+            status: 'resume',
+            parts,
+            total_bytes: st.total_bytes || totalBytes,
+          },
+          200, cors,
+        );
+      }
     }
   } catch {}
 
@@ -884,6 +945,7 @@ async function handleIphoneInit(request, env, cors) {
       r2_key: r2Key,
       ext,
       r2_upload_id: multipart.uploadId,
+      total_bytes: totalBytes,
       created_at_inflight: new Date().toISOString(),
       uploaded_by: auth.kind === 'user' ? auth.user_hash : null,
     }),
@@ -916,6 +978,27 @@ async function handleIphonePart(request, env, cors, uploadId, partNumber) {
 
   const upload = env.BUCKET.resumeMultipartUpload(state.r2_key, state.r2_upload_id);
   const part = await upload.uploadPart(partNumber, request.body);
+
+  // Record this part as a discrete R2 object so init can resume and complete
+  // can validate the whole file — server-authoritative, independent of any
+  // client-side state (which is lost on reinstall). Discrete keys (one per
+  // partNumber) are race-free: the 3 concurrent part uploads each write their
+  // own key, so there's no read-modify-write clobber on the shared marker.
+  const size = Number(request.headers.get('content-length')) || 0;
+  const partKey = `uploads/_parts_${uploadId}/${String(partNumber).padStart(5, '0')}.json`;
+  try {
+    await env.BUCKET.put(
+      partKey,
+      JSON.stringify({ partNumber: part.partNumber, etag: part.etag, size }),
+      {
+        httpMetadata: { contentType: 'application/json' },
+        // Mirror into customMetadata so a list({include:['customMetadata']})
+        // recovers the part set without a GET per part.
+        customMetadata: { pn: String(part.partNumber), etag: part.etag, size: String(size) },
+      },
+    );
+  } catch {}
+
   return jsonResponse(
     { partNumber: part.partNumber, etag: part.etag },
     200, cors,
@@ -935,16 +1018,47 @@ async function handleIphoneComplete(request, env, cors, uploadId) {
   }
   const state = await stateObj.json();
 
-  const body = await request.json();
-  const parts = body.parts;
-  if (!Array.isArray(parts) || parts.length === 0) {
+  const body = await request.json().catch(() => ({}));
+  const clientParts = Array.isArray(body.parts) ? body.parts : [];
+
+  // Server-authoritative completion. Prefer the parts we recorded as they
+  // landed (uploads/_parts_{vid}/) over the client's list, and validate the
+  // whole file is present BEFORE finalizing — a short part set would otherwise
+  // assemble a truncated, corrupt video and report success (the latent bug
+  // behind the IMG_1291 incident). Reject incomplete with 409 so the client
+  // keeps/resumes uploading instead of believing it's done.
+  const serverParts = await listUploadedParts(env, uploadId);
+  let finalParts;
+  if (serverParts.length > 0) {
+    const contiguous = serverParts.every((p, i) => p.partNumber === i + 1);
+    if (!contiguous) {
+      return jsonResponse(
+        { error: 'Incomplete upload', detail: 'non-contiguous parts',
+          have: serverParts.map((p) => p.partNumber), status: 'incomplete' },
+        409, cors,
+      );
+    }
+    const expected = Number(state.total_bytes) || 0;
+    const sum = serverParts.reduce((a, p) => a + (p.size || 0), 0);
+    if (expected > 0 && sum !== expected) {
+      return jsonResponse(
+        { error: 'Incomplete upload',
+          detail: `have ${sum} of ${expected} bytes (${serverParts.length} parts)`,
+          bytes_have: sum, bytes_expected: expected, parts_have: serverParts.length,
+          status: 'incomplete' },
+        409, cors,
+      );
+    }
+    finalParts = serverParts.map((p) => ({ partNumber: p.partNumber, etag: p.etag }));
+  } else if (clientParts.length > 0) {
+    // Backward-compat: uploads started before per-part tracking existed.
+    finalParts = clientParts.map((p) => ({ partNumber: p.partNumber, etag: p.etag }));
+  } else {
     return jsonResponse({ error: 'parts[] required' }, 400, cors);
   }
 
   const upload = env.BUCKET.resumeMultipartUpload(state.r2_key, state.r2_upload_id);
-  await upload.complete(
-    parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
-  );
+  await upload.complete(finalParts);
 
   // Write marker file so the Hetzner poller registers the job.
   const markerKey = `uploads/${state.video_id}.json`;
@@ -985,8 +1099,18 @@ async function handleIphoneComplete(request, env, cors, uploadId) {
     } catch {}
   }
 
-  // Clean up in-flight state.
+  // Clean up in-flight state + the per-part records.
   try { await env.BUCKET.delete(stateKey); } catch {}
+  try {
+    const prefix = `uploads/_parts_${uploadId}/`;
+    let cursor;
+    do {
+      const res = await env.BUCKET.list({ prefix, cursor });
+      const keys = (res.objects || []).map((o) => o.key);
+      if (keys.length) await env.BUCKET.delete(keys);
+      cursor = res.truncated ? res.cursor : undefined;
+    } while (cursor);
+  } catch {}
 
   return jsonResponse(
     {

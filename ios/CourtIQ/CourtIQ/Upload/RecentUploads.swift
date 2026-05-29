@@ -35,6 +35,12 @@ final class RecentUploadsModel: ObservableObject {
     @Published private(set) var items: [RecentUpload] = []
     @Published private(set) var lastError: String?
     @Published private(set) var isLoading = false
+    /// True once a refresh has SUCCEEDED at least once (even if it returned
+    /// zero items). Until then `items.isEmpty` just means "haven't loaded
+    /// yet" — the Upload tab must not show the "Upload your first video"
+    /// screen during that window, or it flashes on every launch for users
+    /// who actually have videos.
+    @Published private(set) var hasLoadedOnce = false
 
     let userHash: String
     private var timer: AnyCancellable?
@@ -68,6 +74,7 @@ final class RecentUploadsModel: ObservableObject {
             let previous = items
             if resp.items != items { items = resp.items }
             lastError = nil
+            hasLoadedOnce = true
             // Fire a local notification for every video that just
             // transitioned to "complete" since the last poll. iOS
             // delivers banners even when the app is foregrounded if we

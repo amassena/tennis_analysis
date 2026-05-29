@@ -22,7 +22,6 @@ struct RecordView: View {
                     onUpload: {
                         UploadManager.shared.enqueue(
                             localFileURL: url,
-                            assetId: "\(userHash)_\(UUID().uuidString)",
                             filename: url.lastPathComponent,
                             userHash: userHash
                         )

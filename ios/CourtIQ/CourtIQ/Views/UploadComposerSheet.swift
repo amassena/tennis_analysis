@@ -85,7 +85,6 @@ struct UploadComposerSheet: View {
                         // doesn't need to stay open while uploads run).
                         UploadManager.shared.enqueue(
                             localFileURL: url,
-                            assetId: "\(userHash)_\(UUID().uuidString)",
                             filename: filename,
                             userHash: userHash
                         )

@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import UIKit
 import AVFoundation
+import CryptoKit
 
 /// Owns the active upload list and orchestrates the chunked-upload
 /// protocol against `/api/upload/iphone/{init,part,complete}`.
@@ -73,7 +74,6 @@ final class UploadManager: ObservableObject {
     /// already copied the picker's ephemeral URL into our tmp dir.
     func enqueue(
         localFileURL: URL,
-        assetId: String,
         filename: String,
         userHash: String
     ) {
@@ -83,8 +83,34 @@ final class UploadManager: ObservableObject {
         // block the upload. The server pipeline also re-extracts the
         // date from the source MOV; this just makes the date correct
         // for the in-app surfaces BEFORE processing finishes.
-        let recordedAt = videoCreationDate(at: localFileURL)
-            ?? Date()
+        let rawCreation = videoCreationDate(at: localFileURL)
+        let recordedAt = rawCreation ?? Date()
+
+        // Deterministic, content-derived asset_id. The same library video
+        // re-picked must map to the SAME id so the server dedups/resumes
+        // instead of creating a duplicate upload (issue #27). PHPicker is
+        // permission-free, so we can't use a PHAsset identifier — but
+        // filename + byte-size + creation-date is a stable signature for a
+        // given video without any photo-library auth. (Note: do NOT fold in
+        // the `recordedAt` fallback `Date()`, which is non-deterministic.)
+        let assetId = Self.stableAssetId(
+            userHash: userHash, filename: filename, size: size, creation: rawCreation)
+
+        // Client-side dedup: if this exact video is already known, don't add
+        // a second row (which would also collide on UploadStore's state file
+        // and confuse the SwiftUI list by id). Resume a failed one; leave an
+        // active or completed one alone (the server confirms duplicates on
+        // re-init anyway).
+        if let existing = uploads.first(where: { $0.id == assetId }) {
+            switch existing.status {
+            case .failed:
+                retry(id: assetId)
+            case .queued, .initializing, .uploading, .finalizing, .completed:
+                break
+            }
+            return
+        }
+
         let state = UploadState.make(
             assetId: assetId,
             filename: filename,
@@ -96,6 +122,18 @@ final class UploadManager: ObservableObject {
         uploads.insert(state, at: 0)
         UploadStore.save(state)
         Task { await self.run(stateId: state.id) }
+    }
+
+    /// SHA256(userHash | filename | size | creation-epoch) truncated — a
+    /// stable id for a given video so re-picks dedup. See `enqueue`.
+    private static func stableAssetId(
+        userHash: String, filename: String, size: Int64, creation: Date?
+    ) -> String {
+        let creationStamp = creation.map { String(Int($0.timeIntervalSince1970)) } ?? ""
+        let seed = "\(userHash)|\(filename)|\(size)|\(creationStamp)"
+        let hex = SHA256.hash(data: Data(seed.utf8))
+            .map { String(format: "%02x", $0) }.joined().prefix(16)
+        return "\(userHash)_\(hex)"
     }
 
     /// Reads `creationDate` from the AVURLAsset metadata. iPhone Camera
@@ -223,9 +261,26 @@ final class UploadManager: ObservableObject {
                 }
                 return
             }
-            update(stateId: stateId) {
-                $0.uploadId = initResult.upload_id ?? initResult.video_id
-                $0.status = .uploading
+            if initResult.status == "resume" {
+                // Server already has an in-flight multipart for this asset.
+                // Adopt its upload_id and seed partsDone from the server's
+                // record so uploadAllParts skips what already landed — this is
+                // what makes re-picking the same video after a stall / app
+                // kill / REINSTALL continue instead of restarting from 0.
+                let serverParts = initResult.parts ?? []
+                update(stateId: stateId) {
+                    $0.uploadId = initResult.upload_id ?? initResult.video_id
+                    $0.partsDone = serverParts.map { p in
+                        UploadState.CompletedPart(partNumber: p.partNumber, etag: p.etag, size: p.size)
+                    }
+                    $0.bytesUploaded = serverParts.reduce(Int64(0)) { acc, p in acc + p.size }
+                    $0.status = .uploading
+                }
+            } else {
+                update(stateId: stateId) {
+                    $0.uploadId = initResult.upload_id ?? initResult.video_id
+                    $0.status = .uploading
+                }
             }
         } else {
             // Resume — just make sure we report the right status
@@ -402,7 +457,8 @@ final class UploadManager: ObservableObject {
         let body = InitRequest(
             asset_id: state.assetId,
             filename: state.filename,
-            created_at: state.createdAtISO
+            created_at: state.createdAtISO,
+            total_bytes: state.totalBytes
         )
         var req = URLRequest(url: APIClient.baseURL.appendingPathComponent("api/upload/iphone/init"))
         req.httpMethod = "POST"
@@ -463,6 +519,7 @@ private struct InitRequest: Encodable {
     let asset_id: String
     let filename: String
     let created_at: String
+    let total_bytes: Int64   // lets the server validate whole-file at complete
 }
 
 private struct InitResponse: Decodable {
@@ -470,7 +527,17 @@ private struct InitResponse: Decodable {
     let upload_id: String?  // present on 200, absent on 409
     let r2_key: String
     let asset_id: String
-    let status: String?     // "duplicate" on 409
+    let status: String?      // "duplicate" (409) | "resume" (200, in-flight exists)
+    let parts: [ServerPart]? // present on "resume": parts already uploaded
+}
+
+/// A part the server already has — returned in an init "resume" response so
+/// the client can skip re-uploading it (server-authoritative, survives a
+/// reinstall that wiped local UploadState).
+private struct ServerPart: Decodable {
+    let partNumber: Int
+    let etag: String
+    let size: Int64
 }
 
 private struct PartResponse: Decodable {

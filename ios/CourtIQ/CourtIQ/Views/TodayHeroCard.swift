@@ -111,23 +111,16 @@ struct TodayHeroCard: View {
     }
 
     private func thumbnail(for item: RecentUpload) -> some View {
+        // CachedThumbnail (not AsyncImage): UploadTabView's List re-renders
+        // this hero card on every upload-progress tick. AsyncImage refetched
+        // each time → placeholder flash = the residual flicker. The
+        // process-wide cache (shared with the Recent rows, same thumb URL)
+        // serves the image instantly with no reflash.
         let url = URL(string: "https://tennis.playfullife.com/u/\(userHash)/thumbs/\(item.video_id).jpg")!
-        return AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().aspectRatio(contentMode: .fill)
-            default:
-                ZStack {
-                    Color.brandSurfaceElevated
-                    Image(systemName: "play.rectangle.fill")
-                        .font(.system(size: 44))
-                        .foregroundColor(.brandTextSecondary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 200)
-        .clipped()
+        return CachedThumbnail(url: url)
+            .frame(maxWidth: .infinity)
+            .frame(height: 200)
+            .clipped()
     }
 
     private var tagPill: some View {

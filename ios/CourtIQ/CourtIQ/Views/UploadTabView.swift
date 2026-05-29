@@ -25,7 +25,16 @@ struct UploadTabView: View {
                 // history elsewhere.
                 let activeUploads = manager.uploads.filter { $0.status != .completed }
                 if activeUploads.isEmpty && recent.items.isEmpty {
-                    EmptyUploadsView { showingComposer = true }
+                    // Only the GENUINE first-run screen — and only once Recent
+                    // has actually loaded and come back empty. Before the first
+                    // load completes, `items` is empty simply because we haven't
+                    // fetched yet; showing EmptyUploadsView then flashes "Upload
+                    // your first video" on every launch for users with videos.
+                    if recent.hasLoadedOnce {
+                        EmptyUploadsView { showingComposer = true }
+                    } else {
+                        LoadingUploadsView()
+                    }
                 } else {
                     List {
                         TodayHeroCard(userHash: userHash, recent: recent)
@@ -87,6 +96,20 @@ struct UploadTabView: View {
         let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
         let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
         return "v\(v) (\(b))"
+    }
+}
+
+/// Shown while the first Recent fetch is in flight, so we never flash the
+/// first-run screen at returning users. Deliberately minimal — it's on screen
+/// for ~1s at most.
+private struct LoadingUploadsView: View {
+    var body: some View {
+        ZStack {
+            Color.brandBackground.ignoresSafeArea()
+            ProgressView()
+                .tint(.brandAccent)
+                .scaleEffect(1.2)
+        }
     }
 }
 
