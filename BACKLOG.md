@@ -1,5 +1,16 @@
 # Backlog
 
+> **As of 2026-05-28, the primary tracker is GitHub Issues:**
+> https://github.com/amassena/tennis_analysis/issues
+> Browse/triage from the GitHub mobile app. Claude manages issues via `gh`
+> (`gh issue create/list/close`). When the user mentions a bug/idea, open an
+> issue (labels: bug/feature/ios/pipeline/video-arch/ux/comparison + p1/p2/p3),
+> not a line here. Close issues referencing the fixing commit.
+>
+> This file is kept only as a scratch/legacy log. Active app/product/video
+> threads were migrated to Issues #1–#14. The Research-loop / model / pipeline-
+> robustness sections below are NOT yet migrated.
+
 Drop-anywhere capture for bugs, ideas, and UX papercuts. Add a one-liner the moment a thought hits — don't lose it.
 
 ## Bugs
