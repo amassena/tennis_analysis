@@ -911,6 +911,31 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     except Exception as e:
         log(f"Sequences step failed (non-fatal): {e}", "WARN")
 
+    # Step 5f: Pro comparison clips (the gallery "Pro Compare" feature).
+    # Like sequences, this was never wired into the pipeline — only ran
+    # manually — so iphone_* uploads had no comparisons (issue #9). Matches
+    # each shot to a pro exemplar by type + camera angle, composites them
+    # side-by-side, and uploads a compiled {vid}_comparisons.mp4 to the flat
+    # path; Step 6b migrates it per-user. Capped at 8 clips so a long
+    # session doesn't generate 100+. Non-fatal; 20-min timeout (downloads
+    # pro clips on first run per machine).
+    try:
+        log("Step 5f: Generating pro comparison clips")
+        if preprocessed.exists():
+            r = subprocess.run(
+                [python, str(PROJECT_ROOT / "scripts" / "pro_comparison.py"),
+                 str(preprocessed), "--upload", "--max-clips", "8"],
+                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=1200,
+            )
+            if r.returncode != 0:
+                log(f"Pro comparison failed: {r.stderr[-300:]}", "WARN")
+            else:
+                log("Pro comparison clips uploaded")
+        else:
+            log("Pro comparison skipped (no preprocessed video)", "WARN")
+    except Exception as e:
+        log(f"Pro comparison step failed (non-fatal): {e}", "WARN")
+
     # Step 6: Export videos and upload to R2
     log("Step 6: Exporting videos to R2")
     stage("clips", 0, "Exporting video formats + uploading to R2")

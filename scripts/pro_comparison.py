@@ -398,7 +398,7 @@ def detect_camera_angle(det_data):
 
 def generate_comparisons(video_path, output_dir=None, player=None,
                           shot_type_filter=None, max_clips=None, upload=False,
-                          cross_gender=False):
+                          user_hash=None, cross_gender=False):
     """Generate comparison clips for all eligible shots in a video.
 
     Args:
@@ -574,9 +574,11 @@ def generate_comparisons(video_path, output_dir=None, player=None,
         print(f"\nUploading {len(generated)} comparison files to R2...")
         try:
             from scripts.export_videos import upload_to_r2
+            prefix = (f"highlights/{user_hash}/{video_name}"
+                      if user_hash else f"highlights/{video_name}")
             for filepath in generated:
                 filename = os.path.basename(filepath)
-                remote_key = f"highlights/{video_name}/{filename}"
+                remote_key = f"{prefix}/{filename}"
                 upload_to_r2(filepath, remote_key)
         except Exception as e:
             print(f"  [ERROR] R2 upload failed: {e}")
@@ -599,6 +601,9 @@ def main():
                         help="Output directory (default: exports/{video}/)")
     parser.add_argument("--upload", action="store_true",
                         help="Upload to R2 after generating")
+    parser.add_argument("--user-hash", default=None,
+                        help="Per-user prefix (e.g. u_ae629639). When set, uploads to "
+                             "highlights/<hash>/<vid>/ so the per-user gallery finds them.")
     parser.add_argument("--cross-gender", action="store_true",
                         help="Allow cross-gender matches (e.g. study Henin's "
                         "1HBH as a male right-hander). Default: same gender only.")
@@ -615,6 +620,7 @@ def main():
         shot_type_filter=args.shot_type,
         max_clips=args.max_clips,
         upload=args.upload,
+        user_hash=args.user_hash,
         cross_gender=args.cross_gender,
     )
 
