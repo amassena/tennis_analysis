@@ -1,5 +1,52 @@
 import SwiftUI
 
+/// Process-wide thumbnail cache. Survives SwiftUI view recreation so a
+/// re-render (e.g. on every upload-progress update) doesn't refetch and
+/// flash the placeholder.
+final class ThumbnailCache {
+    static let shared = ThumbnailCache()
+    private let cache = NSCache<NSURL, UIImage>()
+    func image(for url: URL) -> UIImage? { cache.object(forKey: url as NSURL) }
+    func set(_ image: UIImage, for url: URL) { cache.setObject(image, forKey: url as NSURL) }
+}
+
+/// Thumbnail that loads once and serves from the cache thereafter, so
+/// list re-renders never reflash it. Replaces AsyncImage in the upload
+/// surface where progress updates re-render frequently.
+struct CachedThumbnail: View {
+    let url: URL
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let img = image ?? ThumbnailCache.shared.image(for: url) {
+                Image(uiImage: img).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                ZStack {
+                    Color.brandSurfaceElevated
+                    Image(systemName: "play.rectangle")
+                        .font(.system(size: 18))
+                        .foregroundColor(.brandTextSecondary)
+                }
+                .task { await load() }
+            }
+        }
+    }
+
+    private func load() async {
+        if ThumbnailCache.shared.image(for: url) != nil { return }
+        var req = URLRequest(url: url)
+        if let jwt = TokenStore.load() {
+            req.setValue("Bearer \(jwt)", forHTTPHeaderField: "Authorization")
+        }
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let img = UIImage(data: data) else { return }
+        ThumbnailCache.shared.set(img, for: url)
+        image = img
+    }
+}
+
 /// "Recently uploaded" section rendered inside UploadTabView's List.
 /// Pulls server-side state (post-upload-completion) so the user can see
 /// "queued / processing / ready" without having to switch to the Gallery
@@ -66,22 +113,15 @@ private struct RecentRow: View {
     }
 
     private var thumbnail: some View {
-        let url = URL(string:
-            "https://tennis.playfullife.com/u/\(userHash)/thumbs/\(item.video_id).jpg",
-        )!
-        return AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().aspectRatio(contentMode: .fill)
-            default:
-                ZStack {
-                    Color.brandSurfaceElevated
-                    Image(systemName: "play.rectangle")
-                        .font(.system(size: 18))
-                        .foregroundColor(.brandTextSecondary)
-                }
-            }
-        }
+        // CachedThumbnail (not AsyncImage): an upload-progress update
+        // republishes the list and recreates these rows, and AsyncImage
+        // re-fetches → flashes its placeholder each time = the flicker.
+        // CachedThumbnail serves a once-loaded image from a process-wide
+        // cache, so re-renders show it instantly with no reflash.
+        CachedThumbnail(
+            url: URL(string:
+                "https://tennis.playfullife.com/u/\(userHash)/thumbs/\(item.video_id).jpg")!,
+        )
         .frame(width: 64, height: 40)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }

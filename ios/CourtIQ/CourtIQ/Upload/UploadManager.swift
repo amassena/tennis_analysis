@@ -12,7 +12,22 @@ import AVFoundation
 final class UploadManager: ObservableObject {
     static let shared = UploadManager()
 
-    @Published private(set) var uploads: [UploadState] = []
+    @Published private(set) var uploads: [UploadState] = [] {
+        didSet { updateScreenWake() }
+    }
+
+    /// Keep the screen awake while an upload is actively in flight. iOS
+    /// auto-lock suspends the app (and the foreground URLSession), pausing
+    /// the upload — for the patient/foreground approach we prevent the
+    /// screen from sleeping so a long upload keeps progressing. Restored
+    /// the moment no upload is active.
+    private func updateScreenWake() {
+        let active = uploads.contains {
+            $0.status == .queued || $0.status == .initializing
+                || $0.status == .uploading || $0.status == .finalizing
+        }
+        UIApplication.shared.isIdleTimerDisabled = active
+    }
 
     private let chunkSize: Int64 = 50 * 1024 * 1024  // 50 MB
     private let maxConcurrentParts = 3
