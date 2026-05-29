@@ -7,6 +7,7 @@ struct CourtIQApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var auth = AuthCoordinator()
     @StateObject private var nav = AppNavigation()
+    @Environment(\.scenePhase) private var scenePhase
     private let notifDelegate = NotificationDelegate()
 
     init() {
@@ -55,6 +56,16 @@ struct CourtIQApp: App {
                 .preferredColorScheme(.dark)
                 .task {
                     UploadResumer.resumeOnLaunch()
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Resume stalled uploads when the app returns to the
+                    // foreground — backgrounding suspends the foreground
+                    // URLSession, so on reopen the in-flight chunk is dead
+                    // and nothing restarts it without this. Idempotent: the
+                    // UploadManager run-guard skips uploads already running.
+                    if phase == .active {
+                        UploadResumer.resumeOnLaunch()
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(
                     for: .didTapReadyNotification

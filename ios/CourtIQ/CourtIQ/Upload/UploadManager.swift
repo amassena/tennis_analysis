@@ -29,6 +29,11 @@ final class UploadManager: ObservableObject {
     /// Lazy-built URLSession; rebuilt when the WiFi-only toggle flips.
     private var sessionCache: URLSession?
 
+    /// stateIds with a run() loop currently executing. Guards against
+    /// double-running the same upload when both launch-resume and
+    /// foreground-resume (or a manual retry) fire for it.
+    private var running = Set<String>()
+
     var currentSession: URLSession {
         if let s = sessionCache { return s }
         let cfg = URLSessionConfiguration.default
@@ -115,6 +120,24 @@ final class UploadManager: ObservableObject {
         Task { await self.run(stateId: id) }
     }
 
+    /// A connectivity / app-suspension error that should NOT terminally
+    /// fail the upload — it stays resumable so launch/foreground resume
+    /// retries from the next missing part. Permanent errors (auth, bad
+    /// request) still fail so the user sees them.
+    private func isTransient(_ error: Error) -> Bool {
+        if let u = error as? URLError {
+            switch u.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+                 .cannotConnectToHost, .cancelled, .dataNotAllowed,
+                 .internationalRoamingOff, .callIsActive:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
+
     func markFailed(id: String, reason: String) {
         update(stateId: id) {
             $0.status = .failed
@@ -135,6 +158,11 @@ final class UploadManager: ObservableObject {
 
     private func run(stateId: String) async {
         guard let idx0 = uploads.firstIndex(where: { $0.id == stateId }) else { return }
+        // Don't double-run: launch-resume, foreground-resume, and manual
+        // retry can all target the same upload. Only one loop at a time.
+        guard !running.contains(stateId) else { return }
+        running.insert(stateId)
+        defer { running.remove(stateId) }
 
         // Ask iOS for extra runtime in case the user backgrounds the app.
         // ~30s on most devices; not as good as true background URLSession
@@ -195,9 +223,19 @@ final class UploadManager: ObservableObject {
         do {
             parts = try await uploadAllParts(stateId: stateId)
         } catch {
-            update(stateId: stateId) {
-                $0.status = .failed
-                $0.errorMessage = "parts: \(error.localizedDescription)"
+            if isTransient(error) {
+                // Network blip / app suspended mid-chunk. Keep it resumable
+                // (status stays .uploading) — launch/foreground resume will
+                // continue from the next missing part. Not a terminal fail.
+                update(stateId: stateId) {
+                    $0.status = .uploading
+                    $0.errorMessage = nil
+                }
+            } else {
+                update(stateId: stateId) {
+                    $0.status = .failed
+                    $0.errorMessage = "parts: \(error.localizedDescription)"
+                }
             }
             return
         }
@@ -207,9 +245,19 @@ final class UploadManager: ObservableObject {
         do {
             _ = try await postComplete(stateId: stateId, parts: parts)
         } catch {
-            update(stateId: stateId) {
-                $0.status = .failed
-                $0.errorMessage = "complete: \(error.localizedDescription)"
+            if isTransient(error) {
+                // Parts are all up; just the finalize call got interrupted.
+                // Stay resumable — resume skips the done parts and retries
+                // /complete.
+                update(stateId: stateId) {
+                    $0.status = .uploading
+                    $0.errorMessage = nil
+                }
+            } else {
+                update(stateId: stateId) {
+                    $0.status = .failed
+                    $0.errorMessage = "complete: \(error.localizedDescription)"
+                }
             }
             return
         }
