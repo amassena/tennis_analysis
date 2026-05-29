@@ -565,6 +565,10 @@ def main():
     parser.add_argument("--no-audio-snap", action="store_true",
                         help="Skip audio-peak contact-frame snap (use raw detector frame)")
     parser.add_argument("--upload", action="store_true", help="Upload to R2")
+    parser.add_argument("--user-hash", default=None,
+                        help="Per-user prefix (e.g. u_ae629639). When set, uploads to "
+                             "highlights/<hash>/<vid>/sequences/ so the per-user gallery "
+                             "finds them. Without it, uploads to the legacy flat path.")
     parser.add_argument("--max-shots", type=int, default=0, help="Limit number of shots")
     args = parser.parse_args()
 
@@ -648,10 +652,13 @@ def main():
         load_dotenv()
         from storage.r2_client import R2Client
         r2 = R2Client()
+        prefix = (f"highlights/{args.user_hash}/{args.video}/sequences"
+                  if args.user_hash
+                  else f"highlights/{args.video}/sequences")
         for path, info in generated:
-            key = f"highlights/{args.video}/sequences/{os.path.basename(path)}"
+            key = f"{prefix}/{os.path.basename(path)}"
             r2.upload(path, key, content_type="image/jpeg")
-        print(f"Uploaded {len(generated)} composites to R2")
+        print(f"Uploaded {len(generated)} composites to R2 -> {prefix}/")
 
 
 if __name__ == "__main__":
