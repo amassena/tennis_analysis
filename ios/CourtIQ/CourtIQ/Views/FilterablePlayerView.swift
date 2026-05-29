@@ -180,11 +180,13 @@ struct FilterablePlayerView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundColor(.white)
                     Button {
-                        let goingFullscreen = !isFullscreen
+                        // Fullscreen just hides the chrome (header + chips +
+                        // shot strip) for an immersive view. Orientation is
+                        // free — the player follows the device, so the user
+                        // can be in portrait or landscape either way.
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            isFullscreen = goingFullscreen
+                            isFullscreen.toggle()
                         }
-                        requestOrientation(landscape: goingFullscreen)
                         scheduleControlsHide()
                     } label: {
                         Image(systemName: isFullscreen
@@ -272,6 +274,11 @@ struct FilterablePlayerView: View {
     }
 
     private func setup() {
+        // Allow the player to rotate freely with the device (portrait or
+        // landscape). The rest of the app stays portrait via the AppDelegate
+        // gate; we open it up only while the player is on screen, and
+        // teardown() snaps it back to portrait.
+        AppDelegate.orientationLock = .allButUpsideDown
         let item = AVPlayerItem(url: url)
         // Calling player.play() before the item is .readyToPlay is the
         // cause of the "tap play, nothing happens, tap again, nothing,
