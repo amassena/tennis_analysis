@@ -1170,36 +1170,38 @@ async function handleStatusUpdate(request, env, cors, id) {
 }
 
 async function handleQueue(env, cors) {
-  // List all upload metadata JSONs
+  // List top-level upload metadata JSONs (delimiter:'/' already excludes the
+  // _parts_<vid>/ subdirs). Skip in-flight init state files (ghost "Queued"
+  // rows) and the allowlist config.
   const listed = await env.BUCKET.list({ prefix: 'uploads/', delimiter: '/' });
-  const items = [];
+  const keys = listed.objects
+    .filter((obj) => obj.key.endsWith('.json')
+      && !obj.key.includes('_inflight_')
+      && obj.key !== 'uploads/_allowlist.json')
+    .map((obj) => obj.key);
 
-  for (const obj of listed.objects) {
-    if (!obj.key.endsWith('.json')) continue;
-    // Skip in-flight init state files (uploads that started but never
-    // completed). They leak into the gallery as ghost "Queued" rows
-    // with no status field.
-    if (obj.key.includes('_inflight_')) continue;
-    // Skip the allowlist config.
-    if (obj.key === 'uploads/_allowlist.json') continue;
-    try {
-      const metaObj = await env.BUCKET.get(obj.key);
-      if (metaObj) {
-        const meta = await metaObj.json();
-        // Only include relevant fields (not uploadId or internal keys)
-        items.push({
-          id: meta.id,
-          filename: meta.filename || meta.url || 'Unknown',
-          status: meta.status,
-          stage: meta.stage || null,
-          progress: meta.progress || null,
-          uploaded_at: meta.uploaded_at,
-          updated_at: meta.updated_at || meta.completed_at || meta.uploaded_at,
-          video_url: meta.video_url || null,
-          error: meta.error || null,
-        });
-      }
-    } catch {}
+  // Parallel fetch — was a sequential GET per marker, which slowed linearly as
+  // the catalog grew.
+  const metas = await Promise.all(keys.map(async (k) => {
+    try { const o = await env.BUCKET.get(k); return o ? await o.json() : null; }
+    catch { return null; }
+  }));
+
+  const items = [];
+  for (const meta of metas) {
+    if (!meta) continue;
+    // Only include relevant fields (not uploadId or internal keys)
+    items.push({
+      id: meta.id,
+      filename: meta.filename || meta.url || 'Unknown',
+      status: meta.status,
+      stage: meta.stage || null,
+      progress: meta.progress || null,
+      uploaded_at: meta.uploaded_at,
+      updated_at: meta.updated_at || meta.completed_at || meta.uploaded_at,
+      video_url: meta.video_url || null,
+      error: meta.error || null,
+    });
   }
 
   // Sort by upload time, newest first
