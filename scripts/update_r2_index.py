@@ -292,7 +292,7 @@ def build_index_html(videos_meta):
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23dbf757' stroke='%23a8c93f' stroke-width='2'/%3E%3Cpath d='M 8 35 Q 50 50 8 65' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3Cpath d='M 92 35 Q 50 50 92 65' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#eee}}
+body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#eee;overflow-x:hidden}}
 
 /* ── Header ── */
 .header{{position:sticky;top:0;z-index:100;background:#0a0a0a;border-bottom:1px solid #1a1a1a;padding:12px 20px}}
@@ -621,12 +621,21 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 @media(max-width:700px){{
   .header-inner{{gap:10px}}
   .logo{{font-size:1.1em}}
-  .grid{{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}}
+  /* min-width:0 lets the search box shrink instead of forcing the header
+     wider than the viewport (caused page-level horizontal scroll + cut
+     right column on phones). */
+  .search-box{{min-width:0;flex-basis:100%}}
+  /* Exactly two equal columns on phones — auto-fill with a px min could
+     compute 3 cols at some widths and cut the right one. 1fr 1fr always
+     fits the viewport regardless of exact width. */
+  .grid{{grid-template-columns:1fr 1fr;gap:8px}}
   .card-body{{padding:8px 10px}}
   .filters{{padding:8px 12px}}
   .content{{padding:12px}}
   .player-bar{{justify-content:center}}
   .share-btn{{margin-left:0!important;width:100%}}
+  /* keep the sort dropdown from overflowing the filter row */
+  .sort-select{{max-width:100%}}
 }}
 </style>
 </head><body>
