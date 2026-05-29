@@ -606,11 +606,6 @@ private struct ServerPart: Decodable {
     let size: Int64
 }
 
-private struct PartResponse: Decodable {
-    let partNumber: Int
-    let etag: String
-}
-
 private struct CompleteRequest: Encodable {
     let parts: [PartRef]
     struct PartRef: Encodable {
@@ -627,7 +622,6 @@ private struct CompleteResponse: Decodable {
 
 enum UploadError: LocalizedError {
     case stateMissing
-    case emptyFile
     case badResponse
     case http(status: Int, body: String)
     case unknown
@@ -635,7 +629,6 @@ enum UploadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .stateMissing: return "Upload state missing"
-        case .emptyFile: return "File is empty"
         case .badResponse: return "Bad response"
         case .http(let s, let b): return "HTTP \(s): \(b)"
         case .unknown: return "Unknown error"
