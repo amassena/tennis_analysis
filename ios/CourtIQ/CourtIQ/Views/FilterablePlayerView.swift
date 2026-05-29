@@ -43,7 +43,6 @@ struct FilterablePlayerView: View {
     @State private var totalDuration: Double = 0
     @State private var showControls = true
     @State private var controlsHideTask: Task<Void, Never>? = nil
-    @State private var isFullscreen = false
     @State private var lastAutoSeekAt: TimeInterval = 0
     @State private var compareShots: Set<Int> = []   // global shot idxs with a comparison clip
     @State private var compareItem: CompareClip? = nil   // currently-presented comparison
@@ -59,58 +58,68 @@ struct FilterablePlayerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if !isFullscreen {
-                HStack {
-                    Text(title.isEmpty ? (videoId ?? "") : title)
-                        .font(.subheadline)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.title3)
-                            .foregroundColor(.white)
-                            .padding(8)
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            // Video fills the whole screen in every orientation; chrome
+            // floats on top so it never steals video space. (The old VStack
+            // stacked header/chips/strip above & below, which shrank the
+            // video — worst in landscape where vertical room is scarce.)
+            PlayerLayerContainer(player: player)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { toggleControls() }
+
+            if showControls {
+                VStack(spacing: 0) {
+                    // ── Top chrome: title + close + filter chips ──
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text(title.isEmpty ? (videoId ?? "") : title)
+                                .font(.subheadline).foregroundColor(.white).lineLimit(1)
+                            Spacer()
+                            Button { dismiss() } label: {
+                                Image(systemName: "xmark")
+                                    .font(.title3).foregroundColor(.white).padding(8)
+                            }
+                        }
+                        .padding(.horizontal, 14).padding(.top, 6)
+                        FilterChipRow(
+                            shots: shots,
+                            variant: variant ?? "timeline",
+                            currentFilter: $currentFilter,
+                            speed: $speed,
+                            onFilterChange: applyFilter,
+                            onSloToggle: applySlo,
+                        )
                     }
+                    .background(LinearGradient(
+                        colors: [Color.black.opacity(0.7), Color.black.opacity(0)],
+                        startPoint: .top, endPoint: .bottom))
+
+                    Spacer()
+
+                    // ── Bottom chrome: playback controls + shot strip ──
+                    VStack(spacing: 0) {
+                        playbackControls
+                        if !shots.isEmpty {
+                            ShotStripRow(
+                                shots: shots,
+                                variant: variant ?? "timeline",
+                                compareShots: compareShots,
+                                onJump: jumpToShot,
+                                onCompare: presentComparison,
+                            )
+                        }
+                    }
+                    .background(LinearGradient(
+                        colors: [Color.black.opacity(0), Color.black.opacity(0.7)],
+                        startPoint: .top, endPoint: .bottom))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.black)
-
-                FilterChipRow(
-                    shots: shots,
-                    variant: variant ?? "timeline",
-                    currentFilter: $currentFilter,
-                    speed: $speed,
-                    onFilterChange: applyFilter,
-                    onSloToggle: applySlo,
-                )
-            }
-
-            ZStack {
-                PlayerLayerContainer(player: player)
-                    .onTapGesture { toggleControls() }
-                if showControls {
-                    customControlsOverlay
-                        .transition(.opacity)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if !isFullscreen, !shots.isEmpty {
-                ShotStripRow(
-                    shots: shots,
-                    variant: variant ?? "timeline",
-                    compareShots: compareShots,
-                    onJump: jumpToShot,
-                    onCompare: presentComparison,
-                )
+                .transition(.opacity)
             }
         }
-        .background(Color.black.ignoresSafeArea())
-        .ignoresSafeArea(edges: isFullscreen ? .all : [])
-        .statusBarHidden(isFullscreen)
+        .statusBarHidden(!showControls)
         .onAppear(perform: setup)
         .onDisappear(perform: teardown)
         .fullScreenCover(item: $compareItem, onDismiss: {
@@ -135,78 +144,46 @@ struct FilterablePlayerView: View {
         compareItem = CompareClip(url: u, label: "You vs Pro — shot \(s.idx + 1)")
     }
 
-    private var customControlsOverlay: some View {
-        VStack {
-            Spacer()
-            VStack(spacing: 8) {
-                HStack(spacing: 24) {
-                    Button { skip(-10) } label: {
-                        Image(systemName: "gobackward.10")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                    }
-                    Button { togglePlayPause() } label: {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 38, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 64, height: 64)
-                            .background(Color.black.opacity(0.4))
-                            .clipShape(Circle())
-                    }
-                    Button { skip(10) } label: {
-                        Image(systemName: "goforward.10")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                    }
+    private var playbackControls: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 24) {
+                Button { skip(-10) } label: {
+                    Image(systemName: "gobackward.10").font(.title2).foregroundColor(.white)
                 }
-                .padding(.vertical, 8)
-
-                HStack(spacing: 10) {
-                    Text(timeString(currentTime))
-                        .font(.caption.monospacedDigit())
+                Button { togglePlayPause() } label: {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 34, weight: .semibold))
                         .foregroundColor(.white)
-                    Slider(
-                        value: Binding(
-                            get: { currentTime },
-                            set: { newValue in
-                                currentTime = newValue
-                                player.seek(to: CMTime(seconds: newValue, preferredTimescale: 600))
-                            },
-                        ),
-                        in: 0...(max(totalDuration, 0.1)),
-                    )
-                    .tint(Color(red: 1.0, green: 0.549, blue: 0.0))
-                    Text(timeString(totalDuration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(.white)
-                    Button {
-                        // Fullscreen just hides the chrome (header + chips +
-                        // shot strip) for an immersive view. Orientation is
-                        // free — the player follows the device, so the user
-                        // can be in portrait or landscape either way.
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isFullscreen.toggle()
-                        }
-                        scheduleControlsHide()
-                    } label: {
-                        Image(systemName: isFullscreen
-                            ? "arrow.down.right.and.arrow.up.left"
-                            : "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(6)
-                    }
+                        .frame(width: 58, height: 58)
+                        .background(Color.black.opacity(0.4))
+                        .clipShape(Circle())
                 }
-                .padding(.horizontal, 14)
+                Button { skip(10) } label: {
+                    Image(systemName: "goforward.10").font(.title2).foregroundColor(.white)
+                }
             }
-            .padding(.bottom, 16)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0), Color.black.opacity(0.55)],
-                    startPoint: .top, endPoint: .bottom,
-                ),
-            )
+            .padding(.top, 6)
+
+            HStack(spacing: 10) {
+                Text(timeString(currentTime))
+                    .font(.caption.monospacedDigit()).foregroundColor(.white)
+                Slider(
+                    value: Binding(
+                        get: { currentTime },
+                        set: { newValue in
+                            currentTime = newValue
+                            player.seek(to: CMTime(seconds: newValue, preferredTimescale: 600))
+                        },
+                    ),
+                    in: 0...(max(totalDuration, 0.1)),
+                )
+                .tint(Color(red: 1.0, green: 0.549, blue: 0.0))
+                Text(timeString(totalDuration))
+                    .font(.caption.monospacedDigit()).foregroundColor(.white)
+            }
+            .padding(.horizontal, 14)
         }
+        .padding(.top, 6)
     }
 
     private func togglePlayPause() {
@@ -240,30 +217,6 @@ struct FilterablePlayerView: View {
         }
     }
 
-    /// YouTube-style: when entering fullscreen, force the device UI to
-    /// landscape so a landscape video fills the entire screen. When
-    /// exiting, snap back to portrait. Requires iOS 16+ which is fine
-    /// since the project deployment target is iOS 17.
-    private func requestOrientation(landscape: Bool) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })
-        else { return }
-        // Open the app-level gate BEFORE requesting the geometry change.
-        // requestGeometryUpdate is clamped to the intersection of the
-        // Info.plist orientations and what the app delegate currently
-        // permits — so the delegate lock must be widened first, else the
-        // request silently no-ops (the bug in builds 22/23).
-        let mask: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
-        AppDelegate.orientationLock = mask
-        scene.requestGeometryUpdate(
-            .iOS(interfaceOrientations: landscape ? .landscapeRight : .portrait),
-        ) { error in
-            print("[FilterablePlayer] orientation request failed: \(error)")
-        }
-        scene.keyWindow?.rootViewController?
-            .setNeedsUpdateOfSupportedInterfaceOrientations()
-    }
 
     private func timeString(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
