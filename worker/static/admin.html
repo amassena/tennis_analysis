@@ -21,6 +21,9 @@ h2 .n{background:#1c1c1e;color:#c7ff00;border-radius:10px;padding:1px 8px;font-s
 .row.err-row{border-color:#5a2020}
 .row .errmsg{color:#ff8888;font-size:.8em}
 .d-up{background:#c7ff00}.d-proc{background:#f5a623}.d-fail{background:#ff4d4d}.d-done{background:#3ddc84}
+.stuck{background:#5a2020;color:#ff8888;border:1px solid #ff4d4d;border-radius:4px;padding:0 5px;font-size:.7em;font-weight:800;letter-spacing:.04em;margin-right:6px}
+.chips{margin:2px 0 8px;display:flex;flex-wrap:wrap;gap:5px}
+.chip{background:#1c1c1e;color:#f5a623;border-radius:10px;padding:1px 9px;font-size:.78em;font-weight:600}
 table{width:100%;border-collapse:collapse;font-size:.82em}
 th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #1f1f22}
 th{color:#9aa0a6;font-weight:600;font-size:.85em}
@@ -34,28 +37,43 @@ td.n{font-variant-numeric:tabular-nums}
 <div id="content"></div>
 <div class="refresh" id="refresh">auto-refresh 10s</div>
 <script>
+// Pre-pipeline states: registered with the coordinator but a worker hasn't
+// started processing yet. These should clear fast; if not, it's stuck.
+var PRE_STATES=['coordinator_registered','awaiting_coordinator','queued','pending','queued_no_marker'];
+function ageSec(iso){ if(!iso) return Infinity; return Math.max(0,(Date.now()-new Date(iso).getTime())/1000); }
 function fmtAge(iso){
-  if(!iso) return '—';
-  var s=Math.max(0,(Date.now()-new Date(iso).getTime())/1000);
+  var s=ageSec(iso); if(s===Infinity) return '—';
   if(s<60) return Math.round(s)+'s ago';
   if(s<3600) return Math.round(s/60)+'m ago';
   if(s<86400) return Math.round(s/3600)+'h ago';
   return Math.round(s/86400)+'d ago';
 }
 function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function lastActivity(it){ return it.updated_at || it.uploaded_at; }
+// A non-terminal video that hasn't advanced in too long: 15m if it never
+// started processing (pre-state), 60m if mid-pipeline (big videos are slow).
+// This also surfaces coordinator/marker mismatches — a marker frozen at
+// coordinator_registered while the coordinator already failed shows up here.
+function isStuck(it){
+  if(it.inflight) return false;
+  if(it.status==='complete'||it.status==='failed') return false;
+  var s=ageSec(lastActivity(it));
+  return (PRE_STATES.indexOf(it.status)>=0) ? s>15*60 : s>60*60;
+}
 function row(it){
-  var cls = it.inflight?'d-up':it.status==='failed'?'d-fail':it.status==='complete'?'d-done':'d-proc';
+  var stuck=isStuck(it);
+  var cls = stuck?'d-fail':it.inflight?'d-up':it.status==='failed'?'d-fail':it.status==='complete'?'d-done':'d-proc';
   var meta = it.inflight ? 'uploading'+(it.progress!=null?' '+it.progress+'%':'')
     : (it.stage?esc(it.stage):esc(it.status))+(it.progress!=null?' '+it.progress+'%':'');
   var err = it.error?'<div class="errmsg">'+esc(it.error)+'</div>':'';
-  return '<div class="row '+(it.status==='failed'?'err-row':'')+'">'
+  var badge = stuck?'<span class="stuck">STUCK</span>':'';
+  return '<div class="row '+(it.status==='failed'||stuck?'err-row':'')+'">'
     +'<span class="dot '+cls+'"></span>'
-    +'<span class="f">'+esc(it.filename)+err+'</span>'
-    +'<span class="u">'+esc((it.user_hash||'?').slice(0,10))+'</span>'
-    +'<span class="meta">'+meta+' · '+fmtAge(it.uploaded_at)+'</span></div>';
+    +'<span class="f">'+esc(it.filename)+' <span class="u">'+esc((it.user_hash||'?').slice(0,10))+'</span>'+err+'</span>'
+    +'<span class="meta">'+badge+meta+' · '+fmtAge(lastActivity(it))+'</span></div>';
 }
 function sectionHTML(title,arr){
-  var body = arr.length ? arr.map(row).join('') : '<div class="empty">none</div>';
+  var body = arr.length ? arr.map(function(it){return row(it);}).join('') : '<div class="empty">none</div>';
   return '<section><h2>'+title+' <span class="n">'+arr.length+'</span></h2>'+body+'</section>';
 }
 async function load(){
@@ -70,13 +88,28 @@ async function load(){
     var items=d.items||[];
     var uploading=items.filter(function(x){return x.inflight;});
     var failed=items.filter(function(x){return !x.inflight&&x.status==='failed';});
-    var processing=items.filter(function(x){return !x.inflight&&x.status!=='failed'&&x.status!=='complete';});
+    var stuck=items.filter(isStuck);
+    var processing=items.filter(function(x){return !x.inflight&&x.status!=='failed'&&x.status!=='complete'&&!isStuck(x);});
     var complete=items.filter(function(x){return x.status==='complete';}).slice(0,15);
-    document.getElementById('sub').innerHTML='<b>'+items.length+'</b> videos · <b>'+(d.users||[]).length+'</b> users · updated '+fmtAge(d.generated_at);
+    document.getElementById('sub').innerHTML='<b>'+items.length+'</b> videos · <b>'+(d.users||[]).length+'</b> users · '
+      +(stuck.length?'<b style="color:#ff4d4d">'+stuck.length+' stuck</b> · ':'')
+      +(failed.length?'<b style="color:#ff8888">'+failed.length+' failed</b> · ':'')
+      +'updated '+fmtAge(d.generated_at);
     var html='';
+    // Stuck/stale first — the thing you actually need to see.
+    if(stuck.length) html+=sectionHTML('⚠️ Stuck / stale',stuck);
     html+=sectionHTML('Uploading now',uploading);
     html+=sectionHTML('Processing',processing);
-    html+=sectionHTML('Failed',failed);
+    // Failed, with a by-stage breakdown so patterns pop (e.g. "3 at detecting_shots").
+    if(failed.length){
+      var byStage={};
+      failed.forEach(function(f){var s=f.stage||f.status||'unknown'; byStage[s]=(byStage[s]||0)+1;});
+      var chips=Object.keys(byStage).sort(function(a,b){return byStage[b]-byStage[a];})
+        .map(function(s){return '<span class="chip">'+esc(s)+' · '+byStage[s]+'</span>';}).join('');
+      html+='<section><h2>Failed <span class="n">'+failed.length+'</span></h2>'
+        +'<div class="chips">'+chips+'</div>'
+        +failed.map(function(it){return row(it);}).join('')+'</section>';
+    } else { html+=sectionHTML('Failed',failed); }
     // per-user rollup
     var u=(d.users||[]).sort(function(a,b){return b.total-a.total;});
     html+='<section><h2>By user <span class="n">'+u.length+'</span></h2>';
