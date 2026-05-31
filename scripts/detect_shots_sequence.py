@@ -287,8 +287,35 @@ def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
     inference_time = time.time() - t0
 
     if len(timestamps) == 0:
-        print(f"  No valid windows")
-        return None
+        # No valid windows = no detectable shots. Return a VALID empty result
+        # (0 detections), NOT None, so the pipeline records 0 shots and
+        # completes — a no-tennis / too-short clip is a legitimate 0-shot
+        # outcome, not a failure. (A genuinely missing pose file above still
+        # returns None = real error.) This is what made the no-tennis test
+        # clips fail the whole pipeline instead of completing with 0 shots.
+        print(f"  No valid windows — 0 shots (completing, not failing)")
+        return {
+            "version": 6,
+            "detector": "sequence_cnn",
+            "source_video": video_name,
+            "video_path": str(video_path),
+            "pose_path": pose_path,
+            "fps": fps,
+            "total_frames": total_frames,
+            "duration": round(total_frames / fps, 2) if fps else None,
+            "parameters": {
+                "threshold": threshold, "nms_gap": nms_gap,
+                "step_sec": step_sec, "model": "sequence_detector.pt",
+            },
+            "summary": {
+                "total_detections": 0,
+                "by_tier": {"high": 0, "medium": 0, "low": 0},
+                "by_type": {},
+                "inference_time": round(inference_time, 2),
+                "windows_evaluated": 0,
+            },
+            "detections": [],
+        }
 
     print(f"  Inference: {inference_time:.1f}s ({len(timestamps)} windows)")
 
