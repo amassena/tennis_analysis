@@ -101,7 +101,9 @@ async function handleAsset(request, env, path) {
   let key;
   if (path === '/' || path === '/index.html') {
     key = 'static/root-landing.html';
-  } else if (path === '/admin' || path === '/admin.html') {
+  } else if (path === '/admin' || path === '/admin/' || path === '/admin.html') {
+    // Accept the trailing-slash variant too — in-app browsers (e.g. the Claude
+    // app's web view) append "/", which otherwise 404'd.
     key = 'static/admin.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
