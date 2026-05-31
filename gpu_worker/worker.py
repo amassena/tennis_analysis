@@ -842,7 +842,14 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
             text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"Shot detection failed: {result.stderr}")
+            # Capture stdout + exit code, not just stderr — the detector logs
+            # to stdout and an empty stderr (the old "Shot detection failed: "
+            # with no detail) usually means the process was killed
+            # (OOM/CUDA-OOM/timeout) with no Python traceback at all.
+            detail = (result.stderr or "").strip() or (result.stdout or "").strip()[-800:] \
+                or "(no output — process likely killed: OOM / CUDA OOM / timeout)"
+            raise RuntimeError(
+                f"Shot detection failed (exit {result.returncode}): {detail}")
     stage("detection", 100, "Shot detection complete")
 
     # Step 5b: Upload video metadata to R2 (so gallery index works from any machine)
