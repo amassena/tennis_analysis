@@ -126,7 +126,19 @@ def report_queue_status(upload_id: str, status: str = None, stage: str = None,
         error: Error message (for failed status)
         video_url: Link to finished video (for complete status)
     """
-    if not upload_id or not UPLOAD_PASSWORD:
+    # Reliable path: write straight to the R2 marker (no shared password
+    # needed). This keeps the app/gallery status in sync even when the
+    # /api/status POST below is unavailable.
+    _write_status_to_r2_marker(upload_id, status=status, stage=stage,
+                               progress=progress, error=error, video_url=video_url)
+
+    if not upload_id:
+        return
+    if not UPLOAD_PASSWORD:
+        # Loud, not silent: the secondary /api/status POST can't run without a
+        # password, but the R2 marker above is already updated.
+        log("UPLOAD_PASSWORD not set — skipping /api/status POST "
+            "(R2 marker updated directly instead)", "WARN")
         return
 
     data = {"password": UPLOAD_PASSWORD}
@@ -564,6 +576,52 @@ def _get_r2_client():
         region_name="us-east-1",
     )
     return client, bucket
+
+
+def _write_status_to_r2_marker(upload_id: str, status: str = None, stage: str = None,
+                               progress: int = None, error: str = None,
+                               video_url: str = None):
+    """Write processing status DIRECTLY to the R2 marker uploads/{id}.json.
+
+    The reliable status path: the worker already has R2 creds, so it updates
+    the marker the app/gallery read WITHOUT the password-gated /api/status
+    POST. That POST silently no-ops when UPLOAD_PASSWORD is unset (it was),
+    which left every processed video stuck showing "Queued". Bulletproof —
+    never raises, never blocks the pipeline.
+    """
+    if not upload_id:
+        return
+    try:
+        import json as _json
+        import datetime as _dt
+        client, bucket = _get_r2_client()
+        if not client:
+            return
+        key = f"uploads/{upload_id}.json"
+        try:
+            obj = client.get_object(Bucket=bucket, Key=key)
+            meta = _json.loads(obj["Body"].read())
+        except Exception:
+            return  # no marker (e.g. non-iphone upload) — nothing to sync
+        now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+        if status:
+            meta["status"] = status
+        if stage:
+            meta["stage"] = stage
+        if progress is not None:
+            meta["progress"] = progress
+        if error:
+            meta["error"] = error
+        if video_url:
+            meta["video_url"] = video_url
+        meta["updated_at"] = now
+        if status == "complete":
+            meta["completed_at"] = meta.get("completed_at") or now
+        client.put_object(Bucket=bucket, Key=key,
+                          Body=_json.dumps(meta).encode(),
+                          ContentType="application/json")
+    except Exception as e:
+        log(f"R2 marker status write failed: {e}", "WARN")
 
 
 def _upload_file_to_r2(local_path: str, r2_key: str, content_type: str = "application/octet-stream") -> bool:
