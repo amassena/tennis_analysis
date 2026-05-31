@@ -185,7 +185,14 @@ async function serveR2Object(request, env, key, opts = {}) {
   }
 
   if (!obj) {
-    return new Response('Not Found', { status: 404 });
+    // no-store so a transient 404 (e.g. a route that didn't exist yet, or a
+    // trailing-slash miss) doesn't get cached by the browser/edge and "stick"
+    // after the route starts working.
+    return new Response('Not Found', {
+      status: 404,
+      headers: { 'cache-control': 'no-store, no-cache, must-revalidate, max-age=0',
+                 'cdn-cache-control': 'no-store' },
+    });
   }
 
   const headers = new Headers();
