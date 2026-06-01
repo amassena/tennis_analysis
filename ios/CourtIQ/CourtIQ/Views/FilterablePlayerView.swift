@@ -473,14 +473,18 @@ struct FilterablePlayerView: View {
         // time, we'd seek to 1:34.5, AVPlayer would snap to 1:32, we'd
         // see we were outside the segment again, the throttle would
         // elapse, and we'd loop forever between 1:32 and the next seek
-        // attempt. toleranceBefore: .zero prevents the backwards snap;
-        // toleranceAfter: .positiveInfinity keeps the seek cheap (no
-        // forced exact-frame decode).
+        // attempt. toleranceBefore: .zero prevents the backwards snap.
         for s in segs where s.start > now {
+            // Land INSIDE the segment. .positiveInfinity forward let
+            // long-GOP/sparse-keyframe encodes jump to a far keyframe PAST the
+            // shot, skipping it (#2 mis-land). Cap forward tolerance below the
+            // 1.5s pre-roll so the seek decodes toward the target and lands on
+            // the swing, not past it.
+            let fwd = min(1.0, max(0.1, s.end - s.start - 0.5))
             player.seek(
                 to: CMTime(seconds: s.start, preferredTimescale: 600),
                 toleranceBefore: .zero,
-                toleranceAfter: .positiveInfinity,
+                toleranceAfter: CMTime(seconds: fwd, preferredTimescale: 600),
             )
             return
         }
