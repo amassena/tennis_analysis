@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Stats — Tennis Highlights</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0b;color:#f5f5f7;padding:16px 16px 60px}
+h1{font-size:1.3em;font-weight:800;color:#c7ff00}
+a{color:#c7ff00}
+.sub{color:#9aa0a6;font-size:.82em;margin:2px 0 18px}
+.err{color:#ff6b6b;padding:24px;text-align:center}
+.muted{color:#6a6f75;font-size:.85em}
+section{margin-bottom:26px}
+h2{font-size:.74em;text-transform:uppercase;letter-spacing:.09em;color:#9aa0a6;margin-bottom:10px}
+.kpis{display:flex;flex-wrap:wrap;gap:9px}
+.kpi{background:#141416;border:1px solid #1f1f22;border-radius:12px;padding:12px 16px;flex:1;min-width:90px}
+.kpi .v{font-size:1.7em;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi .l{color:#9aa0a6;font-size:.7em;text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.card{background:#141416;border:1px solid #1f1f22;border-radius:12px;padding:14px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.bar{fill:#c7ff00}
+.bar:hover{fill:#e3ff66}
+.axis{stroke:#2a2a2e;stroke-width:1}
+.tick{fill:#6a6f75;font-size:9px}
+.mix{display:flex;height:30px;border-radius:7px;overflow:hidden;margin-bottom:8px}
+.mix span{display:flex;align-items:center;justify-content:center;font-size:.72em;font-weight:700;color:#0a0a0b;min-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:.78em;color:#9aa0a6}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.fh{background:#b07cd6}.bh{background:#5fd493}.sv{background:#ffa64d}.vo{background:#5aa6ff}
+.empty{color:#5a5f65;font-size:.85em;padding:10px 2px}
+.trendnote{color:#9aa0a6;font-size:.78em;margin-top:8px;line-height:1.4}
+.line{fill:none;stroke-width:2}
+.dot{r:3}
+</style>
+</head><body>
+<h1>Your Stats</h1>
+<div class="sub" id="sub">loading…</div>
+<div id="content"></div>
+
+<script>
+var BASE='https://tennis.playfullife.com';
+function qp(k){return new URL(location.href).searchParams.get(k);}
+function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+var TYPE={forehand:{c:'#b07cd6',k:'fh',ab:'FH'},backhand:{c:'#5fd493',k:'bh',ab:'BH'},serve:{c:'#ffa64d',k:'sv',ab:'SV'},volley:{c:'#5aa6ff',k:'vo',ab:'VO'}};
+
+async function resolveHash(){
+  if(qp('u')) return qp('u');
+  // admin viewing: fall through to admin queue; else the cookie's own sub is used server-side
+  // simplest: require ?u for admin, else the page hits /api/u/<sub> — but we don't know sub client-side,
+  // so try the admin queue to discover any user, preferring none.
+  return null;
+}
+
+function barChart(sessions){
+  if(!sessions.length) return '<div class="empty">No sessions yet.</div>';
+  var W=320, H=120, pad=18, n=sessions.length;
+  var max=Math.max.apply(null, sessions.map(function(s){return s.shots;}))||1;
+  var bw=Math.max(2,(W-pad)/n-2);
+  var bars='';
+  sessions.forEach(function(s,i){
+    var h=(H-pad)*(s.shots/max);
+    var x=pad+i*((W-pad)/n), y=(H-pad)-h;
+    bars+='<rect class="bar" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'"><title>'+s.date+': '+s.shots+' shots</title></rect>';
+  });
+  // y max label + first/last date
+  var first=sessions[0].date.slice(5), last=sessions[n-1].date.slice(5);
+  return '<svg viewBox="0 0 '+W+' '+(H+12)+'">'
+    +'<line class="axis" x1="'+pad+'" y1="'+(H-pad)+'" x2="'+W+'" y2="'+(H-pad)+'"/>'
+    +'<text class="tick" x="0" y="12">'+max+'</text>'
+    +bars
+    +'<text class="tick" x="'+pad+'" y="'+(H+8)+'">'+first+'</text>'
+    +'<text class="tick" x="'+W+'" y="'+(H+8)+'" text-anchor="end">'+last+'</text>'
+    +'</svg>';
+}
+
+function trendChart(points){
+  // points: [{date,value}] sorted; value cm (can be negative). Zero line drawn.
+  if(points.length<2) return null;
+  var W=320,H=110,pad=20;
+  var vals=points.map(function(p){return p.value;});
+  var mn=Math.min.apply(null,vals.concat([0])), mx=Math.max.apply(null,vals.concat([0]));
+  var rng=(mx-mn)||1;
+  function y(v){return pad+(H-2*pad)*(1-(v-mn)/rng);}
+  function x(i){return pad+(W-pad-4)*(i/(points.length-1));}
+  var d=points.map(function(p,i){return (i?'L':'M')+x(i).toFixed(1)+' '+y(p.value).toFixed(1);}).join(' ');
+  var dots=points.map(function(p,i){return '<circle class="dot" cx="'+x(i).toFixed(1)+'" cy="'+y(p.value).toFixed(1)+'" fill="#c7ff00"><title>'+p.date+': '+p.value+'cm</title></circle>';}).join('');
+  var zeroY=y(0);
+  return '<svg viewBox="0 0 '+W+' '+H+'">'
+    +'<line class="axis" x1="'+pad+'" y1="'+zeroY.toFixed(1)+'" x2="'+W+'" y2="'+zeroY.toFixed(1)+'" stroke-dasharray="3 3"/>'
+    +'<text class="tick" x="0" y="'+(zeroY+3).toFixed(1)+'">0</text>'
+    +'<path class="line" stroke="#c7ff00" d="'+d+'"/>'+dots+'</svg>';
+}
+
+async function load(){
+  var uh=qp('u');
+  var url=BASE+'/api/u/'+(uh||'')+'/stats';
+  if(!uh){
+    // No ?u — try to discover own hash via the admin queue (admins) is wrong here;
+    // instead tell the user. The one-tap link from /inspect/admin includes context.
+    document.getElementById('sub').innerHTML='';
+    // Attempt: many users land here from their gallery which knows the hash. If missing, show hint.
+  }
+  try{
+    var r=await fetch(url,{credentials:'include',cache:'no-store'});
+    if(r.status===401||r.status===403){
+      document.getElementById('sub').textContent='';
+      document.getElementById('content').innerHTML='<div class="err">Not authorized. Open this from your gallery, or append ?u=your_hash. Sign in first if needed.</div>';
+      return;
+    }
+    if(!r.ok){ document.getElementById('content').innerHTML='<div class="err">HTTP '+r.status+'</div>'; return; }
+    var d=await r.json();
+    render(d);
+  }catch(e){
+    document.getElementById('content').innerHTML='<div class="err">'+esc(String(e))+'</div>';
+  }
+}
+
+function render(d){
+  var t=d.totals||{};
+  document.getElementById('sub').innerHTML='<b style="color:#f5f5f7">'+esc(d.user_hash)+'</b> · <a href="'+BASE+'/u/'+d.user_hash+'">← gallery</a>';
+  var html='';
+  // KPIs
+  html+='<section><div class="kpis">'
+    +kpi(t.shots||0,'total shots')
+    +kpi(t.sessions||0,'sessions')
+    +kpi(t.videos||0,'videos')
+    +kpi(avgPerSession(d),'shots / session')
+    +'</div></section>';
+
+  // Shots per session
+  html+='<section><h2>Shots per session</h2><div class="card">'+barChart(d.sessions||[])+'</div></section>';
+
+  // Shot-type mix
+  var bt=t.by_type||{}, tot=Object.values(bt).reduce(function(a,b){return a+b;},0);
+  if(tot>0){
+    var segs='',leg='';
+    Object.keys(TYPE).forEach(function(k){
+      var n=bt[k]; if(!n) return;
+      var pct=(n/tot*100);
+      segs+='<span class="'+TYPE[k].k+'" style="width:'+pct+'%">'+(pct>9?TYPE[k].ab:'')+'</span>';
+      leg+='<span><i class="'+TYPE[k].k+'"></i>'+k+' '+n+' ('+pct.toFixed(0)+'%)</span>';
+    });
+    html+='<section><h2>Shot mix</h2><div class="card"><div class="mix">'+segs+'</div><div class="legend">'+leg+'</div></div></section>';
+  }
+
+  // Wrist-contact-offset trend (the form metric)
+  var trend=d.wrist_offset_trend||{};
+  html+='<section><h2>Contact point trend <span class="muted">(wrist vs body at contact)</span></h2><div class="card">';
+  var any=false;
+  Object.keys(TYPE).forEach(function(k){
+    var pts=(trend[k]||[]).slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+    var chart=trendChart(pts);
+    if(chart){ any=true; html+='<div style="margin-bottom:6px;font-size:.82em;font-weight:700;color:'+TYPE[k].c+'">'+k+'</div>'+chart; }
+  });
+  if(!any){
+    html+='<div class="empty">Form-trend data appears here as your videos process on the updated pipeline. '
+      +'Positive = contact ahead of body (good extension); negative = late contact.</div>';
+  } else {
+    html+='<div class="trendnote">Positive cm = wrist ahead of body at contact (good, out front). Negative = contact behind body (late).</div>';
+  }
+  html+='</div></section>';
+
+  document.getElementById('content').innerHTML=html;
+}
+
+function kpi(v,l){return '<div class="kpi"><div class="v">'+esc(String(v))+'</div><div class="l">'+esc(l)+'</div></div>';}
+function avgPerSession(d){var s=(d.totals||{}).sessions||0; if(!s) return 0; return Math.round(((d.totals||{}).shots||0)/s);}
+
+load();
+</script>
+</body></html>

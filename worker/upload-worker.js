@@ -105,6 +105,7 @@ async function handleAsset(request, env, path) {
   // and redirect to the clean URL (preserving other query params, e.g. ?vid=).
   const adminTool = (path === '/admin' || path === '/admin/' || path === '/admin.html') ? '/admin'
     : (path === '/inspect' || path === '/inspect/' || path === '/inspect.html') ? '/inspect'
+    : (path === '/stats' || path === '/stats/' || path === '/stats.html') ? '/stats'
     : null;
   if (adminTool) {
     const u = new URL(request.url);
@@ -134,6 +135,8 @@ async function handleAsset(request, env, path) {
     key = 'static/admin.html';
   } else if (path === '/inspect' || path === '/inspect/' || path === '/inspect.html') {
     key = 'static/inspect.html';
+  } else if (path === '/stats' || path === '/stats/' || path === '/stats.html') {
+    key = 'static/stats.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {
@@ -537,6 +540,12 @@ async function handleApi(request, env, path) {
     const recentMatch = path.match(/^\/api\/u\/(u_[a-f0-9]{8})\/recent$/);
     if (recentMatch && request.method === 'GET') {
       return await handleUserRecent(request, env, cors, recentMatch[1]);
+    }
+
+    // GET /api/u/<hash>/stats — aggregated per-user analytics (#20).
+    const statsMatch = path.match(/^\/api\/u\/(u_[a-f0-9]{8})\/stats$/);
+    if (statsMatch && request.method === 'GET') {
+      return await handleUserStats(request, env, cors, statsMatch[1]);
     }
 
     return jsonResponse({ error: 'Not found' }, 404, cors);
@@ -1415,6 +1424,87 @@ async function handleUserRecent(request, env, cors, userHash) {
     200,
     { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' },
   );
+}
+
+// GET /api/u/<hash>/stats — aggregate every per-user meta.json into analytics
+// (#20). Auth: owner JWT/cookie or admin. Reads highlights/<hash>/<vid>/meta.json
+// in parallel and rolls up sessions (one per calendar day), shot-type mix, and
+// the biomech wrist-contact-offset trend (where present).
+async function handleUserStats(request, env, cors, userHash) {
+  const noCache = { ...cors, 'cache-control': 'no-store', 'cdn-cache-control': 'no-store' };
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) return jsonResponse({ error: 'Unauthorized' }, 401, noCache);
+  if (claims.sub !== userHash && !isAdminUser(env, claims.sub)) {
+    return jsonResponse({ error: 'Forbidden' }, 403, noCache);
+  }
+
+  // Collect every per-video meta.json key, then GET in parallel.
+  const keys = [];
+  let cursor;
+  do {
+    const page = await env.BUCKET.list({ prefix: `highlights/${userHash}/`, cursor });
+    for (const obj of page.objects) {
+      if (obj.key.endsWith('/meta.json')) keys.push(obj.key);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  const metas = (await Promise.all(keys.map(async (k) => {
+    try {
+      const o = await env.BUCKET.get(k);
+      if (!o) return null;
+      const m = await o.json();
+      m._vid = k.split('/').slice(-2)[0];
+      return m;
+    } catch { return null; }
+  }))).filter(Boolean).filter((m) => (m.shots || 0) > 0);  // 0-shot excluded, as in gallery
+
+  // Roll up.
+  const byDay = {};        // 'YYYY-MM-DD' -> {date, shots, videos, forehand, backhand, serve, volley}
+  const typeTotals = {};
+  let totalShots = 0;
+  const offsetByType = {}; // shot_type -> [ {date, value} ] from biomech
+  for (const m of metas) {
+    totalShots += m.shots || 0;
+    const day = (m.created || '').slice(0, 10) || 'unknown';
+    const d = byDay[day] || (byDay[day] = { date: day, shots: 0, videos: 0 });
+    d.shots += m.shots || 0;
+    d.videos += 1;
+    for (const [t, n] of Object.entries(m.breakdown || {})) {
+      typeTotals[t] = (typeTotals[t] || 0) + n;
+      d[t] = (d[t] || 0) + n;
+    }
+    const per = (m.biomech || {}).per_type || {};
+    for (const [t, v] of Object.entries(per)) {
+      if (v && v.avg_wrist_contact_offset_cm != null) {
+        (offsetByType[t] = offsetByType[t] || []).push(
+          { date: day, value: v.avg_wrist_contact_offset_cm });
+      }
+    }
+  }
+  const sessions = Object.values(byDay)
+    .filter((s) => s.date !== 'unknown')
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return jsonResponse({
+    user_hash: userHash,
+    totals: {
+      videos: metas.length,
+      shots: totalShots,
+      sessions: sessions.length,
+      by_type: typeTotals,
+    },
+    sessions,                 // chronological, one per day
+    wrist_offset_trend: offsetByType,
+    generated_at: new Date().toISOString(),
+  }, 200, noCache);
 }
 
 // ---------------------------------------------------------------------------
