@@ -40,6 +40,12 @@ video{width:100%;border-radius:8px;background:#000;display:block}
 .cmp .lab{color:#c79bff;font-size:.72em;font-weight:700;margin-bottom:5px}
 .empty{color:#5a5f65;font-size:.85em;padding:6px 2px}
 .flag{background:#5a2020;color:#ff8888;border-radius:5px;padding:1px 6px;font-size:.68em;font-weight:700;margin-left:6px}
+.fb{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;border-top:1px solid #1f1f22;padding-top:7px}
+.fb button{background:#1c1c1e;color:#9aa0a6;border:1px solid #2a2a2e;border-radius:6px;padding:4px 9px;font-size:.72em}
+.fb button:active{transform:scale(.96)}
+.fb button.sent{background:#13361f;color:#3ddc84;border-color:#2f7d4f}
+.fb button.good.sent{background:#13361f}
+.fb .note{flex:1;min-width:120px;background:#0f0f10;border:1px solid #2a2a2e;color:#f5f5f7;border-radius:6px;padding:4px 8px;font-size:.75em}
 details summary{cursor:pointer;color:#9aa0a6;font-size:.85em;padding:4px 0}
 .thumb{width:100%;border-radius:8px;display:block;margin-bottom:10px;background:#1c1c1e}
 .muted{color:#6a6f75}
@@ -147,11 +153,46 @@ async function load(){
       html+='<div class="cmp"><div class="lab">PRO COMPARISON</div>'
         +'<video controls preload="none" src="'+P+vid+'_comparison_shot_'+pad3(idx)+'.mp4"></video></div>';
     }
+    // Feedback row — per-shot corrections feed a ground-truth loop.
+    html+='<div class="fb" data-shot="'+idx+'">'
+      +fbBtn(idx,'wrong_type','wrong type')
+      +fbBtn(idx,'not_a_shot','not a shot')
+      +fbBtn(idx,'contact_off','contact off')
+      +(hasCmp?fbBtn(idx,'bad_comparison','bad compare'):'')
+      +fbBtn(idx,'good','👍')
+      +'<input class="note" placeholder="note… (Enter to send)" onkeydown="if(event.key===\'Enter\'){sendFb('+idx+',\'note\',this.value);this.value=\'\';}">'
+      +'</div>';
     html+='</div>';
   });
   html+='</section>';
 
   c.innerHTML=html;
+
+  // Mark buttons that already have feedback from a prior session.
+  var fb=await fetchJSON(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback');
+  if(fb&&fb.entries){
+    fb.entries.forEach(function(e){
+      var row=c.querySelector('.fb[data-shot="'+e.shot_idx+'"]');
+      if(row){ var b=row.querySelector('button[data-kind="'+e.kind+'"]'); if(b) b.classList.add('sent'); }
+    });
+  }
+}
+
+function fbBtn(idx,kind,label){
+  return '<button data-kind="'+kind+'" class="'+kind+'" onclick="sendFb('+idx+',\''+kind+'\')">'+esc(label)+'</button>';
+}
+
+async function sendFb(shotIdx, kind, note){
+  var vid=qp('vid'); if(!vid) return;
+  var row=document.querySelector('.fb[data-shot="'+shotIdx+'"]');
+  try{
+    var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:kind, shot_idx:shotIdx, note:note||''})
+    });
+    if(r.ok && row){ var b=row.querySelector('button[data-kind="'+kind+'"]'); if(b){ b.classList.add('sent'); b.textContent=b.textContent.replace(/ ✓$/,'')+' ✓'; } }
+    else if(!r.ok){ alert('Feedback failed: HTTP '+r.status+(r.status===403?' (sign in as owner/admin)':'')); }
+  }catch(e){ alert('Feedback error: '+e); }
 }
 
 function swap(btn,toSkel){

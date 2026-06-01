@@ -520,6 +520,19 @@ async function handleApi(request, env, path) {
       return await handleRenameVideo(request, env, cors, renameMatch[1]);
     }
 
+    // Per-video feedback (from the /inspect tool). Owner JWT or admin.
+    // Appends a labeled entry to highlights/<owner>/<vid>/feedback.json — the
+    // start of a ground-truth / correction loop (flag wrong shot type, missed
+    // contact frame, bad comparison, etc).
+    const fbMatch = path.match(/^\/api\/inspect\/([^/]+)\/feedback$/);
+    if (fbMatch && request.method === 'POST') {
+      return await handleInspectFeedback(request, env, cors, fbMatch[1]);
+    }
+    const fbGet = path.match(/^\/api\/inspect\/([^/]+)\/feedback$/);
+    if (fbGet && request.method === 'GET') {
+      return await handleInspectFeedbackGet(request, env, cors, fbGet[1]);
+    }
+
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
     const recentMatch = path.match(/^\/api\/u\/(u_[a-f0-9]{8})\/recent$/);
     if (recentMatch && request.method === 'GET') {
@@ -1464,6 +1477,70 @@ async function handleRenameVideo(request, env, cors, vid) {
     { ok: true, vid, display_name: meta.display_name || null },
     200, cors,
   );
+}
+
+// Shared auth+owner resolution for inspect feedback. Returns
+// {owner} on success or a Response to return on failure.
+async function _resolveOwnerForWrite(request, env, cors, vid) {
+  if (!/^[A-Za-z0-9_-]+$/.test(vid)) {
+    return { error: jsonResponse({ error: 'Invalid video id' }, 400, cors) };
+  }
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const headerAuth = (request.headers.get('authorization') || '').startsWith('Bearer ')
+    ? request.headers.get('authorization').slice(7).trim() : null;
+  const token = cookieToken || headerAuth;
+  let claims = null;
+  if (token && env.JWT_SIGNING_SECRET) {
+    try { claims = await verifyOurJWT(token, env.JWT_SIGNING_SECRET); } catch {}
+  }
+  if (!claims) return { error: jsonResponse({ error: 'Unauthorized' }, 401, cors) };
+  let owner = null;
+  try {
+    const m = await env.BUCKET.get(`uploads/${vid}.json`);
+    if (m) { const marker = await m.json(); owner = marker.user_hash || marker.uploaded_by || null; }
+  } catch {}
+  if (!owner) return { error: jsonResponse({ error: 'Video not found' }, 404, cors) };
+  if (claims.sub !== owner && !isAdminUser(env, claims.sub)) {
+    return { error: jsonResponse({ error: 'Forbidden' }, 403, cors) };
+  }
+  return { owner, sub: claims.sub };
+}
+
+// POST /api/inspect/:vid/feedback  — append a feedback/correction entry.
+// Body: { kind, shot_idx?, note?, value? }. kind is one of
+// wrong_type|not_a_shot|contact_off|bad_comparison|good|other (free-form ok).
+async function handleInspectFeedback(request, env, cors, vid) {
+  const r = await _resolveOwnerForWrite(request, env, cors, vid);
+  if (r.error) return r.error;
+  const body = await request.json().catch(() => ({}));
+  const entry = {
+    kind: (body.kind || 'other').toString().slice(0, 40),
+    shot_idx: (body.shot_idx === null || body.shot_idx === undefined) ? null : Number(body.shot_idx),
+    note: (body.note || '').toString().slice(0, 500),
+    value: body.value === undefined ? null : body.value,
+    by: r.sub,
+    at: new Date().toISOString(),
+  };
+  const key = `highlights/${r.owner}/${vid}/feedback.json`;
+  let doc = { video_id: vid, entries: [] };
+  try { const f = await env.BUCKET.get(key); if (f) doc = await f.json(); } catch {}
+  if (!Array.isArray(doc.entries)) doc.entries = [];
+  doc.entries.push(entry);
+  doc.updated_at = entry.at;
+  await env.BUCKET.put(key, JSON.stringify(doc), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  return jsonResponse({ ok: true, count: doc.entries.length, entry }, 200, cors);
+}
+
+// GET /api/inspect/:vid/feedback — read existing feedback (owner/admin).
+async function handleInspectFeedbackGet(request, env, cors, vid) {
+  const r = await _resolveOwnerForWrite(request, env, cors, vid);
+  if (r.error) return r.error;
+  const key = `highlights/${r.owner}/${vid}/feedback.json`;
+  let doc = { video_id: vid, entries: [] };
+  try { const f = await env.BUCKET.get(key); if (f) doc = await f.json(); } catch {}
+  return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
 }
 
 // ---------------------------------------------------------------------------
