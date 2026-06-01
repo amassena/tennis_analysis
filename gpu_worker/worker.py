@@ -629,26 +629,37 @@ def _write_status_to_r2_marker(upload_id: str, status: str = None, stage: str = 
         log(f"R2 marker status write failed: {e}", "WARN")
 
 
-def _patch_meta_on_r2(video_name: str, patch: dict):
-    """Merge `patch` into highlights/{vid}/meta.json on R2 (fetch → update →
-    re-upload). Used to add the biomech summary after meta.json was already
-    uploaded earlier in the pipeline. Best-effort; never raises."""
+def _patch_meta_on_r2(video_name: str, patch: dict, user_hash: str = None):
+    """Merge `patch` into meta.json on R2 (fetch → update → re-upload).
+
+    Patches EVERY meta.json that exists for this video — the flat
+    highlights/{vid}/meta.json (where step 5b writes it, before the step-6b
+    per-user migration) AND the per-user highlights/{user}/{vid}/meta.json (the
+    path the gallery actually reads). Belt-and-suspenders: depending on whether
+    this runs before or after migration, one or both paths exist, and we must
+    not leave a stale per-user copy. Best-effort; never raises."""
     try:
         import json as _json
         client, bucket = _get_r2_client()
         if not client:
             return
-        key = f"highlights/{video_name}/meta.json"
-        meta = {}
-        try:
-            obj = client.get_object(Bucket=bucket, Key=key)
-            meta = _json.loads(obj["Body"].read())
-        except Exception:
-            return  # no meta.json (5b may have been skipped) — nothing to patch
-        meta.update(patch)
-        client.put_object(Bucket=bucket, Key=key,
-                          Body=_json.dumps(meta).encode(),
-                          ContentType="application/json")
+        keys = [f"highlights/{video_name}/meta.json"]
+        if user_hash:
+            keys.append(f"highlights/{user_hash}/{video_name}/meta.json")
+        patched = 0
+        for key in keys:
+            try:
+                obj = client.get_object(Bucket=bucket, Key=key)
+                meta = _json.loads(obj["Body"].read())
+            except Exception:
+                continue  # that path doesn't exist — skip
+            meta.update(patch)
+            client.put_object(Bucket=bucket, Key=key,
+                              Body=_json.dumps(meta).encode(),
+                              ContentType="application/json")
+            patched += 1
+        if patched == 0:
+            log("meta.json patch: no meta.json found to patch", "WARN")
     except Exception as e:
         log(f"meta.json patch failed: {e}", "WARN")
 
@@ -983,7 +994,9 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
                         "speed_decline_pct": (bio.get("fatigue_indicator") or {}).get("speed_decline_pct"),
                         "per_type": per_type,
                     }
-                    _patch_meta_on_r2(video_name, {"biomech": biomech_summary})
+                    _bio_uh = _read_user_hash_for_video(video_name)
+                    _patch_meta_on_r2(video_name, {"biomech": biomech_summary},
+                                      user_hash=_bio_uh)
                     log("Patched meta.json with biomech summary (#20)")
                 except Exception as _pe:
                     log(f"meta.json biomech patch failed (non-fatal): {_pe}", "WARN")
