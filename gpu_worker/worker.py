@@ -1296,6 +1296,32 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
     return highlights_url
 
 
+def _script_signatures():
+    """Short content hashes of the key pipeline scripts, for drift detection
+    (#29). Compare these across machines / against the committed source to
+    catch a worker running stale code."""
+    import hashlib
+    files = [
+        "scripts/detect_shots_sequence.py",
+        "scripts/biomechanical_analysis.py",
+        "scripts/claude_coach.py",
+        "scripts/pro_comparison.py",
+        "scripts/swing_composite.py",
+        "scripts/export_videos.py",
+        "scripts/update_r2_index.py",
+        "gpu_worker/worker.py",
+    ]
+    sigs = {}
+    for f in files:
+        p = PROJECT_ROOT / f
+        name = f.split("/")[-1].replace(".py", "")
+        if p.exists():
+            sigs[name] = hashlib.sha256(p.read_bytes()).hexdigest()[:8]
+        else:
+            sigs[name] = "MISSING"
+    return sigs
+
+
 def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
                 once: bool = False, skip_youtube: bool = False, youtube_dry_run: bool = False):
     """Main worker loop.
@@ -1317,6 +1343,15 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
     log(f"Starting GPU worker: {WORKER_ID}")
     log(f"Coordinator: {COORDINATOR_URL}")
     log(f"Poll interval: {POLL_INTERVAL}s")
+    # Log a hash of the key pipeline scripts so script drift (a worker running
+    # stale code — see issue #29) is VISIBLE at startup instead of silently
+    # producing wrong outputs (e.g. the null wrist-offset from a stale
+    # biomechanical_analysis.py).
+    try:
+        sigs = _script_signatures()
+        log("Script versions: " + " ".join(f"{n}={h}" for n, h in sigs.items()))
+    except Exception as e:
+        log(f"Script signature check failed: {e}", "WARN")
     if skip_youtube:
         log("YouTube upload: DISABLED")
     elif youtube_dry_run:
