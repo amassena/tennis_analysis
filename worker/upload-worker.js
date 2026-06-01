@@ -98,6 +98,25 @@ export default {
 // ---------------------------------------------------------------------------
 
 async function handleAsset(request, env, path) {
+  // One-tap admin sign-in: /admin?t=<jwt> sets the auth cookie and redirects to
+  // a clean /admin, so a single link both authenticates AND shows the dashboard
+  // (no token-pasting, no separate gallery hop).
+  if (path === '/admin' || path === '/admin/' || path === '/admin.html') {
+    const t = new URL(request.url).searchParams.get('t');
+    if (t && env.JWT_SIGNING_SECRET) {
+      try {
+        await verifyOurJWT(t, env.JWT_SIGNING_SECRET);  // throws if invalid/expired
+        return new Response(null, {
+          status: 302,
+          headers: {
+            'location': '/admin',
+            'set-cookie': `tennis_jwt=${t}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+            'cache-control': 'no-store',
+          },
+        });
+      } catch {}
+    }
+  }
   let key;
   if (path === '/' || path === '/index.html') {
     key = 'static/root-landing.html';
