@@ -606,6 +606,11 @@ def _write_status_to_r2_marker(upload_id: str, status: str = None, stage: str = 
         now = _dt.datetime.now(_dt.timezone.utc).isoformat()
         if status:
             meta["status"] = status
+            # Clear a stale error from a prior failed run once we're no longer
+            # failed (e.g. a reprocess that now succeeds) — otherwise the
+            # dashboard shows a red error on a green/complete item.
+            if status != "failed":
+                meta["error"] = None
         if stage:
             meta["stage"] = stage
         if progress is not None:
