@@ -81,6 +81,24 @@ def load_detections(video_name):
     return None
 
 
+def _angle_family(angle):
+    """Normalize a clip's angle label to a coarse family aligned with
+    detect_camera_angle's output ('side' / 'behind' / 'front').
+
+    detected_angle vocabulary: side-deuce, side-ad → 'side'; front-broadcast →
+    'front'; behind-player → 'behind'. The legacy `angle` field is already
+    'side'/'behind'. unknown/ambiguous → None (won't match any request).
+    """
+    a = (angle or "").lower()
+    if a.startswith("side"):
+        return "side"
+    if a.startswith("behind"):
+        return "behind"
+    if a.startswith("front"):
+        return "front"
+    return None
+
+
 def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None,
                    used_files=None, user_hand=None, user_gender=None,
                    user_backhand_style=None, cross_gender=False):
@@ -132,17 +150,22 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
             if clip.get("type") == shot_type:
-                # HARD angle filter: a wrong-angle comparison is worse than
-                # none (you can't compare mechanics across camera angles).
-                # When the user's angle is known, only accept clips whose
-                # angle matches it; skip clips with no/different angle. If
-                # the user's angle is unknown, fall back to scoring.
+                # HARD angle filter on the REAL angle. The coarse `angle` field
+                # collapses everything to side/behind and mislabels ~114 frontal
+                # (front-broadcast) clips as "side" (#18) — filtering on it let
+                # frontal clips through for "side" requests. Filter on the
+                # detected_angle family instead so a "side" request keeps only
+                # true side clips (side-deuce / side-ad) and excludes frontal &
+                # behind. Falls back to the coarse field when detected_angle is
+                # absent (legacy clips). A wrong-angle comparison is worse than
+                # none — you can't compare mechanics across camera angles.
                 if preferred_angle:
-                    if clip.get("angle") != preferred_angle:
+                    fam = _angle_family(clip.get("detected_angle") or clip.get("angle"))
+                    if fam != preferred_angle:
                         continue
                 score = 0.0
-                # Strong preference for matching angle
-                if preferred_angle and clip.get("angle") == preferred_angle:
+                # Matching angle confirmed by the filter above.
+                if preferred_angle:
                     score += 3.0
                 # Preference for preferred player
                 if preferred_player and player_id == preferred_player:
