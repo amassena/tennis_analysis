@@ -629,6 +629,30 @@ def _write_status_to_r2_marker(upload_id: str, status: str = None, stage: str = 
         log(f"R2 marker status write failed: {e}", "WARN")
 
 
+def _patch_meta_on_r2(video_name: str, patch: dict):
+    """Merge `patch` into highlights/{vid}/meta.json on R2 (fetch → update →
+    re-upload). Used to add the biomech summary after meta.json was already
+    uploaded earlier in the pipeline. Best-effort; never raises."""
+    try:
+        import json as _json
+        client, bucket = _get_r2_client()
+        if not client:
+            return
+        key = f"highlights/{video_name}/meta.json"
+        meta = {}
+        try:
+            obj = client.get_object(Bucket=bucket, Key=key)
+            meta = _json.loads(obj["Body"].read())
+        except Exception:
+            return  # no meta.json (5b may have been skipped) — nothing to patch
+        meta.update(patch)
+        client.put_object(Bucket=bucket, Key=key,
+                          Body=_json.dumps(meta).encode(),
+                          ContentType="application/json")
+    except Exception as e:
+        log(f"meta.json patch failed: {e}", "WARN")
+
+
 def _upload_file_to_r2(local_path: str, r2_key: str, content_type: str = "application/octet-stream") -> bool:
     """Upload a file to R2. Returns True on success."""
     client, bucket = _get_r2_client()
@@ -936,6 +960,33 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
                 log(f"Biomech failed: {r.stderr[-300:]}", "WARN")
             else:
                 log(f"Biomech saved: {biomech_out.name}")
+                # Persist a compact biomech summary into meta.json so the
+                # gallery / analytics page can show form trends (#20 Phase 0).
+                # meta.json was uploaded in 5b BEFORE biomech ran, so we patch
+                # it here (fetch → merge → re-upload). Keeps the wrist-contact-
+                # offset etc. instead of discarding it after coaching reads it.
+                try:
+                    import json as _json2
+                    with open(biomech_out) as _bf:
+                        bio = _json2.load(_bf)
+                    per_type = {}
+                    for st, ts in (bio.get("type_summaries") or {}).items():
+                        per_type[st] = {
+                            "avg_wrist_contact_offset_cm": ts.get("avg_wrist_contact_offset_cm"),
+                            "avg_peak_swing_speed": ts.get("avg_peak_swing_speed"),
+                            "avg_arm_extension": ts.get("avg_arm_extension"),
+                            "avg_trunk_rotation": ts.get("avg_trunk_rotation"),
+                            "count": ts.get("count"),
+                        }
+                    biomech_summary = {
+                        "dominant_hand": bio.get("dominant_hand"),
+                        "speed_decline_pct": (bio.get("fatigue_indicator") or {}).get("speed_decline_pct"),
+                        "per_type": per_type,
+                    }
+                    _patch_meta_on_r2(video_name, {"biomech": biomech_summary})
+                    log("Patched meta.json with biomech summary (#20)")
+                except Exception as _pe:
+                    log(f"meta.json biomech patch failed (non-fatal): {_pe}", "WARN")
     except Exception as e:
         log(f"Biomech step failed (non-fatal): {e}", "WARN")
 
