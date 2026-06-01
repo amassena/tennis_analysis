@@ -101,15 +101,23 @@ async function handleAsset(request, env, path) {
   // One-tap admin sign-in: /admin?t=<jwt> sets the auth cookie and redirects to
   // a clean /admin, so a single link both authenticates AND shows the dashboard
   // (no token-pasting, no separate gallery hop).
-  if (path === '/admin' || path === '/admin/' || path === '/admin.html') {
-    const t = new URL(request.url).searchParams.get('t');
+  // One-tap admin-tool sign-in: /admin?t= and /inspect?t= set the auth cookie
+  // and redirect to the clean URL (preserving other query params, e.g. ?vid=).
+  const adminTool = (path === '/admin' || path === '/admin/' || path === '/admin.html') ? '/admin'
+    : (path === '/inspect' || path === '/inspect/' || path === '/inspect.html') ? '/inspect'
+    : null;
+  if (adminTool) {
+    const u = new URL(request.url);
+    const t = u.searchParams.get('t');
     if (t && env.JWT_SIGNING_SECRET) {
       try {
         await verifyOurJWT(t, env.JWT_SIGNING_SECRET);  // throws if invalid/expired
+        u.searchParams.delete('t');
+        const clean = adminTool + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '');
         return new Response(null, {
           status: 302,
           headers: {
-            'location': '/admin',
+            'location': clean,
             'set-cookie': `tennis_jwt=${t}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=2592000`,
             'cache-control': 'no-store',
           },
@@ -124,6 +132,8 @@ async function handleAsset(request, env, path) {
     // Accept the trailing-slash variant too — in-app browsers (e.g. the Claude
     // app's web view) append "/", which otherwise 404'd.
     key = 'static/admin.html';
+  } else if (path === '/inspect' || path === '/inspect/' || path === '/inspect.html') {
+    key = 'static/inspect.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {
