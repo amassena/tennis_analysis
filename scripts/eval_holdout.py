@@ -241,8 +241,10 @@ def evaluate(model_path, manifest_path, output_path):
         # times — the most accurate truth available). For each matched
         # (gt, det) pair, |det_t - gt_t| in ms. This is the metric a
         # regression-head model should drive DOWN. Reported, not yet gated.
+        # match_detections returns tp_pairs as (gt_entry, det_entry, time_error_sec).
         contact_errs_ms = []
-        for gt_s, det_s in tp_strict:
+        for _pair in tp_strict:
+            gt_s, det_s = _pair[0], _pair[1]
             gt_t = gt_s.get("timestamp", gt_s.get("t"))
             det_t = det_s.get("timestamp", det_s.get("t"))
             if gt_t is not None and det_t is not None:
@@ -295,7 +297,8 @@ def evaluate(model_path, manifest_path, output_path):
     # metric a contact-regression model should improve. Reported for now;
     # gating on it requires explicit approval (deploy-gate rules are fixed).
     _ce = []
-    for gt_s, det_s in all_tp_pairs:
+    for _pair in all_tp_pairs:
+        gt_s, det_s = _pair[0], _pair[1]
         gt_t = gt_s.get("timestamp", gt_s.get("t"))
         det_t = det_s.get("timestamp", det_s.get("t"))
         if gt_t is not None and det_t is not None:
