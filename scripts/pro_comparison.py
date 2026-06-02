@@ -224,6 +224,28 @@ def get_pro_clip_path(player_name, clip_info, library):
     return None
 
 
+def audio_snap_timestamp(timestamp, video_path, audio_peaks, fps,
+                         search_sec=0.3, min_rel_amp=1.5):
+    """Snap a detection timestamp to the nearest strong audio strike, so the
+    user clip aligns on ACOUSTIC contact — matching the quality of the pro
+    half's hand-labeled contact_frame. The filmstrip (swing_composite) already
+    does this; the comparison didn't, which left the two halves aligned to
+    contact points ~100ms apart (visible desync). Per-shot, not a constant
+    offset. Returns (snapped_timestamp, snapped: bool); falls back to the raw
+    timestamp when no confident peak is nearby.
+    """
+    if not audio_peaks or not audio_peaks.get("peaks"):
+        return timestamp, False
+    raw_frame = int(round(timestamp * fps))
+    from scripts.swing_composite import snap_to_audio_peak
+    snapped_frame, did = snap_to_audio_peak(raw_frame, fps, audio_peaks,
+                                            search_sec=search_sec,
+                                            min_rel_amp=min_rel_amp)
+    if not did:
+        return timestamp, False
+    return snapped_frame / fps, True
+
+
 def extract_user_clip(video_path, timestamp, output_path, speed=SLOWMO_SPEED):
     """Extract a clip from the user's video centered on the contact point.
 
@@ -450,6 +472,19 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     if not det_data:
         print(f"[ERROR] No detections found for {video_name}")
         return []
+    det_fps = det_data.get("fps", 60) or 60
+
+    # Audio strike peaks for per-shot contact snapping (sync fix). Computed
+    # once; reused for every shot. Best-effort — if audio is missing/noisy,
+    # snapping silently no-ops and we fall back to the raw detection timestamp.
+    audio_peaks = None
+    try:
+        from scripts.swing_composite import extract_audio_peaks
+        audio_peaks = extract_audio_peaks(str(video_path))
+        n_pk = len(audio_peaks.get("peaks", [])) if audio_peaks else 0
+        print(f"[contact-sync] audio peaks found: {n_pk}")
+    except Exception as e:
+        print(f"[contact-sync] audio peak extraction skipped: {e}")
 
     # Load pro library
     library = load_pro_library()
@@ -549,9 +584,17 @@ def generate_comparisons(video_path, output_dir=None, player=None,
             pro_angle = pro_clip.get("angle", "?")
             print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s vs {pro_name} ({pro_angle})")
 
-            # Extract user clip centered on contact
+            # Snap to the audio strike so the user clip aligns on acoustic
+            # contact (matching the pro half's labeled contact). Per-shot.
+            snap_t, snapped = audio_snap_timestamp(
+                timestamp, video_path, audio_peaks, det_fps)
+            if snapped:
+                print(f"      contact-sync: {timestamp:.2f}s -> {snap_t:.2f}s "
+                      f"({(snap_t-timestamp)*1000:+.0f}ms to audio strike)")
+
+            # Extract user clip centered on (snapped) contact
             user_clip = os.path.join(tmpdir, f"user_{i:03d}.mp4")
-            if not extract_user_clip(video_path, timestamp, user_clip):
+            if not extract_user_clip(video_path, snap_t, user_clip):
                 print(f"    [ERROR] Failed to extract user clip")
                 continue
 
