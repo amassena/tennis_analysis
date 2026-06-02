@@ -647,6 +647,27 @@ def main():
 
     print(f"\nGenerated {len(generated)} composites in {out_dir}")
 
+    # Manifest of per-shot strip geometry so the /inspect adjuster can map a
+    # panel-click to a precise contact time: for each shot, the contact time
+    # the strip was built around + the panel time-offsets + which panel is the
+    # contact (orange) one. One row per non-skeleton strip.
+    strips_manifest = {
+        "video": args.video,
+        "panel_offsets_sec": PANEL_OFFSETS_SEC,
+        "contact_panel_idx": CONTACT_PANEL_IDX,
+        "shots": [
+            {"shot_idx": info["shot_idx"], "shot_type": info["shot_type"],
+             "contact_timestamp": info["timestamp"], "num_panels": info["num_panels"],
+             "file": os.path.basename(path)}
+            for path, info in generated if not path.endswith("_skel.jpg")
+        ],
+    }
+    manifest_local = os.path.join(os.path.dirname(generated[0][0]) if generated else ".",
+                                  f"{args.video}_strips.json") if generated else None
+    if manifest_local:
+        with open(manifest_local, "w") as mf:
+            json.dump(strips_manifest, mf)
+
     if args.upload and generated:
         from dotenv import load_dotenv
         load_dotenv()
@@ -658,7 +679,9 @@ def main():
         for path, info in generated:
             key = f"{prefix}/{os.path.basename(path)}"
             r2.upload(path, key, content_type="image/jpeg")
-        print(f"Uploaded {len(generated)} composites to R2 -> {prefix}/")
+        if manifest_local:
+            r2.upload(manifest_local, f"{prefix}/strips.json", content_type="application/json")
+        print(f"Uploaded {len(generated)} composites + strips.json to R2 -> {prefix}/")
 
 
 if __name__ == "__main__":

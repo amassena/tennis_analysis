@@ -47,11 +47,16 @@ video{width:100%;border-radius:8px;background:#000;display:block}
 .fb button.good.sent{background:#13361f}
 .fb .note{flex:1;min-width:120px;background:#0f0f10;border:1px solid #2a2a2e;color:#f5f5f7;border-radius:6px;padding:4px 8px;font-size:.75em}
 .adj{margin-top:8px;border:1px solid #3b2d5a;border-radius:8px;padding:8px;background:#120f18}
-.adj video{width:100%;border-radius:6px;background:#000;margin-bottom:6px}
-.adj .ctl{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-.adj .ctl button{background:#1c1c1e;color:#f5f5f7;border:1px solid #3a3a3e;border-radius:6px;padding:5px 9px;font-size:.8em;font-variant-numeric:tabular-nums}
-.adj .ctl .save{background:#c7ff00;color:#0a0a0b;font-weight:700;border:0}
-.adj .ctl .t{color:#c79bff;font-size:.8em;font-variant-numeric:tabular-nums;margin:0 4px}
+.stripwrap{position:relative;line-height:0;margin-bottom:6px}
+.stripwrap img{width:100%;border-radius:6px;display:block}
+.pz{position:absolute;top:0;bottom:0;cursor:pointer;border-left:1px solid rgba(255,255,255,.06)}
+.pz[data-cur="1"]{box-shadow:inset 0 0 0 2px rgba(255,140,0,.5)}
+.pz:hover{background:rgba(199,255,0,.12)}
+.pz.sel{box-shadow:inset 0 0 0 3px #c7ff00;background:rgba(199,255,0,.15)}
+.adj .ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.adj .ctl .save{background:#c7ff00;color:#0a0a0b;font-weight:700;border:0;border-radius:6px;padding:5px 12px;font-size:.8em}
+.adj .ctl .save:disabled{opacity:.4}
+.adj .ctl .t{color:#c79bff;font-size:.78em;font-variant-numeric:tabular-nums}
 .adj .saved{color:#3ddc84;font-size:.78em;margin-left:6px}
 details summary{cursor:pointer;color:#9aa0a6;font-size:.85em;padding:4px 0}
 .thumb{width:100%;border-radius:8px;display:block;margin-bottom:10px;background:#1c1c1e}
@@ -69,6 +74,10 @@ details summary{cursor:pointer;color:#9aa0a6;font-size:.85em;padding:4px 0}
 <script>
 var BASE='https://tennis.playfullife.com';
 var CURRENT_UH=null;
+var STRIPS=null, STRIP_BY_IDX={}, CORR_BY_IDX={};
+// Fallback panel offsets (matches swing_composite PANEL_OFFSETS_SEC) for strips
+// rendered before strips.json existed.
+var DEFAULT_OFFSETS=[-0.700,-0.350,-0.150,-0.075,-0.037,0.0,0.037,0.075,0.150,0.350,0.700];
 function qp(k){return new URL(location.href).searchParams.get(k);}
 function esc(s){return (s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function pad3(n){return String(n).padStart(3,'0');}
@@ -120,6 +129,14 @@ async function load(){
   var contactByIdx={};
   if(contact&&contact.per_shot){ contact.per_shot.forEach(function(s,i){ contactByIdx[i]=s; }); }
   var ca=(meta&&meta.contact_accuracy)||null;
+  // Strip geometry (panel offsets + per-shot contact anchor) for the adjuster.
+  STRIPS=await fetchJSON(P+'sequences/strips.json');
+  STRIP_BY_IDX={};
+  if(STRIPS&&STRIPS.shots){ STRIPS.shots.forEach(function(s){ STRIP_BY_IDX[s.shot_idx]=s; }); }
+  // Already-saved corrections → mark them.
+  var corr=await fetchJSON(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/contact-correction');
+  CORR_BY_IDX={};
+  if(corr&&corr.corrections){ corr.corrections.forEach(function(c){ CORR_BY_IDX[c.shot_idx]=c; }); }
 
   var html='';
 
@@ -230,49 +247,60 @@ async function sendFb(shotIdx, kind, note){
   }catch(e){ alert('Feedback error: '+e); }
 }
 
-// Contact-frame adjuster: scrub the timeline video frame-by-frame to the true
-// contact, then save it as a GT-grade correction.
-var FPS = 60;  // preprocessed timeline is 60fps CFR
+// Contact-frame adjuster — print the filmstrip and let the user TAP the panel
+// that's actually contact (move the orange keyframe). Each panel is at a known
+// time offset from the strip's contact anchor, so a tap → corrected contact time.
 function openAdjust(idx, contactT, btn){
   var box=document.getElementById('adj-'+idx);
-  if(box.style.display==='none'){ box.style.display='block'; } else { box.style.display='none'; box.innerHTML=''; return; }
+  if(box.style.display!=='none'){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
   var uh=qp('u')||CURRENT_UH, vid=qp('vid');
-  var vurl=BASE+'/u/'+uh+'/'+vid+'/'+vid+'_timeline.mp4';
+  var strip=STRIP_BY_IDX[idx];
+  var offsets=(STRIPS&&STRIPS.panel_offsets_sec)||DEFAULT_OFFSETS;
+  // anchor = the contact time the strip was actually built around (audio-snapped);
+  // fall back to the shot's detection timestamp if no manifest.
+  var anchor=(strip&&strip.contact_timestamp!=null)?strip.contact_timestamp:contactT;
+  var n=offsets.length;
+  var film=BASE+'/u/'+uh+'/'+vid+'/sequences/shot_'+pad3(idx)+'_'+(strip?strip.shot_type:'')+'.jpg';
+  // Build clickable overlay: image + N equal-width zones.
+  var zones='';
+  var curIdx=(STRIPS&&STRIPS.contact_panel_idx!=null)?STRIPS.contact_panel_idx:offsets.indexOf(0.0);
+  for(var k=0;k<n;k++){
+    var pct=(100/n);
+    zones+='<div class="pz" data-k="'+k+'" onclick="pickPanel('+idx+','+k+','+anchor+')" '
+      +'style="left:'+(k*pct)+'%;width:'+pct+'%"'+(k===curIdx?' data-cur="1"':'')+'></div>';
+  }
+  var saved=CORR_BY_IDX[idx];
   box.innerHTML=
-    '<video preload="auto" muted playsinline src="'+vurl+'#t='+contactT.toFixed(3)+'"></video>'
-    +'<div class="ctl">'
-    +'<button onclick="stepFrame('+idx+',-5)">⏮ −5</button>'
-    +'<button onclick="stepFrame('+idx+',-1)">◀ −1</button>'
-    +'<span class="t" id="adjt-'+idx+'">'+contactT.toFixed(3)+'s</span>'
-    +'<button onclick="stepFrame('+idx+',1)">+1 ▶</button>'
-    +'<button onclick="stepFrame('+idx+',5)">+5 ⏭</button>'
-    +'<button class="save" onclick="saveContact('+idx+','+contactT+')">Save contact</button>'
-    +'<span class="saved" id="adjsaved-'+idx+'"></span>'
-    +'</div>'
-    +'<div class="muted" style="font-size:.72em;margin-top:4px">Step to the exact ball-contact frame, then Save. Stored as a ground-truth label.</div>';
-  var v=box.querySelector('video');
-  v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=contactT; }catch(e){} });
+    '<div class="muted" style="font-size:.74em;margin-bottom:5px">Tap the panel where the ball actually contacts the racket. Saved as a ground-truth label.</div>'
+    +'<div class="stripwrap"><img src="'+film+'" onerror="this.style.opacity=.3">'+zones+'</div>'
+    +'<div class="ctl"><span class="t" id="adjt-'+idx+'">contact panel: '+curIdx+' ('+anchor.toFixed(2)+'s)</span>'
+    +'<button class="save" id="adjsave-'+idx+'" onclick="saveContact('+idx+','+contactT+')" disabled>Save</button>'
+    +'<span class="saved" id="adjsaved-'+idx+'">'+(saved?'previously: '+(saved.delta_ms>0?'+':'')+saved.delta_ms+'ms':'')+'</span></div>';
+  box._pick=null;
 }
-function stepFrame(idx, frames){
-  var box=document.getElementById('adj-'+idx); var v=box.querySelector('video');
-  if(!v) return;
-  v.pause();
-  var nt=Math.max(0, (v.currentTime||0) + frames/FPS);
-  v.currentTime=nt;
-  document.getElementById('adjt-'+idx).textContent=nt.toFixed(3)+'s';
+function pickPanel(idx, k, anchor){
+  var offsets=(STRIPS&&STRIPS.panel_offsets_sec)||DEFAULT_OFFSETS;
+  var box=document.getElementById('adj-'+idx);
+  var corrT=anchor + offsets[k];
+  box._pick=corrT;
+  box.querySelectorAll('.pz').forEach(function(z){ z.classList.toggle('sel', +z.dataset.k===k); });
+  var d=Math.round(offsets[k]*1000);
+  document.getElementById('adjt-'+idx).textContent='panel '+k+' → '+corrT.toFixed(2)+'s ('+(d>0?'+':'')+d+'ms from current)';
+  document.getElementById('adjsave-'+idx).disabled=false;
 }
 async function saveContact(idx, origT){
-  var box=document.getElementById('adj-'+idx); var v=box.querySelector('video');
-  var corrT=v?v.currentTime:origT;
+  var box=document.getElementById('adj-'+idx);
+  if(box._pick==null) return;
   var vid=qp('vid');
   try{
     var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/contact-correction',{
       method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({shot_idx:idx, original_t:origT, corrected_t:corrT})
+      body:JSON.stringify({shot_idx:idx, original_t:origT, corrected_t:box._pick})
     });
     var el=document.getElementById('adjsaved-'+idx);
-    if(r.ok){ var d=Math.round((corrT-origT)*1000); el.textContent='✓ saved ('+(d>0?'+':'')+d+'ms)'; }
-    else { el.textContent='✗ HTTP '+r.status; el.style.color='#ff6b6b'; }
+    if(r.ok){ var d=Math.round((box._pick-origT)*1000); el.textContent='✓ saved ('+(d>0?'+':'')+d+'ms)'; el.style.color='#3ddc84'; }
+    else { el.textContent='✗ HTTP '+r.status+(r.status===403?' (sign in)':''); el.style.color='#ff6b6b'; }
   }catch(e){ alert('Save error: '+e); }
 }
 
