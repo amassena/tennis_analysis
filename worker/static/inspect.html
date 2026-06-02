@@ -251,30 +251,39 @@ async function sendFb(shotIdx, kind, note){
 // that's actually contact (move the orange keyframe). Each panel is at a known
 // time offset from the strip's contact anchor, so a tap → corrected contact time.
 function openAdjust(idx, contactT, btn){
+  var card=btn.closest('.shot');
+  var img=card.querySelector('.film');
   var box=document.getElementById('adj-'+idx);
-  if(box.style.display!=='none'){ box.style.display='none'; box.innerHTML=''; return; }
+  // Toggle OFF: remove the zone overlay from the existing strip + clear box.
+  if(box.style.display!=='none'){
+    box.style.display='none'; box.innerHTML='';
+    var w=card.querySelector('.stripwrap');
+    if(w){ w.parentNode.insertBefore(img, w); w.remove(); }
+    return;
+  }
   box.style.display='block';
-  var uh=qp('u')||CURRENT_UH, vid=qp('vid');
   var strip=STRIP_BY_IDX[idx];
   var offsets=(STRIPS&&STRIPS.panel_offsets_sec)||DEFAULT_OFFSETS;
-  // anchor = the contact time the strip was actually built around (audio-snapped);
-  // fall back to the shot's detection timestamp if no manifest.
+  // anchor = the contact time the strip was actually built around (audio-snapped).
   var anchor=(strip&&strip.contact_timestamp!=null)?strip.contact_timestamp:contactT;
   var n=offsets.length;
-  var film=BASE+'/u/'+uh+'/'+vid+'/sequences/shot_'+pad3(idx)+'_'+(strip?strip.shot_type:'')+'.jpg';
-  // Build clickable overlay: image + N equal-width zones.
-  var zones='';
   var curIdx=(STRIPS&&STRIPS.contact_panel_idx!=null)?STRIPS.contact_panel_idx:offsets.indexOf(0.0);
-  for(var k=0;k<n;k++){
-    var pct=(100/n);
-    zones+='<div class="pz" data-k="'+k+'" onclick="pickPanel('+idx+','+k+','+anchor+')" '
-      +'style="left:'+(k*pct)+'%;width:'+pct+'%"'+(k===curIdx?' data-cur="1"':'')+'></div>';
+  // Make the EXISTING filmstrip clickable: wrap it + overlay N tap-zones.
+  if(!card.querySelector('.stripwrap')){
+    var wrap=document.createElement('div'); wrap.className='stripwrap';
+    img.parentNode.insertBefore(wrap, img); wrap.appendChild(img);
+    for(var k=0;k<n;k++){
+      var z=document.createElement('div'); z.className='pz'; z.dataset.k=k;
+      z.style.left=(k*100/n)+'%'; z.style.width=(100/n)+'%';
+      if(k===curIdx) z.dataset.cur='1';
+      z.onclick=(function(kk){return function(){pickPanel(idx,kk,anchor);};})(k);
+      wrap.appendChild(z);
+    }
   }
   var saved=CORR_BY_IDX[idx];
   box.innerHTML=
-    '<div class="muted" style="font-size:.74em;margin-bottom:5px">Tap the panel where the ball actually contacts the racket. Saved as a ground-truth label.</div>'
-    +'<div class="stripwrap"><img src="'+film+'" onerror="this.style.opacity=.3">'+zones+'</div>'
-    +'<div class="ctl"><span class="t" id="adjt-'+idx+'">contact panel: '+curIdx+' ('+anchor.toFixed(2)+'s)</span>'
+    '<div class="muted" style="font-size:.74em;margin-bottom:5px">Tap the panel in the filmstrip above where the ball meets the racket. Orange = current. Saved as a ground-truth label.</div>'
+    +'<div class="ctl"><span class="t" id="adjt-'+idx+'">current contact: panel '+curIdx+' ('+anchor.toFixed(2)+'s)</span>'
     +'<button class="save" id="adjsave-'+idx+'" onclick="saveContact('+idx+','+contactT+')" disabled>Save</button>'
     +'<span class="saved" id="adjsaved-'+idx+'">'+(saved?'previously: '+(saved.delta_ms>0?'+':'')+saved.delta_ms+'ms':'')+'</span></div>';
   box._pick=null;
@@ -282,9 +291,11 @@ function openAdjust(idx, contactT, btn){
 function pickPanel(idx, k, anchor){
   var offsets=(STRIPS&&STRIPS.panel_offsets_sec)||DEFAULT_OFFSETS;
   var box=document.getElementById('adj-'+idx);
+  var card=box.closest('.shot');
   var corrT=anchor + offsets[k];
   box._pick=corrT;
-  box.querySelectorAll('.pz').forEach(function(z){ z.classList.toggle('sel', +z.dataset.k===k); });
+  // zones live in the card's filmstrip wrap (not the box)
+  card.querySelectorAll('.stripwrap .pz').forEach(function(z){ z.classList.toggle('sel', +z.dataset.k===k); });
   var d=Math.round(offsets[k]*1000);
   document.getElementById('adjt-'+idx).textContent='panel '+k+' → '+corrT.toFixed(2)+'s ('+(d>0?'+':'')+d+'ms from current)';
   document.getElementById('adjsave-'+idx).disabled=false;
