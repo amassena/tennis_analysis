@@ -412,6 +412,16 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     else:
         crop_w = int(crop_h * ratio)
 
+    # Floor the crop to a PERSON-SIZED region. When the pose at contact is
+    # sparse/clustered (only arm+racket landmarks above conf), player_w/h is
+    # tiny and the old 200px floor zoomed to a postage stamp showing just the
+    # ball + racket, no person (user-reported framing bug). Require the crop to
+    # span at least ~45% of frame height so a player is always visible. Good
+    # shots already exceed this, so they're unaffected.
+    min_h = int(0.45 * img_h)
+    if crop_h < min_h:
+        crop_h = min_h
+        crop_w = int(crop_h * ratio)
     crop_w = max(crop_w, 200)
     crop_h = max(crop_h, 200)
     crop_w = min(crop_w, img_w)
