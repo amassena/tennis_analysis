@@ -1010,6 +1010,12 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     # and the deploy gate. Non-fatal.
     try:
         log("Step 5c2: Contact accuracy (audio truth)")
+        # Ensure project root is importable — the worker's runtime sys.path
+        # doesn't always include it, so `from scripts...` can fail with
+        # "No module named 'scripts'" mid-pipeline.
+        import sys as _sys
+        if str(PROJECT_ROOT) not in _sys.path:
+            _sys.path.insert(0, str(PROJECT_ROOT))
         from scripts.contact_accuracy import measure_video as _measure_contact
         ca = _measure_contact(video_name, video_path=str(preprocessed))
         if "error" not in ca:
