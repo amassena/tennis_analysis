@@ -1003,6 +1003,47 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     except Exception as e:
         log(f"Biomech step failed (non-fatal): {e}", "WARN")
 
+    # Step 5c2: Contact accuracy (audio-strike truth). Measures how well the
+    # detected contact frame lines up with the ball-strike SOUND — the
+    # objective signal behind detection-timing / filmstrip / comparison-sync
+    # quality. Confidence-gated; persisted to meta.json for /inspect + /admin
+    # and the deploy gate. Non-fatal.
+    try:
+        log("Step 5c2: Contact accuracy (audio truth)")
+        from scripts.contact_accuracy import measure_video as _measure_contact
+        ca = _measure_contact(video_name, video_path=str(preprocessed))
+        if "error" not in ca:
+            ca_summary = {
+                "shots": ca.get("shots"),
+                "confident_matches": ca.get("confident_matches"),
+                "confident_coverage": ca.get("confident_coverage"),
+                "median_abs_error_ms": ca.get("median_abs_error_ms"),
+                "p90_abs_error_ms": ca.get("p90_abs_error_ms"),
+                "median_signed_error_ms": ca.get("median_signed_error_ms"),
+            }
+            _ca_uh = _read_user_hash_for_video(video_name)
+            _patch_meta_on_r2(video_name, {"contact_accuracy": ca_summary},
+                              user_hash=_ca_uh)
+            # Stash per-shot errors alongside shots.json so /inspect can badge
+            # individual shots. Small file; uploaded to both paths if present.
+            try:
+                import json as _cj
+                per = {"video": video_name,
+                       "per_shot": ca.get("per_shot", [])}
+                _tmp = PROJECT_ROOT / "analysis" / f"{video_name}_contact.json"
+                _tmp.parent.mkdir(parents=True, exist_ok=True)
+                _tmp.write_text(_cj.dumps(per))
+                _upload_file_to_r2(str(_tmp), f"highlights/{video_name}/contact.json",
+                                   "application/json")
+            except Exception as _ce:
+                log(f"contact.json upload skipped: {_ce}", "WARN")
+            log(f"Contact accuracy: {ca_summary['confident_matches']}/{ca_summary['shots']} "
+                f"confident, median|err|={ca_summary['median_abs_error_ms']}ms")
+        else:
+            log(f"Contact accuracy skipped: {ca['error']}", "WARN")
+    except Exception as e:
+        log(f"Contact accuracy step failed (non-fatal): {e}", "WARN")
+
     # Step 5d: Claude coaching summary
     try:
         log("Step 5d: Claude coaching summary")
