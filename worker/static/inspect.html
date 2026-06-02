@@ -46,6 +46,13 @@ video{width:100%;border-radius:8px;background:#000;display:block}
 .fb button.sent{background:#13361f;color:#3ddc84;border-color:#2f7d4f}
 .fb button.good.sent{background:#13361f}
 .fb .note{flex:1;min-width:120px;background:#0f0f10;border:1px solid #2a2a2e;color:#f5f5f7;border-radius:6px;padding:4px 8px;font-size:.75em}
+.adj{margin-top:8px;border:1px solid #3b2d5a;border-radius:8px;padding:8px;background:#120f18}
+.adj video{width:100%;border-radius:6px;background:#000;margin-bottom:6px}
+.adj .ctl{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.adj .ctl button{background:#1c1c1e;color:#f5f5f7;border:1px solid #3a3a3e;border-radius:6px;padding:5px 9px;font-size:.8em;font-variant-numeric:tabular-nums}
+.adj .ctl .save{background:#c7ff00;color:#0a0a0b;font-weight:700;border:0}
+.adj .ctl .t{color:#c79bff;font-size:.8em;font-variant-numeric:tabular-nums;margin:0 4px}
+.adj .saved{color:#3ddc84;font-size:.78em;margin-left:6px}
 details summary{cursor:pointer;color:#9aa0a6;font-size:.85em;padding:4px 0}
 .thumb{width:100%;border-radius:8px;display:block;margin-bottom:10px;background:#1c1c1e}
 .muted{color:#6a6f75}
@@ -61,6 +68,7 @@ details summary{cursor:pointer;color:#9aa0a6;font-size:.85em;padding:4px 0}
 
 <script>
 var BASE='https://tennis.playfullife.com';
+var CURRENT_UH=null;
 function qp(k){return new URL(location.href).searchParams.get(k);}
 function esc(s){return (s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function pad3(n){return String(n).padStart(3,'0');}
@@ -97,6 +105,7 @@ async function load(){
 
   var uh=await resolveUserHash(vid);
   if(!uh){ c.innerHTML='<div class="err">Could not resolve user for '+esc(vid)+'. Add ?u=u_xxxx to the URL, or sign in as admin.</div>'; return; }
+  CURRENT_UH=uh;
   var P=BASE+'/u/'+uh+'/'+vid+'/';           // per-user asset prefix
   document.getElementById('sub').innerHTML='<b>'+esc(vid)+'</b> · user <b>'+esc(uh)+'</b>';
 
@@ -177,14 +186,17 @@ async function load(){
         +'<video controls preload="none" src="'+P+vid+'_comparison_shot_'+pad3(idx)+'.mp4"></video></div>';
     }
     // Feedback row — per-shot corrections feed a ground-truth loop.
+    var st = (s.t!=null?s.t:0);
     html+='<div class="fb" data-shot="'+idx+'">'
       +fbBtn(idx,'wrong_type','wrong type')
       +fbBtn(idx,'not_a_shot','not a shot')
       +fbBtn(idx,'contact_off','contact off')
       +(hasCmp?fbBtn(idx,'bad_comparison','bad compare'):'')
       +fbBtn(idx,'good','👍')
+      +'<button onclick="openAdjust('+idx+','+st+',this)">✎ adjust contact</button>'
       +'<input class="note" placeholder="note… (Enter to send)" onkeydown="if(event.key===\'Enter\'){sendFb('+idx+',\'note\',this.value);this.value=\'\';}">'
       +'</div>';
+    html+='<div class="adj" id="adj-'+idx+'" style="display:none"></div>';
     html+='</div>';
   });
   html+='</section>';
@@ -216,6 +228,52 @@ async function sendFb(shotIdx, kind, note){
     if(r.ok && row){ var b=row.querySelector('button[data-kind="'+kind+'"]'); if(b){ b.classList.add('sent'); b.textContent=b.textContent.replace(/ ✓$/,'')+' ✓'; } }
     else if(!r.ok){ alert('Feedback failed: HTTP '+r.status+(r.status===403?' (sign in as owner/admin)':'')); }
   }catch(e){ alert('Feedback error: '+e); }
+}
+
+// Contact-frame adjuster: scrub the timeline video frame-by-frame to the true
+// contact, then save it as a GT-grade correction.
+var FPS = 60;  // preprocessed timeline is 60fps CFR
+function openAdjust(idx, contactT, btn){
+  var box=document.getElementById('adj-'+idx);
+  if(box.style.display==='none'){ box.style.display='block'; } else { box.style.display='none'; box.innerHTML=''; return; }
+  var uh=qp('u')||CURRENT_UH, vid=qp('vid');
+  var vurl=BASE+'/u/'+uh+'/'+vid+'/'+vid+'_timeline.mp4';
+  box.innerHTML=
+    '<video preload="auto" muted playsinline src="'+vurl+'#t='+contactT.toFixed(3)+'"></video>'
+    +'<div class="ctl">'
+    +'<button onclick="stepFrame('+idx+',-5)">⏮ −5</button>'
+    +'<button onclick="stepFrame('+idx+',-1)">◀ −1</button>'
+    +'<span class="t" id="adjt-'+idx+'">'+contactT.toFixed(3)+'s</span>'
+    +'<button onclick="stepFrame('+idx+',1)">+1 ▶</button>'
+    +'<button onclick="stepFrame('+idx+',5)">+5 ⏭</button>'
+    +'<button class="save" onclick="saveContact('+idx+','+contactT+')">Save contact</button>'
+    +'<span class="saved" id="adjsaved-'+idx+'"></span>'
+    +'</div>'
+    +'<div class="muted" style="font-size:.72em;margin-top:4px">Step to the exact ball-contact frame, then Save. Stored as a ground-truth label.</div>';
+  var v=box.querySelector('video');
+  v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=contactT; }catch(e){} });
+}
+function stepFrame(idx, frames){
+  var box=document.getElementById('adj-'+idx); var v=box.querySelector('video');
+  if(!v) return;
+  v.pause();
+  var nt=Math.max(0, (v.currentTime||0) + frames/FPS);
+  v.currentTime=nt;
+  document.getElementById('adjt-'+idx).textContent=nt.toFixed(3)+'s';
+}
+async function saveContact(idx, origT){
+  var box=document.getElementById('adj-'+idx); var v=box.querySelector('video');
+  var corrT=v?v.currentTime:origT;
+  var vid=qp('vid');
+  try{
+    var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/contact-correction',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({shot_idx:idx, original_t:origT, corrected_t:corrT})
+    });
+    var el=document.getElementById('adjsaved-'+idx);
+    if(r.ok){ var d=Math.round((corrT-origT)*1000); el.textContent='✓ saved ('+(d>0?'+':'')+d+'ms)'; }
+    else { el.textContent='✗ HTTP '+r.status; el.style.color='#ff6b6b'; }
+  }catch(e){ alert('Save error: '+e); }
 }
 
 function swap(btn,toSkel){

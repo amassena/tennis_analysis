@@ -536,6 +536,15 @@ async function handleApi(request, env, path) {
       return await handleInspectFeedbackGet(request, env, cors, fbGet[1]);
     }
 
+    // Contact-frame correction (GT label capture from the /inspect adjuster).
+    const ccMatch = path.match(/^\/api\/inspect\/([^/]+)\/contact-correction$/);
+    if (ccMatch && request.method === 'POST') {
+      return await handleContactCorrection(request, env, cors, ccMatch[1]);
+    }
+    if (ccMatch && request.method === 'GET') {
+      return await handleContactCorrectionGet(request, env, cors, ccMatch[1]);
+    }
+
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
     const recentMatch = path.match(/^\/api\/u\/(u_[a-f0-9]{8})\/recent$/);
     if (recentMatch && request.method === 'GET') {
@@ -1629,6 +1638,49 @@ async function handleInspectFeedbackGet(request, env, cors, vid) {
   if (r.error) return r.error;
   const key = `highlights/${r.owner}/${vid}/feedback.json`;
   let doc = { video_id: vid, entries: [] };
+  try { const f = await env.BUCKET.get(key); if (f) doc = await f.json(); } catch {}
+  return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
+}
+
+// POST /api/inspect/:vid/contact-correction — record a human-corrected contact
+// time for a shot (from the /inspect frame adjuster). These are GROUND-TRUTH
+// contact labels — the data a regression-head model needs to train against (#30).
+// Body: { shot_idx, original_t, corrected_t }.
+async function handleContactCorrection(request, env, cors, vid) {
+  const r = await _resolveOwnerForWrite(request, env, cors, vid);
+  if (r.error) return r.error;
+  const body = await request.json().catch(() => ({}));
+  const orig = Number(body.original_t);
+  const corr = Number(body.corrected_t);
+  if (!isFinite(corr)) return jsonResponse({ error: 'corrected_t required' }, 400, cors);
+  const entry = {
+    shot_idx: (body.shot_idx == null) ? null : Number(body.shot_idx),
+    original_t: isFinite(orig) ? Math.round(orig * 1000) / 1000 : null,
+    corrected_t: Math.round(corr * 1000) / 1000,
+    delta_ms: isFinite(orig) ? Math.round((corr - orig) * 1000) : null,
+    by: r.sub,
+    at: new Date().toISOString(),
+  };
+  const key = `highlights/${r.owner}/${vid}/contact_corrections.json`;
+  let doc = { video_id: vid, corrections: [] };
+  try { const f = await env.BUCKET.get(key); if (f) doc = await f.json(); } catch {}
+  if (!Array.isArray(doc.corrections)) doc.corrections = [];
+  // Replace any prior correction for the same shot (latest wins).
+  doc.corrections = doc.corrections.filter((c) => c.shot_idx !== entry.shot_idx);
+  doc.corrections.push(entry);
+  doc.updated_at = entry.at;
+  await env.BUCKET.put(key, JSON.stringify(doc), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  return jsonResponse({ ok: true, count: doc.corrections.length, entry }, 200, cors);
+}
+
+// GET /api/inspect/:vid/contact-correction — read corrections (owner/admin).
+async function handleContactCorrectionGet(request, env, cors, vid) {
+  const r = await _resolveOwnerForWrite(request, env, cors, vid);
+  if (r.error) return r.error;
+  const key = `highlights/${r.owner}/${vid}/contact_corrections.json`;
+  let doc = { video_id: vid, corrections: [] };
   try { const f = await env.BUCKET.get(key); if (f) doc = await f.json(); } catch {}
   return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
 }
