@@ -172,6 +172,8 @@ Files at `detections/{vid}_fused.json` (user-edited ground truth) — distinct f
 - **Quote escaping in gallery JS**: Never write `onclick="foo('bar')"` from a Python f-string. Use `data-action` attributes + event delegation. `update_r2_index.py` runs `node --check` before R2 upload.
 - **Processed file mtime ≠ recording date**: For gallery dates, always prefer iCloud asset `created`, then raw MOV ffprobe, then detection JSON `created`. Preprocessed mtime is the day of processing, not recording.
 - **Running process doesn't pick up synced files.** Kill + restart after `scp`.
+- **Pose `frames` list is SPARSE (`--skip-dead`).** `extract_poses --skip-dead` drops dead frames, so `frames[i]` is the i-th *kept* frame, NOT video frame i — list position drifts from the absolute frame number by however many dead frames preceded it. Always look poses up by each entry's `frame_idx`, never by list position. Detector `frame`/`timestamp` are absolute. (Cost a long debug in Jun 2026: filmstrips framed on the far-court opponent because `swing_composite` indexed positionally; `get_landmarks` now maps by `frame_idx`.)
+- **`wrangler r2 object get` can serve stale (edge-cached) bytes** for a key that was previously fetched, even after a fresh `put` or `delete`. To verify the TRUE object state, use a signed S3 `head_object`/`get_object` via boto3 against `https://<CF_ACCOUNT_ID>.r2.cloudflarestorage.com` (creds in `.env`), not `wrangler r2 object get`.
 
 ## Workflow rules — multi-stream development
 
