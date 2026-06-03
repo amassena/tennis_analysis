@@ -492,47 +492,45 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
         rgb.flags.writeable = False
         result = pose_model.process(rgb)
 
-        # Multi-person: select the hitter (not the distant opponent) and make it
-        # the primary pose. No-op for single-person frames + the solutions API.
+        # Decouple detection from framing (#24):
+        #   landmarks/world_landmarks       = MediaPipe's DEFAULT [0] pose. This
+        #     is exactly what the detection CNN was trained on — leaving it
+        #     untouched means detection does NOT regress.
+        #   hitter_landmarks/...            = the HITTER among multiple people,
+        #     for framing + biomech. Only differs from default when >1 person.
         all_poses = getattr(result, "all_pose_landmarks", None)
-        if all_poses and len(all_poses) > 1:
-            hi = select_hitter(all_poses, _prev_hitter_centroid)
-            result.select_primary(hi)
-            _bb = _pose_bbox(all_poses[hi])
-            if _bb:
-                _prev_hitter_centroid = (_bb[0], _bb[1])
-        elif all_poses and len(all_poses) == 1:
-            _bb = _pose_bbox(all_poses[0])
+        all_world = getattr(result, "all_world_landmarks", None)
+        hitter_idx = None
+        if all_poses and len(all_poses) >= 1:
+            hitter_idx = select_hitter(all_poses, _prev_hitter_centroid) if len(all_poses) > 1 else 0
+            _bb = _pose_bbox(all_poses[hitter_idx])
             if _bb:
                 _prev_hitter_centroid = (_bb[0], _bb[1])
 
+        def _to_rows(landmark_list):
+            return [[round(lm.x, 6), round(lm.y, 6), round(lm.z, 6),
+                     round(lm.visibility, 6)] for lm in landmark_list.landmark]
+
         if result.pose_landmarks:
             frames_detected += 1
-            landmarks = [
-                [
-                    round(lm.x, 6),
-                    round(lm.y, 6),
-                    round(lm.z, 6),
-                    round(lm.visibility, 6),
-                ]
-                for lm in result.pose_landmarks.landmark
-            ]
-            world_landmarks = [
-                [
-                    round(lm.x, 6),
-                    round(lm.y, 6),
-                    round(lm.z, 6),
-                    round(lm.visibility, 6),
-                ]
-                for lm in result.pose_world_landmarks.landmark
-            ]
-            frames.append({
+            landmarks = _to_rows(result.pose_landmarks)            # default [0]
+            world_landmarks = _to_rows(result.pose_world_landmarks)
+            frame_rec = {
                 "frame_idx": frame_idx,
                 "timestamp": round(timestamp, 6),
                 "detected": True,
                 "landmarks": landmarks,
                 "world_landmarks": world_landmarks,
-            })
+            }
+            # Add hitter pose when it differs from the default (multi-person).
+            if (hitter_idx is not None and hitter_idx != 0
+                    and all_poses and hitter_idx < len(all_poses)):
+                frame_rec["hitter_landmarks"] = _to_rows(
+                    _LandmarkListAdapter(all_poses[hitter_idx]))
+                if all_world and hitter_idx < len(all_world):
+                    frame_rec["hitter_world_landmarks"] = _to_rows(
+                        _LandmarkListAdapter(all_world[hitter_idx]))
+            frames.append(frame_rec)
 
             if skeleton_writer is not None and mp_drawing is not None:
                 rgb.flags.writeable = True

@@ -158,8 +158,11 @@ def get_keypoint(frame_data, idx):
 
     Returns (x, y, z) or None if not available.
     """
-    # Try world_landmarks first (real-world coordinates)
-    world_lm = frame_data.get("world_landmarks")
+    # Prefer the HITTER's world landmarks when present (#24, multi-person
+    # frames); falls back to the default pose. Keeps biomech measuring the
+    # player, not a distant opponent. Detection is unaffected — it reads
+    # 'landmarks' directly, not via get_keypoint.
+    world_lm = frame_data.get("hitter_world_landmarks") or frame_data.get("world_landmarks")
     if world_lm and idx < len(world_lm):
         return world_lm[idx]
 

@@ -190,7 +190,9 @@ def get_landmarks(pose_frames, frame_idx):
     pf = pose_frames[frame_idx]
     if not pf.get("detected") or not pf.get("landmarks"):
         return None
-    lms = pf["landmarks"]
+    # Prefer the HITTER pose for framing when present (#24) — falls back to the
+    # default pose on single-person frames.
+    lms = pf.get("hitter_landmarks") or pf["landmarks"]
     result = []
     for lm in lms:
         if isinstance(lm, dict):
