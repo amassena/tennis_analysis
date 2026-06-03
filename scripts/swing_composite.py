@@ -183,11 +183,36 @@ def load_data(vid):
     return det, poses, str(video_path)
 
 
+# Maps id(pose_frames list) -> (list_ref, {frame_idx: entry}). The frames list
+# is SPARSE when poses were extracted with --skip-dead (dead frames dropped), so
+# positional indexing pose_frames[n] does NOT line up with video frame n — it
+# drifts by however many dead frames preceded n (observed ~930 frames / 15s on a
+# 14-min clip). Detector frame numbers are ABSOLUTE, so we must map by each
+# entry's own frame_idx. Memoized per list so lookups stay O(1).
+_POSE_INDEX_CACHE = {}
+
+
+def _pose_index(pose_frames):
+    key = id(pose_frames)
+    cached = _POSE_INDEX_CACHE.get(key)
+    if cached is None or cached[0] is not pose_frames:
+        cached = (pose_frames,
+                  {pf.get("frame_idx", i): pf for i, pf in enumerate(pose_frames)})
+        _POSE_INDEX_CACHE[key] = cached
+    return cached[1]
+
+
 def get_landmarks(pose_frames, frame_idx):
-    """Get landmarks as list of (x, y) normalized coords, handling both formats."""
-    if frame_idx >= len(pose_frames):
+    """Get landmarks as (x, y, visibility) triples for an ABSOLUTE video frame.
+
+    Looks the frame up by frame_idx (not list position) so it works whether the
+    pose list is dense or sparse (--skip-dead). See _POSE_INDEX_CACHE note.
+    """
+    if not pose_frames:
         return None
-    pf = pose_frames[frame_idx]
+    pf = _pose_index(pose_frames).get(frame_idx)
+    if pf is None:
+        return None
     if not pf.get("detected") or not pf.get("landmarks"):
         return None
     # Prefer the HITTER pose for framing when present (#24) — falls back to the
@@ -364,6 +389,30 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     ]
     contact_panel_idx = CONTACT_PANEL_IDX
 
+    # Reject the FAR-COURT OPPONENT before framing (#24 follow-up). MediaPipe
+    # returns one pose per frame here, and at the contact frame it sometimes
+    # catches the cleanly-standing opponent across the net instead of the
+    # contorted near hitter — so the crop would lock onto the wrong, tiny,
+    # high-in-frame person (user-reported "no person / framed on the wrong
+    # guy"). Self-calibrate per shot: the hitter is the LARGEST pose across the
+    # strip. Any panel whose pose is < half that height is the distant opponent
+    # (or sparse noise) and must not drive size/position. Clean shots (one big
+    # pose throughout) and the sparse arm+racket case (all panels small, so the
+    # threshold keeps them) are both unaffected.
+    frame_bbox = {}  # fi -> bbox height in px
+    for fi in frame_indices:
+        lms = get_landmarks(pose_frames, fi)
+        if not lms:
+            continue
+        ys = [y for x, y, v in lms if v > 0.3]
+        if len(ys) >= 2:
+            frame_bbox[fi] = (max(ys) - min(ys)) * img_h
+    if not frame_bbox:
+        cap.release()
+        return None, None
+    max_h_px = max(frame_bbox.values())
+    near_frames = {fi for fi, h in frame_bbox.items() if h >= 0.5 * max_h_px}
+
     # PER-FRAME centering: each panel centered on that frame's torso.
     # Crop SIZE is uniform across panels so the framing looks consistent.
     # Crop POSITION moves with the player.
@@ -377,6 +426,8 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
     size_frames = set(frame_indices[size_panel_lo:size_panel_hi])
 
     for fi in frame_indices:
+        if fi not in near_frames:        # skip far-court opponent / noise
+            continue
         lms = get_landmarks(pose_frames, fi)
         if not lms:
             continue
@@ -394,6 +445,18 @@ def generate_composite(video_path, det, poses, shot_idx, draw_skel=True,
                     ty.append(y * img_h)
             if len(tx) >= 2:
                 per_frame_torso[fi] = (sum(tx) / len(tx), sum(ty) / len(ty))
+
+    # If the contact window had no near-hitter frames (contact caught only the
+    # opponent), size from ALL near-hitter panels so we still frame the player.
+    if len(size_xs) < 30:
+        for fi in near_frames:
+            lms = get_landmarks(pose_frames, fi)
+            if not lms:
+                continue
+            for x, y, v in lms:
+                if v > 0.3:
+                    size_xs.append(x * img_w)
+                    size_ys.append(y * img_h)
 
     if len(size_xs) < 30:
         cap.release()
