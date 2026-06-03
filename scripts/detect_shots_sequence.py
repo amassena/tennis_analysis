@@ -354,13 +354,18 @@ def find_shots(timestamps, probs, threshold=0.5, nms_gap=1.5, prominence=0.1,
 def detect_video(video_path, model, device, threshold=0.5, nms_gap=1.5,
                  step_sec=0.1, batch_size=256, per_class_thresholds=None,
                  min_class_conf=0.0, demote_below_class_conf=None,
-                 smooth_window=0):
+                 smooth_window=0, pose_path=None):
     """Run full detection pipeline on a video.
 
     Returns result dict in fused_detect.py format.
+
+    pose_path: optional explicit path to the pose JSON. Lets callers (e.g.
+        eval_holdout) read from a protected/cached location instead of the
+        churning POSES_DIR.
     """
     video_name = Path(video_path).stem
-    pose_path = os.path.join(POSES_DIR, f"{video_name}.json")
+    if pose_path is None:
+        pose_path = os.path.join(POSES_DIR, f"{video_name}.json")
 
     if not os.path.exists(pose_path):
         print(f"  No pose file for {video_name}")

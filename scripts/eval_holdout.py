@@ -45,6 +45,11 @@ from scripts.sequence_model import load_model
 
 DEFAULT_MANIFEST = PROJECT_ROOT / "eval" / "holdout" / "manifest.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "eval_results"
+# Protected pose cache for the holdout — the pipeline never writes here, so
+# these poses don't get churned/cleared like POSES_DIR. Makes eval fast +
+# reproducible and is the cure for the bogus-baseline bug (an incomplete
+# holdout silently inflated F1). Populated by scripts/cache_holdout_poses.py.
+HOLDOUT_POSE_DIR = PROJECT_ROOT / "eval" / "holdout" / "poses"
 
 # Detection knobs — match production worker config
 DETECT_THRESHOLD = 0.90
@@ -199,30 +204,38 @@ def evaluate(model_path, manifest_path, output_path):
     per_video = []
 
     t0 = time.time()
+    expected_videos = len(manifest["videos"])
+    skipped = []   # videos that could NOT be scored — makes the run INVALID
     for v in manifest["videos"]:
         vid = v["video_id"]
         video_path = PROJECT_ROOT / v["video_path"]
         gt_path = PROJECT_ROOT / v["gt_path"]
         if not video_path.exists():
-            print(f"  [WARN] missing video file for {vid}: {video_path}")
-            continue
+            print(f"  [ERROR] missing video file for {vid}: {video_path}")
+            skipped.append((vid, "missing_video")); continue
         if not gt_path.exists():
-            print(f"  [WARN] missing GT file for {vid}: {gt_path}")
-            continue
+            print(f"  [ERROR] missing GT file for {vid}: {gt_path}")
+            skipped.append((vid, "missing_gt")); continue
 
         print(f"\n  -- {vid} ({v.get('camera_angle','?')}) --")
         gt_data = json.loads(gt_path.read_text())
         gt_shots = normalize_gt_shots(gt_data)
+
+        # Prefer the protected holdout pose cache (no churn, no re-extraction).
+        cached_pose = HOLDOUT_POSE_DIR / f"{vid}.json"
+        pose_path = str(cached_pose) if cached_pose.exists() else None
 
         det_data = detect_video(
             str(video_path), model, device,
             threshold=DETECT_THRESHOLD,
             nms_gap=DETECT_NMS_GAP,
             step_sec=DETECT_STEP_SEC,
+            pose_path=pose_path,
         )
         if det_data is None:
-            print(f"  [WARN] detection failed for {vid}")
-            continue
+            print(f"  [ERROR] detection failed for {vid} "
+                  f"(pose missing? cached={cached_pose.exists()})")
+            skipped.append((vid, "detect_failed")); continue
         det_shots = normalize_det_shots(det_data)
 
         tol_tight_sec, fps_used = event_tolerance_seconds(det_data)
@@ -319,8 +332,15 @@ def evaluate(model_path, manifest_path, output_path):
         all_gt_shots, all_det_shots, tolerance=0.1, require_class_match=True)
     event_tight = compute_metrics(len(tp_tight_all), len(fp_tight_all), len(fn_tight_all))
 
+    # A run that couldn't score every holdout video is NOT a valid baseline —
+    # comparing against a partial F1 is exactly what produced the bogus 0.91.
+    valid = (len(skipped) == 0)
     out = {
         "schema_version": 1,
+        "valid": valid,                            # False = do NOT trust as baseline
+        "videos_expected": expected_videos,
+        "videos_evaluated": len(per_video),
+        "skipped": skipped,
         "model_sha256": model_sha,
         "model_path": _path_for_sidecar(model_path),
         "manifest_sha256": manifest_sha,
@@ -360,6 +380,10 @@ def evaluate(model_path, manifest_path, output_path):
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(out, indent=2))
+    if not valid:
+        print(f"\n[eval_holdout] *** INVALID RUN *** scored {len(per_video)}/"
+              f"{expected_videos} holdout videos — DO NOT use as a baseline. "
+              f"Skipped: {skipped}")
     print(f"\n[eval_holdout] event_level_F1={overall['f1']:.3f} (legacy 1.5s, headline) "
           f"event_tight_F1={event_tight['f1']:.3f} (0.1s) "
           f"FN={len(all_fn_gts)} FP={len(all_fp_dets)} "
@@ -383,6 +407,10 @@ def evaluate(model_path, manifest_path, output_path):
         except Exception as e:
             print(f"[eval_holdout] sidecar update failed: {e}")
 
+    # Non-zero exit on an invalid (incomplete) run so callers / compare_models
+    # can't silently treat a partial score as a real baseline.
+    if not valid:
+        sys.exit(3)
     return out
 
 
