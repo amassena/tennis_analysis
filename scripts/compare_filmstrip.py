@@ -182,6 +182,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--user", required=True, help="User video ID (e.g. IMG_0999)")
     ap.add_argument("--shot", type=int, default=0, help="Nth shot of --shot-type (0-indexed)")
+    ap.add_argument("--global-shot", type=int, default=None,
+                    help="Global detection index (matches comparison_shot_NNN.mp4 naming). "
+                         "Overrides --shot/--shot-type.")
     ap.add_argument("--shot-type", choices=("forehand", "backhand", "serve"),
                     help="Shot type (default: pick any shot at index --shot)")
     ap.add_argument("--pro", help="Preferred pro slug (default: auto)")
@@ -207,7 +210,13 @@ def main() -> int:
 
     print(f"Loading user data for {args.user}…")
     user_video, user_det, user_poses = load_user_data(args.user)
-    user_shot_idx = find_user_shot_idx(user_det, args.shot, args.shot_type)
+    # --global-shot maps directly to detections[N] (same indexing the per-shot
+    # comparison VIDEOS use), so a batch generator can pair compare_shot_NNN.jpg
+    # with comparison_shot_NNN.mp4. Otherwise fall back to Nth-of-type.
+    if args.global_shot is not None:
+        user_shot_idx = args.global_shot
+    else:
+        user_shot_idx = find_user_shot_idx(user_det, args.shot, args.shot_type)
     user_shot = user_det["detections"][user_shot_idx]
     shot_type = user_shot["shot_type"]
     print(f"  user shot #{user_shot_idx}: {shot_type} @ frame {user_shot.get('frame')}")
@@ -256,16 +265,19 @@ def main() -> int:
         pro_strip = cv2.flip(pro_strip, 1)
         print(f"  Mirrored pro filmstrip horizontally (handedness conversion)")
 
-    # Resize to same width (the panel heights are the same; widths can differ
-    # if aspect ratios differ).
+    # Both strips have the SAME panel count (NUM_FRAMES) with contact at the
+    # same panel index. Scaling both to equal width therefore aligns every
+    # panel column — contact-on-contact — so you compare the same swing moment
+    # in the same column. (Old code black-padded the narrower strip, which left
+    # a black bar AND mis-aligned the columns.)
     target_w = max(user_strip.shape[1], pro_strip.shape[1])
-    def pad_to_width(img, w):
+    def resize_to_width(img, w):
         if img.shape[1] == w:
             return img
-        pad = np.zeros((img.shape[0], w - img.shape[1], 3), dtype=np.uint8)
-        return np.hstack([img, pad])
-    user_strip = pad_to_width(user_strip, target_w)
-    pro_strip = pad_to_width(pro_strip, target_w)
+        h = int(round(img.shape[0] * w / img.shape[1]))
+        return cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+    user_strip = resize_to_width(user_strip, target_w)
+    pro_strip = resize_to_width(pro_strip, target_w)
 
     # Labels above each row
     user_strip = add_label_band(user_strip, f"YOU - {args.user} shot {args.shot} ({shot_type})")
