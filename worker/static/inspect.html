@@ -47,6 +47,11 @@ video{width:100%;border-radius:8px;background:#000;display:block}
 .fb button.sent{background:#13361f;color:#3ddc84;border-color:#2f7d4f}
 .fb button.good.sent{background:#13361f}
 .fb button.feed.sent{background:#3a2d12;color:#f5a623;border-color:#f5a623}
+/* Feed shots are hidden from the list by default (distracting); the header
+   toggle reveals them (dashed/dimmed) so they can still be un-flagged. */
+.shot.feed-hidden{display:none}
+body.show-feeds .shot.feed-hidden{display:block;opacity:.55;border:1px dashed #f5a623;border-radius:8px;padding:6px}
+.feedtog{background:#3a2d12;color:#f5a623;border:1px solid #f5a623;border-radius:6px;padding:3px 9px;font-size:.5em;margin-left:10px;vertical-align:middle;cursor:pointer}
 .fb .note{flex:1;min-width:120px;background:#0f0f10;border:1px solid #2a2a2e;color:#f5f5f7;border-radius:6px;padding:4px 8px;font-size:.75em}
 .adj{margin-top:8px;border:1px solid #3b2d5a;border-radius:8px;padding:8px;background:#120f18}
 .stripwrap{position:relative;line-height:0;margin-bottom:6px}
@@ -185,7 +190,9 @@ async function load(){
 
   // Per-shot: filmstrip + contact + comparison
   var sl=(shots&&shots.shots)||[];
-  html+='<section><h2>Shots <span class="n">'+sl.length+'</span></h2>';
+  var visCount=sl.filter(function(s){return !FEED_SET[s.idx];}).length;
+  html+='<section><h2>Shots <span class="n">'+visCount+'</span>'
+    +'<button id="feedToggle" class="feedtog" onclick="toggleShowFeeds()" style="display:none">🎾</button></h2>';
   if(!sl.length) html+='<div class="empty">no shots.json / 0 shots</div>';
   sl.forEach(function(s){
     var idx=s.idx, ty=s.type||'?', conf=s.confidence;
@@ -206,7 +213,7 @@ async function load(){
       ceBadge='<span class="flag" style="background:#1c1c1e;color:'+col+';border:1px solid '+col+'">'
         +(e>0?'+':'')+e+'ms</span>';
     }
-    html+='<div class="shot"><div class="hd">'
+    html+='<div class="shot'+(isFeed?' feed-hidden':'')+'" data-card="'+idx+'"><div class="hd">'
       +'<span class="ty '+ty+'">#'+idx+' '+esc(ty)+'</span>'
       +'<span class="meta">t='+(s.t!=null?s.t.toFixed(1):'?')+'s · <span class="conf'+(lowConf?' low':'')+'">conf '+(conf!=null?conf.toFixed(2):'?')+'</span>'
       +(lowConf?'<span class="flag">LOW</span>':'')+ceBadge
@@ -239,6 +246,7 @@ async function load(){
   html+='</section>';
 
   c.innerHTML=html;
+  updateFeedToggle();
 
   // Mark buttons that already have feedback from a prior session.
   var fb=await fetchJSON(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback');
@@ -250,12 +258,14 @@ async function load(){
   }
 }
 
-// Toggle the self-feed flag: stores kind='feed' and hides/shows the shot's pro
-// comparison live (a feed shouldn't be compared, but stays in the timeline).
+// Toggle the self-feed flag (kind='feed'). A feed shouldn't be compared to a
+// pro AND is distracting in the list, so flagging HIDES the whole shot card.
+// It stays in the timeline + the underlying data; the header "show feeds"
+// toggle reveals hidden feeds so they can be un-flagged.
 async function toggleFeed(idx){
   var vid=qp('vid');
   var on=!FEED_SET[idx];
-  var card=document.querySelector('.fb[data-shot="'+idx+'"]').closest('.shot');
+  var card=document.querySelector('[data-card="'+idx+'"]');
   try{
     var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback',{
       method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
@@ -263,22 +273,31 @@ async function toggleFeed(idx){
     });
     if(!r.ok){ alert('Feed flag failed: HTTP '+r.status); return; }
     FEED_SET[idx]=on;
-    var btn=card.querySelector('button[data-kind="feed"]');
-    if(btn) btn.classList.toggle('sent', on);
-    // Hide the pro comparison (a feed shouldn't be compared) but keep the shot
-    // card + filmstrip; it stays in the timeline.
-    var cmp=card.querySelector('.cmp'); if(cmp) cmp.style.display = on?'none':'';
-    // Live FEED badge so the state is visible without a reload.
-    var meta=card.querySelector('.hd .meta');
-    var badge=meta&&meta.querySelector('.feed-badge');
-    if(on && meta && !badge){
-      var s=document.createElement('span');
-      s.className='flag feed-badge';
-      s.style.cssText='background:#3a2d12;color:#f5a623;border:1px solid #f5a623';
-      s.textContent='FEED';
-      meta.appendChild(s);
-    }else if(!on && badge){ badge.remove(); }
+    if(card){
+      var btn=card.querySelector('button[data-kind="feed"]');
+      if(btn) btn.classList.toggle('sent', on);
+      card.classList.toggle('feed-hidden', on);  // hide the whole card when fed
+    }
+    updateFeedToggle();
   }catch(e){ alert('Feed flag error: '+e); }
+}
+
+// Reveal/collapse the hidden feed cards.
+function toggleShowFeeds(){
+  document.body.classList.toggle('show-feeds');
+  updateFeedToggle();
+}
+
+// Sync the header chip (count, label, visibility) + the visible-shot count to
+// the current set of feed-hidden cards.
+function updateFeedToggle(){
+  var b=document.getElementById('feedToggle'); if(!b) return;
+  var n=document.querySelectorAll('.shot.feed-hidden').length;
+  var shown=document.body.classList.contains('show-feeds');
+  if(n===0){ b.style.display='none'; document.body.classList.remove('show-feeds'); }
+  else { b.style.display=''; b.textContent='🎾 '+n+' feed'+(n>1?'s':'')+(shown?' shown — hide':' hidden — show'); }
+  var total=document.querySelectorAll('.shot').length;
+  var nc=document.querySelector('section h2 .n'); if(nc) nc.textContent=(total-n);
 }
 
 function fbBtn(idx,kind,label){
