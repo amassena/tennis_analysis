@@ -200,10 +200,10 @@ async function load(){
       +'<button data-s="'+skel+'" onclick="swap(this,1)">skeleton</button></div>';
     html+='<img class="film" src="'+film+'" loading="lazy" data-film="'+film+'" data-skel="'+skel+'" onerror="this.style.opacity=.3">';
     if(hasCmp){
-      html+='<div class="cmp"><div class="lab">PRO COMPARISON</div>'
+      html+='<div class="cmp"><div class="lab">PRO COMPARISON — your swing above, matched pro below (same contact column)</div>'
         +'<img class="cmpfs" src="'+P+'sequences/compare_shot_'+pad3(idx)+'.jpg" '
         +'loading="lazy" onerror="this.style.display=\'none\'" '
-        +'title="You (top) vs matched pro (bottom), contact-aligned">'
+        +'title="Matched pro filmstrip, contact-aligned to your strip above">'
         +'<video controls preload="none" src="'+P+vid+'_comparison_shot_'+pad3(idx)+'.mp4"></video></div>';
     }
     // Feedback row — per-shot corrections feed a ground-truth loop.

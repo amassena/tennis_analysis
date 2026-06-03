@@ -185,6 +185,9 @@ def main() -> int:
     ap.add_argument("--global-shot", type=int, default=None,
                     help="Global detection index (matches comparison_shot_NNN.mp4 naming). "
                          "Overrides --shot/--shot-type.")
+    ap.add_argument("--pro-only", action="store_true",
+                    help="Output only the matched pro's filmstrip (the user's is "
+                         "already shown in the /inspect shot card).")
     ap.add_argument("--shot-type", choices=("forehand", "backhand", "serve"),
                     help="Shot type (default: pick any shot at index --shot)")
     ap.add_argument("--pro", help="Preferred pro slug (default: auto)")
@@ -264,6 +267,16 @@ def main() -> int:
         # Horizontal flip does NOT correct camera-angle differences.
         pro_strip = cv2.flip(pro_strip, 1)
         print(f"  Mirrored pro filmstrip horizontally (handedness conversion)")
+
+    # PRO-ONLY: the user's own filmstrip is already shown in the /inspect shot
+    # card, so the comparison only needs the PRO strip below it (avoids showing
+    # the user's swing twice). Same panel layout → aligns with the card strip.
+    if args.pro_only:
+        pro_strip = add_label_band(pro_strip, f"PRO - {slug} ({shot_type})")
+        output = args.output or f"/tmp/{args.user}_{user_shot_idx}_pro_{slug}.png"
+        cv2.imwrite(output, pro_strip)
+        print(f"Saved (pro-only): {output} ({pro_strip.shape[1]}x{pro_strip.shape[0]})")
+        return 0
 
     # Both strips have the SAME panel count (NUM_FRAMES) with contact at the
     # same panel index. Scaling both to equal width therefore aligns every

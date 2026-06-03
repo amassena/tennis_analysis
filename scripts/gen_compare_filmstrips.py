@@ -60,7 +60,8 @@ def main():
         out = os.path.join(tempfile.gettempdir(), f"cmp_{vid}_{gi:03d}.png")
         r = subprocess.run(
             [sys.executable, str(Path(PROJECT_ROOT) / "scripts" / "compare_filmstrip.py"),
-             "--user", vid, "--global-shot", str(gi), "--output", out],
+             "--user", vid, "--global-shot", str(gi), "--output", out,
+             "--pro-only", "--no-skeleton"],   # pro-only film strip; user's is in the card
             cwd=PROJECT_ROOT, capture_output=True, text=True)
         if r.returncode != 0 or not os.path.exists(out):
             print(f"  shot {gi}: FAILED — {r.stderr.strip()[-160:]}")
