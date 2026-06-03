@@ -451,7 +451,7 @@ def detect_camera_angle(det_data):
 
 def generate_comparisons(video_path, output_dir=None, player=None,
                           shot_type_filter=None, max_clips=None, upload=False,
-                          user_hash=None, cross_gender=False):
+                          user_hash=None, cross_gender=False, feed_idxs=None):
     """Generate comparison clips for all eligible shots in a video.
 
     Args:
@@ -461,10 +461,15 @@ def generate_comparisons(video_path, output_dir=None, player=None,
         shot_type_filter: Only generate for this shot type
         max_clips: Maximum number of comparison clips to generate
         upload: Upload results to R2
+        feed_idxs: Global shot indices flagged as self-feeds (drop-and-hit
+            rally starters). These stay in the timeline but are NEVER compared
+            to a pro — comparing a feed to a pro groundstroke is meaningless
+            and muddles the gallery. Sourced from /inspect feed flags.
 
     Returns:
         List of generated comparison file paths
     """
+    feed_idxs = set(feed_idxs or [])
     video_name = Path(video_path).stem
 
     # Load detection data
@@ -531,7 +536,11 @@ def generate_comparisons(video_path, output_dir=None, player=None,
         (gi, d) for gi, d in enumerate(detections)
         if d.get("shot_type") in COMPARABLE_TYPES
         and (shot_type_filter is None or d.get("shot_type") == shot_type_filter)
+        and gi not in feed_idxs
     ]
+    if feed_idxs:
+        print(f"  excluding {len(feed_idxs)} feed-flagged shot(s) from comparison: "
+              f"{sorted(feed_idxs)}")
 
     if max_clips:
         eligible = eligible[:max_clips]
@@ -698,7 +707,15 @@ def main():
     parser.add_argument("--cross-gender", action="store_true",
                         help="Allow cross-gender matches (e.g. study Henin's "
                         "1HBH as a male right-hander). Default: same gender only.")
+    parser.add_argument("--feed-shots", default=None,
+                        help="Comma list of GLOBAL shot indices flagged as self-feeds "
+                             "(drop-and-hit rally starters). Excluded from comparison; "
+                             "they stay in the timeline. Sourced from /inspect feed flags.")
     args = parser.parse_args()
+
+    feed_idxs = None
+    if args.feed_shots:
+        feed_idxs = {int(x) for x in args.feed_shots.split(",") if x.strip() != ""}
 
     if not os.path.exists(args.video):
         print(f"[ERROR] Video not found: {args.video}")
@@ -713,6 +730,7 @@ def main():
         upload=args.upload,
         user_hash=args.user_hash,
         cross_gender=args.cross_gender,
+        feed_idxs=feed_idxs,
     )
 
 
