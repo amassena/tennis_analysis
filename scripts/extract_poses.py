@@ -173,7 +173,10 @@ def init_pose_model(mp_config):
     options = vision.PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
-        num_poses=3,  # detect up to 3 people; select_hitter picks the player (#24)
+        num_poses=1,  # REVERTED from 3: multi-pose mode changes MediaPipe's base
+                      # detection and regresses the shot CNN (F1 0.91→0.62, gate-
+                      # caught). #24 framing fix needs a non-pose approach (see
+                      # issue) — must NOT use num_poses>1 on the detection path.
         min_pose_detection_confidence=mp_config["min_detection_confidence"],
         min_pose_presence_confidence=mp_config.get("min_tracking_confidence", 0.5),
         min_tracking_confidence=mp_config["min_tracking_confidence"],
