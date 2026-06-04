@@ -150,19 +150,23 @@ def load_pro_data(slug: str, filename: str):
                                 f"Run extract_pro_clip_poses.py on the GPU machine first.")
     with pose_path.open() as f:
         poses = json.load(f)
-    # Look up type from index.json so the synth det matches
+    # Look up type + measured contact frame from index.json so the synth det
+    # matches. contact_frame is per-clip (detect_pro_contact.py); falls back to
+    # the legacy midpoint only for clips that predate detection.
     with INDEX_PATH.open() as f:
         index = json.load(f)
     shot_type = "forehand"
+    contact = PRO_CONTACT_FRAME
     for clip in index["players"][slug].get("clips", []):
         if clip["file"] == filename:
             shot_type = clip.get("type", "forehand")
+            contact = int(clip.get("contact_frame", PRO_CONTACT_FRAME))
             break
     fake_det = {
         "fps": PRO_FPS,
         "detections": [{
-            "frame": PRO_CONTACT_FRAME,
-            "timestamp": PRO_CONTACT_FRAME / PRO_FPS,
+            "frame": contact,
+            "timestamp": contact / PRO_FPS,
             "shot_type": shot_type,
             "confidence": 1.0,
         }],
