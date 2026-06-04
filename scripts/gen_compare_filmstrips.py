@@ -56,11 +56,16 @@ def main():
 
     print(f"{vid}: generating {len(shots)} comparison filmstrips -> {prefix}/sequences/")
     done = 0
-    for gi in shots:
+    generated = []
+    # rotate cycles the matched-clip pool so successive shots get different
+    # pros/clips (not the same Murray clip every time). Enumerate index is a
+    # fine rotation seed: consecutive same-type shots get consecutive indices.
+    for rot, gi in enumerate(shots):
         out = os.path.join(tempfile.gettempdir(), f"cmp_{vid}_{gi:03d}.png")
         r = subprocess.run(
             [sys.executable, str(Path(PROJECT_ROOT) / "scripts" / "compare_filmstrip.py"),
              "--user", vid, "--global-shot", str(gi), "--output", out,
+             "--rotate", str(rot),
              "--pro-only", "--no-skeleton"],   # pro-only film strip; user's is in the card
             cwd=PROJECT_ROOT, capture_output=True, text=True)
         if r.returncode != 0 or not os.path.exists(out):
@@ -70,7 +75,18 @@ def main():
         # compare_filmstrip writes PNG; re-encode to jpg key is fine (R2 serves bytes).
         c.upload(out, key, content_type="image/png")
         done += 1
+        generated.append(gi)
         print(f"  shot {gi}: uploaded compare_shot_{gi:03d}.jpg")
+
+    # Update the comparisons index so /inspect and the gallery surface exactly
+    # the shots that now have a strip.
+    if generated:
+        import io
+        idx_key = f"{prefix}/{vid}_comparisons_index.json"
+        idx_doc = json.dumps({"video": vid, "shots": generated}).encode()
+        c.client.put_object(Bucket=b, Key=idx_key, Body=idx_doc,
+                            ContentType="application/json")
+        print(f"updated comparisons index -> {idx_key} ({len(generated)} shots)")
     print(f"done: {done}/{len(shots)}")
     return 0 if done else 1
 

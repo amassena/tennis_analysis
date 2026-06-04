@@ -78,18 +78,27 @@ def find_user_shot_idx(det: dict, shot_n: int, shot_type: str | None = None) -> 
 DEFAULT_PREFERRED_PROS = ("murray",)  # see feedback_preferred_comparison_pros.md
 
 
+def _coarse_angle(a: str | None) -> str:
+    """Collapse the angle taxonomy to a family so the user's coarse tag
+    ('behind') matches the clips' fine tags ('behind-player'). front-broadcast
+    ->front, side-ad/side-deuce->side, behind-player->behind."""
+    return (a or "").lower().split("-")[0]
+
+
 def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
                    user_backhand_style: str = "two-handed",
-                   target_angle: str | None = None) -> tuple[str, str]:
+                   target_angle: str | None = None,
+                   rotate: int = 0) -> tuple[str, str]:
     """Return (slug, filename) of a pro clip of the right type.
 
-    Picks first matching from preferred_slug if specified, else tries
-    DEFAULT_PREFERRED_PROS first, then falls back to iteration of the
-    rest. Filters applied:
+    Builds the full pool of eligible clips (preferred pros first) and returns
+    pool[rotate % len(pool)] so successive shots cycle through different clips
+    instead of always taking the first match (the "every forehand is the same
+    Murray clip" bug). Filters:
       - shot_type (forehand/backhand/serve)
       - For backhand: hard-filter on backhand_style match
-      - If target_angle is set, hard-filter on matching angle
-    Falls back to no-angle-filter if nothing matches with the strict angle.
+      - Coarse-angle match to the user (e.g. 'behind' ~ 'behind-player'); if no
+        clip shares the user's angle family, relax and rotate over all matches.
     """
     with INDEX_PATH.open() as f:
         index = json.load(f)
@@ -101,8 +110,10 @@ def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
         ordered += [s for s in all_slugs if s not in ordered]
         slugs = ordered
     user_bh_style = (user_backhand_style or "").lower()
+    want_angle = _coarse_angle(target_angle)
 
-    def _scan(require_angle: bool) -> tuple[str, str] | None:
+    def _pool(require_angle: bool) -> list[tuple[str, str]]:
+        out = []
         for slug in slugs:
             player = index["players"].get(slug, {})
             if shot_type == "backhand" and user_bh_style:
@@ -112,29 +123,23 @@ def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
             for clip in player.get("clips", []):
                 if clip.get("type") != shot_type:
                     continue
-                if require_angle and target_angle:
-                    # Prefer auto-detected angle (4-value taxonomy from
-                    # 2026-05-21 classifier); fall back to legacy 'angle' tag.
-                    clip_angle = (clip.get("detected_angle")
-                                  or clip.get("angle") or "").lower()
-                    if clip_angle != target_angle.lower():
+                if require_angle and want_angle:
+                    clip_angle = _coarse_angle(clip.get("detected_angle")
+                                               or clip.get("angle"))
+                    if clip_angle != want_angle:
                         continue
-                local = PROS_DIR / slug / clip["file"]
-                if local.exists():
-                    return slug, clip["file"]
-        return None
+                if (PROS_DIR / slug / clip["file"]).exists():
+                    out.append((slug, clip["file"]))
+        return out
 
-    # First try with strict angle match, then relax if nothing found
-    hit = _scan(require_angle=True)
-    if hit:
-        return hit
-    hit = _scan(require_angle=False)
-    if hit:
-        return hit
-    raise FileNotFoundError(
-        f"No on-disk pro clip of type {shot_type!r} "
-        f"(backhand_style={user_bh_style!r}, target_angle={target_angle!r})"
-    )
+    # Angle-matched pool first (consistent viewpoint); relax only if empty.
+    pool = _pool(require_angle=True) or _pool(require_angle=False)
+    if not pool:
+        raise FileNotFoundError(
+            f"No on-disk pro clip of type {shot_type!r} "
+            f"(backhand_style={user_bh_style!r}, target_angle={target_angle!r})"
+        )
+    return pool[rotate % len(pool)]
 
 
 def load_pro_data(slug: str, filename: str):
@@ -196,6 +201,9 @@ def main() -> int:
                     help="Shot type (default: pick any shot at index --shot)")
     ap.add_argument("--pro", help="Preferred pro slug (default: auto)")
     ap.add_argument("--pro-clip", help="Specific clip filename (e.g. backhand_005.mp4) — bypasses matcher")
+    ap.add_argument("--rotate", type=int, default=0,
+                    help="Rotation index into the matched-clip pool, so batch "
+                         "generation cycles different pros/clips per shot.")
     ap.add_argument("--user-backhand-style", default="two-handed",
                     choices=("one-handed", "two-handed"),
                     help="User's backhand style (default two-handed). Hard-filter for backhand matches.")
@@ -253,7 +261,7 @@ def main() -> int:
             target_angle = target_angle.lower() if isinstance(target_angle, str) else "behind"
         print(f"Matching pro clip of type {shot_type!r} (angle={target_angle})…")
         slug, filename = match_pro_clip(shot_type, args.pro, args.user_backhand_style,
-                                        target_angle=target_angle)
+                                        target_angle=target_angle, rotate=args.rotate)
         print(f"  -> {slug}/{filename}")
     pro_video, pro_det, pro_poses = load_pro_data(slug, filename)
 
