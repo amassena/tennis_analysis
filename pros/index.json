@@ -368,19 +368,6 @@
      "contact_source": "pose_v1"
     },
     {
-     "file": "backhand_002.mp4",
-     "type": "backhand",
-     "contact_frame": 120,
-     "fps": 60,
-     "source": "youtube",
-     "source_video_id": "djokovic_2025_iw_4k120",
-     "source_timestamp": 161.9,
-     "confidence": 0.993,
-     "angle": "side",
-     "mirrored": false,
-     "detected_angle": "behind-player"
-    },
-    {
      "file": "backhand_003.mp4",
      "type": "backhand",
      "contact_frame": 172,
