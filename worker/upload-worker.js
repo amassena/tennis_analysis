@@ -107,6 +107,7 @@ async function handleAsset(request, env, path) {
     : (path === '/inspect' || path === '/inspect/' || path === '/inspect.html') ? '/inspect'
     : (path === '/stats' || path === '/stats/' || path === '/stats.html') ? '/stats'
     : (path === '/label' || path === '/label/' || path === '/label.html') ? '/label'
+    : (path === '/clips' || path === '/clips/' || path === '/clips.html') ? '/clips'
     : null;
   if (adminTool) {
     const u = new URL(request.url);
@@ -140,6 +141,8 @@ async function handleAsset(request, env, path) {
     key = 'static/stats.html';
   } else if (path === '/label' || path === '/label/' || path === '/label.html') {
     key = 'static/label.html';
+  } else if (path === '/clips' || path === '/clips/' || path === '/clips.html') {
+    key = 'static/clips.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {
@@ -556,6 +559,12 @@ async function handleApi(request, env, path) {
     }
     if (path === '/api/contact-gt' && request.method === 'GET') {
       return await handleContactGtGet(request, env, cors);
+    }
+
+    // GET /api/clips — the 4K session clips + which have a scrub proxy ready
+    // (for the strike-picker UI). Any signed-in user.
+    if (path === '/api/clips' && request.method === 'GET') {
+      return await handleClipsList(request, env, cors);
     }
 
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
@@ -1751,6 +1760,21 @@ async function handleContactGtGet(request, env, cors) {
   let doc = { labels: {} };
   try { const f = await env.BUCKET.get(CONTACT_GT_KEY); if (f) doc = await f.json(); } catch {}
   return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
+}
+
+async function handleClipsList(request, env, cors) {
+  const claims = await _gtAuth(request, env);
+  if (!claims) return jsonResponse({ error: 'unauthorized' }, 401, cors);
+  let man = { clips: [] };
+  try { const f = await env.BUCKET.get('clips_manifest.json'); if (f) man = await f.json(); } catch {}
+  let ready = [];
+  try { const f = await env.BUCKET.get('uploads/proxy_status.json'); if (f) ready = (await f.json()).ready || []; } catch {}
+  const readySet = new Set(ready);
+  const clips = (man.clips || []).map((c) => ({
+    ...c, proxy_ready: readySet.has(c.vid),
+    proxy_url: `/uploads/proxy_${c.vid}.mp4`,
+  }));
+  return jsonResponse({ clips }, 200, { ...cors, 'cache-control': 'no-store' });
 }
 
 // ---------------------------------------------------------------------------

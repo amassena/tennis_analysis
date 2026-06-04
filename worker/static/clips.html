@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mark a strike</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0c0c0e; color:#e8e8ea; font:15px -apple-system,system-ui,sans-serif; }
+  header { padding:14px 16px; border-bottom:1px solid #1f1f22; }
+  h1 { font-size:17px; margin:0 0 4px; }
+  .muted { color:#8a8f98; font-size:.85em; }
+  .wrap { max-width:760px; margin:0 auto; padding:14px; }
+  .clip { display:flex; align-items:center; gap:12px; padding:13px 14px; border:1px solid #232327; border-radius:10px; margin-bottom:10px; background:#141416; }
+  .clip .meta { flex:1; }
+  .clip .vid { font-weight:600; }
+  .clip .dur { color:#8a8f98; font-size:.85em; margin-top:2px; }
+  .go { background:#13361f; color:#3ddc84; border:1px solid #2f7d4f; border-radius:8px; padding:9px 14px; font-size:.9em; text-decoration:none; white-space:nowrap; }
+  .pending { background:#1c1c1e; color:#8a8f98; border:1px solid #2a2a2e; border-radius:8px; padding:9px 14px; font-size:.85em; white-space:nowrap; }
+  .help { color:#6a6f78; font-size:.85em; line-height:1.7; margin:10px 0 18px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎾 Mark a strike</h1>
+  <div class="muted">Pick a session, scrub to a shot where you hit near the camera, click <b>Mark CONTACT</b>, Save. I'll run precise contact on the native 4K there.</div>
+</header>
+<div class="wrap">
+  <div class="help" id="status">Loading sessions…</div>
+  <div id="list"></div>
+</div>
+<script>
+function fmtDur(s){ if(s==null) return '?'; var m=Math.floor(s/60), ss=Math.round(s%60); return m+':'+(ss<10?'0':'')+ss; }
+async function load(){
+  try{
+    var r = await fetch('/api/clips', {credentials:'include'});
+    if(r.status===401){ document.getElementById('status').innerHTML='<span style="color:#ff6b6b">Not signed in. Open this page via your one-tap link (…/clips?t=…).</span>'; return; }
+    var d = await r.json();
+    var clips = d.clips||[];
+    var nReady = clips.filter(function(c){return c.proxy_ready;}).length;
+    document.getElementById('status').innerHTML = nReady+' of '+clips.length+' sessions ready to scrub'
+      + (nReady<clips.length ? ' · the rest are still rendering (this page auto-refreshes).' : '.');
+    var html='';
+    clips.forEach(function(c){
+      var label = '/label?src='+encodeURIComponent(c.proxy_url)+'&fps=30&clip='+encodeURIComponent(c.vid);
+      html += '<div class="clip"><div class="meta"><div class="vid">'+c.vid+'</div>'
+        + '<div class="dur">'+fmtDur(c.duration)+' · '+(c.res||'')+' '+(c.fps||'')+'fps</div></div>'
+        + (c.proxy_ready
+            ? '<a class="go" href="'+label+'">🎾 mark strikes →</a>'
+            : '<span class="pending">⏳ rendering…</span>')
+        + '</div>';
+    });
+    document.getElementById('list').innerHTML = html;
+    if(nReady<clips.length) setTimeout(load, 15000); // poll until all proxies ready
+  }catch(e){ document.getElementById('status').textContent='error: '+e; }
+}
+load();
+</script>
+</body>
+</html>
