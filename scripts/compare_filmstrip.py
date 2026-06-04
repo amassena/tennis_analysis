@@ -123,6 +123,8 @@ def match_pro_clip(shot_type: str, preferred_slug: str | None = None,
             for clip in player.get("clips", []):
                 if clip.get("type") != shot_type:
                     continue
+                if clip.get("quality_ok") is False:   # scored junk (score_pro_clips)
+                    continue
                 if require_angle and want_angle:
                     clip_angle = _coarse_angle(clip.get("detected_angle")
                                                or clip.get("angle"))
