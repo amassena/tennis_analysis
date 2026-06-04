@@ -106,6 +106,7 @@ async function handleAsset(request, env, path) {
   const adminTool = (path === '/admin' || path === '/admin/' || path === '/admin.html') ? '/admin'
     : (path === '/inspect' || path === '/inspect/' || path === '/inspect.html') ? '/inspect'
     : (path === '/stats' || path === '/stats/' || path === '/stats.html') ? '/stats'
+    : (path === '/label' || path === '/label/' || path === '/label.html') ? '/label'
     : null;
   if (adminTool) {
     const u = new URL(request.url);
@@ -137,6 +138,8 @@ async function handleAsset(request, env, path) {
     key = 'static/inspect.html';
   } else if (path === '/stats' || path === '/stats/' || path === '/stats.html') {
     key = 'static/stats.html';
+  } else if (path === '/label' || path === '/label/' || path === '/label.html') {
+    key = 'static/label.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {
@@ -543,6 +546,16 @@ async function handleApi(request, env, path) {
     }
     if (ccMatch && request.method === 'GET') {
       return await handleContactCorrectionGet(request, env, cors, ccMatch[1]);
+    }
+
+    // Contact ground-truth labels (from the /label curation+eval UI). One R2
+    // doc keyed by clip; powers the precise-contact eval scoreboard + clip
+    // curation. Any signed-in user (JWT cookie or ?t=).
+    if (path === '/api/contact-gt' && request.method === 'POST') {
+      return await handleContactGtPost(request, env, cors);
+    }
+    if (path === '/api/contact-gt' && request.method === 'GET') {
+      return await handleContactGtGet(request, env, cors);
     }
 
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
@@ -1682,6 +1695,61 @@ async function handleContactCorrectionGet(request, env, cors, vid) {
   const key = `highlights/${r.owner}/${vid}/contact_corrections.json`;
   let doc = { video_id: vid, corrections: [] };
   try { const f = await env.BUCKET.get(key); if (f) doc = await f.json(); } catch {}
+  return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
+}
+
+// ---------------------------------------------------------------------------
+// Contact ground-truth labels (precise-contact eval + clip curation)
+// ---------------------------------------------------------------------------
+// One R2 doc `contact_gt.json`: { labels: { <clip_key>: {...} } }. Each label:
+//   { clip, fps, contact_frame, occluded_from?, occluded_to?, flag?, note?,
+//     by, at }. clip is the R2 key or vid the label refers to. Latest write
+//   per clip wins. Any signed-in user (JWT cookie or ?t=).
+function _gtAuth(request, env) {
+  const cookieToken = readCookie(request, 'tennis_jwt');
+  const url = new URL(request.url);
+  const queryToken = url.searchParams.get('t');
+  const token = cookieToken || queryToken;
+  return token && env.JWT_SIGNING_SECRET
+    ? verifyOurJWT(token, env.JWT_SIGNING_SECRET).then((c) => c).catch(() => null)
+    : Promise.resolve(null);
+}
+
+const CONTACT_GT_KEY = 'contact_gt.json';
+
+async function handleContactGtPost(request, env, cors) {
+  const claims = await _gtAuth(request, env);
+  if (!claims) return jsonResponse({ error: 'unauthorized' }, 401, cors);
+  let body;
+  try { body = await request.json(); } catch { return jsonResponse({ error: 'bad json' }, 400, cors); }
+  const clip = (body.clip || '').toString().slice(0, 200);
+  if (!clip) return jsonResponse({ error: 'clip required' }, 400, cors);
+  const entry = {
+    clip,
+    fps: body.fps == null ? null : Number(body.fps),
+    contact_frame: body.contact_frame == null ? null : Number(body.contact_frame),
+    occluded_from: body.occluded_from == null ? null : Number(body.occluded_from),
+    occluded_to: body.occluded_to == null ? null : Number(body.occluded_to),
+    flag: body.flag ? body.flag.toString().slice(0, 40) : null,
+    note: body.note ? body.note.toString().slice(0, 500) : '',
+    by: claims.sub || 'unknown',
+    at: new Date().toISOString(),
+  };
+  let doc = { labels: {} };
+  try { const f = await env.BUCKET.get(CONTACT_GT_KEY); if (f) doc = await f.json(); } catch {}
+  if (!doc.labels) doc.labels = {};
+  doc.labels[clip] = entry;
+  await env.BUCKET.put(CONTACT_GT_KEY, JSON.stringify(doc),
+    { httpMetadata: { contentType: 'application/json' } });
+  return jsonResponse({ ok: true, clip, count: Object.keys(doc.labels).length },
+    200, { ...cors, 'cache-control': 'no-store' });
+}
+
+async function handleContactGtGet(request, env, cors) {
+  const claims = await _gtAuth(request, env);
+  if (!claims) return jsonResponse({ error: 'unauthorized' }, 401, cors);
+  let doc = { labels: {} };
+  try { const f = await env.BUCKET.get(CONTACT_GT_KEY); if (f) doc = await f.json(); } catch {}
   return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
 }
 
