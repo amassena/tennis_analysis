@@ -26,6 +26,10 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
+# A real strike redirects the ball: incoming vs outgoing velocity directions
+# must differ by at least this much, else it's a single smooth arc (no contact).
+MIN_TURN_DEG = 25.0
+
 
 @dataclass
 class ContactEstimate:
@@ -36,9 +40,10 @@ class ContactEstimate:
     occluded_from: int | None     # first missing frame in the impact gap
     occluded_to: int | None       # last missing frame in the impact gap
     occluded_ms: float            # duration the ball is unseen across impact
-    method: str                   # 'intersection' | 'reversal' | 'insufficient'
+    method: str                   # 'intersection' | 'weak_no_reversal' | 'reversal' | 'insufficient'
     n_in: int                     # incoming points used
     n_out: int                    # outgoing points used
+    turn_deg: float = 0.0         # incoming↔outgoing velocity turn angle
 
 
 def _segfit(ts: np.ndarray, xs: np.ndarray, ys: np.ndarray, deg: int):
@@ -147,14 +152,36 @@ def estimate_contact(track, fps,
     cross_quality = 1.0 / (1.0 + dmin / scale)
     confidence = float(max(0.0, min(1.0, 0.5 * fit_quality + 0.5 * cross_quality)))
 
+    # --- velocity-discontinuity gate. A real contact reverses/redirects the
+    # ball: the incoming and outgoing velocity directions differ sharply. If
+    # they're nearly the same, the "intersection" is a single smooth arc with
+    # no strike (e.g. a serve where only the post-contact descent was tracked —
+    # the false-confident case). Penalise confidence by the turn angle so a
+    # monotonic arc can't pass as a contact regardless of fit quality.
+    din = np.array([px_in.deriv()(contact), py_in.deriv()(contact)])
+    dout = np.array([px_out.deriv()(contact), py_out.deriv()(contact)])
+    nin, nout = np.linalg.norm(din), np.linalg.norm(dout)
+    if nin > 1e-6 and nout > 1e-6:
+        cosang = float(np.clip((din @ dout) / (nin * nout), -1.0, 1.0))
+        turn_deg = float(np.degrees(np.arccos(cosang)))
+    else:
+        turn_deg = 0.0
+    method = 'intersection'
+    if turn_deg < MIN_TURN_DEG:
+        # ramp confidence down to ~0 as the turn vanishes; flag it.
+        confidence *= max(0.0, turn_deg / MIN_TURN_DEG) ** 2
+        method = 'weak_no_reversal'
+    confidence = float(max(0.0, min(1.0, confidence)))
+
     return ContactEstimate(
         contact_frame=round(contact, 3),
         contact_time=round(contact / fps, 5),
         confidence=round(confidence, 3),
         uncertainty_ms=round(uncertainty_ms, 1),
         occluded_from=occ_from, occluded_to=occ_to, occluded_ms=round(occ_ms, 1),
-        method='intersection',
+        method=method,
         n_in=int(in_mask.sum()), n_out=int(out_mask.sum()),
+        turn_deg=round(turn_deg, 1),
     )
 
 
@@ -209,7 +236,18 @@ def _selftest():
     ok = worst < 1000.0 / fps
     print(f"\nworst error: {worst:.1f}ms  ({'PASS' if ok else 'FAIL'} "
           f"@ <{1000.0/fps:.1f}ms = 1 frame)")
-    return 0 if ok else 1
+
+    # --- monotonic arc (no real strike): a single smooth parabola, same
+    # velocity through the "candidate". Must NOT pass as a confident contact —
+    # this is the false-serve failure mode (only one arc tracked).
+    mono = _synth(30.0, fps=fps, occlude=(0, 0), noise=0.5, g=0.0,
+                  v_in=(-3.0, -5.0), v_out=(-3.0, -5.0))  # straight line, no strike
+    est_m = estimate_contact(mono, fps, window=(28, 32))  # force candidate mid-arc
+    mono_ok = est_m.confidence < 0.35 or est_m.method == 'weak_no_reversal'
+    print(f"monotonic-arc guard: conf={est_m.confidence} turn={est_m.turn_deg}° "
+          f"method={est_m.method}  ({'PASS' if mono_ok else 'FAIL'} — must be low-conf)")
+
+    return 0 if (ok and mono_ok) else 1
 
 
 def main():
