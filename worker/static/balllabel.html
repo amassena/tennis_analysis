@@ -123,10 +123,14 @@ v.addEventListener('loadeddata', function(){ syncCanvas(); draw(); });
 
 function step(n){ v.pause(); v.currentTime=Math.max(0,Math.min((v.duration||1e9), v.currentTime+n/FPS)); }
 function advance(){ step(1); }
-function setLabel(o){ labels[curFrame()]=o; dirty=true; updateProgress(); draw(); }
+function setLabel(o){ labels[curFrame()]=o; dirty=true; updateProgress(); draw(); scheduleSave(); }
 
-// pointerdown = works for mouse AND touch; place the ball and KEEP it visible
-// (no auto-advance — you advance with → when ready, so you can see it landed).
+// Debounced autosave so labeling can't be lost (no need to remember to Save).
+var _saveT=null;
+function scheduleSave(){ clearTimeout(_saveT); _saveT=setTimeout(save, 1200); }
+
+// pointerdown = works for mouse AND touch; place the ball, then AUTO-ADVANCE so
+// you can rattle through frames with just taps. The label is saved on each frame.
 ov.addEventListener('pointerdown', function(e){
   e.preventDefault();
   var r=ov.getBoundingClientRect();
@@ -134,11 +138,12 @@ ov.addEventListener('pointerdown', function(e){
   var f=curFrame();
   labels[f]={x:+nx.toFixed(5), y:+ny.toFixed(5), visible:true}; dirty=true;
   updateProgress(); draw();
-  document.getElementById('saveState').innerHTML='<span class="ok">✓ frame '+f+' set — press → for next</span>';
+  document.getElementById('saveState').innerHTML='<span class="ok">✓ '+f+' set</span>';
+  scheduleSave(); advance();      // place + auto-advance to the next frame
 });
 function markHidden(){ setLabel({x:null,y:null,visible:false}); advance(); }
 function acceptSeed(){ var s=seed[curFrame()]; if(s&&s.visible){ setLabel({x:s.x,y:s.y,visible:true}); } else { setLabel({x:null,y:null,visible:false}); } advance(); }
-function acceptAllSeed(){ Object.keys(seed).forEach(function(f){ if(!(f in labels)){ var s=seed[f]; labels[f]=s.visible?{x:s.x,y:s.y,visible:true}:{x:null,y:null,visible:false}; } }); dirty=true; updateProgress(); draw(); document.getElementById('saveState').innerHTML='<span class="muted">seed accepted into labels — fix the wrong/missing ones, then Save</span>'; }
+function acceptAllSeed(){ Object.keys(seed).forEach(function(f){ if(!(f in labels)){ var s=seed[f]; labels[f]=s.visible?{x:s.x,y:s.y,visible:true}:{x:null,y:null,visible:false}; } }); dirty=true; updateProgress(); draw(); scheduleSave(); document.getElementById('saveState').innerHTML='<span class="muted">seed accepted — autosaving…</span>'; }
 function jumpGap(){ var f=curFrame(); for(var i=f+1;i<TOT;i++){ if(!(i in labels)){ v.currentTime=i/FPS; return; } } document.getElementById('saveState').innerHTML='<span class="ok">no more gaps to end</span>'; }
 function updateProgress(){ var n=Object.keys(labels).length; var vis=Object.values(labels).filter(function(l){return l.visible;}).length; document.getElementById('progress').textContent='labeled '+n+' ('+vis+' visible)'; }
 
@@ -161,7 +166,11 @@ document.addEventListener('keydown', function(e){
   else if(e.key==='g'){ jumpGap(); e.preventDefault(); }
   else if(e.key==='s'){ save(); e.preventDefault(); }
 });
-window.addEventListener('beforeunload', function(e){ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+// Best-effort save on leave (sendBeacon includes the auth cookie, same-origin).
+window.addEventListener('pagehide', function(){
+  if(dirty){ try{ navigator.sendBeacon('/api/ball-labels/'+encodeURIComponent(CLIP),
+    new Blob([JSON.stringify({fps:FPS,width:W,height:H,frames:labels})],{type:'application/json'})); }catch(e){} }
+});
 </script>
 </body>
 </html>
