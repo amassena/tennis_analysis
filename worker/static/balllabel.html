@@ -14,7 +14,7 @@
   .wrap { max-width:1100px; margin:0 auto; padding:12px; }
   .stage { position:relative; line-height:0; }
   video { width:100%; background:#000; border-radius:8px; display:block; }
-  canvas#ov { position:absolute; left:0; top:0; cursor:crosshair; }
+  canvas#ov { position:absolute; left:0; top:0; cursor:crosshair; touch-action:none; outline:1px solid rgba(55,192,255,.2); }
   .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:10px 0; line-height:1.4; }
   button { background:#1c1c1e; color:#d2d2d6; border:1px solid #2a2a2e; border-radius:7px; padding:7px 11px; font-size:.85em; cursor:pointer; }
   button:hover { border-color:#3a3a40; } button:active { transform:scale(.97); }
@@ -104,23 +104,37 @@ function dot(nx,ny,color,r){ ctx.beginPath(); ctx.arc(nx*ov.width, ny*ov.height,
 function draw(){
   ctx.clearRect(0,0,ov.width,ov.height); setFrameUI();
   var f=curFrame();
-  var s=seed[f]; if(s&&s.visible) dot(s.x,s.y,'rgba(55,192,255,.65)',7);
+  var s=seed[f]; if(s&&s.visible) dot(s.x,s.y,'rgba(55,192,255,.6)',6);
   var l=labels[f];
-  if(l){ if(l.visible) dot(l.x,l.y,'#3ddc84',6);
-    else { ctx.fillStyle='#ff6b6b'; ctx.font='bold 15px sans-serif'; ctx.fillText('✕ hidden', 8, 20); } }
+  if(l){
+    if(l.visible){
+      var X=l.x*ov.width, Y=l.y*ov.height;
+      ctx.strokeStyle='#3ddc84'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(X-15,Y); ctx.lineTo(X+15,Y); ctx.moveTo(X,Y-15); ctx.lineTo(X,Y+15); ctx.stroke();
+      dot(l.x,l.y,'#3ddc84',5);
+    } else { ctx.fillStyle='#ff6b6b'; ctx.font='bold 16px sans-serif'; ctx.fillText('✕ ball hidden this frame', 10, 24); }
+  }
 }
+// Redraw on every frame change. rVFC covers playback; 'seeked' covers paused
+// stepping (rVFC doesn't fire while paused); loadeddata fixes initial sizing.
 if('requestVideoFrameCallback' in HTMLVideoElement.prototype){ var rv=function(){ draw(); v.requestVideoFrameCallback(rv); }; v.requestVideoFrameCallback(rv); }
-else { v.addEventListener('seeked', draw); }
+v.addEventListener('seeked', draw);
+v.addEventListener('loadeddata', function(){ syncCanvas(); draw(); });
 
 function step(n){ v.pause(); v.currentTime=Math.max(0,Math.min((v.duration||1e9), v.currentTime+n/FPS)); }
 function advance(){ step(1); }
 function setLabel(o){ labels[curFrame()]=o; dirty=true; updateProgress(); draw(); }
 
-ov.addEventListener('click', function(e){
+// pointerdown = works for mouse AND touch; place the ball and KEEP it visible
+// (no auto-advance — you advance with → when ready, so you can see it landed).
+ov.addEventListener('pointerdown', function(e){
+  e.preventDefault();
   var r=ov.getBoundingClientRect();
   var nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
-  labels[curFrame()]={x:+nx.toFixed(5), y:+ny.toFixed(5), visible:true}; dirty=true;
-  updateProgress(); draw(); advance();      // place + auto-advance
+  var f=curFrame();
+  labels[f]={x:+nx.toFixed(5), y:+ny.toFixed(5), visible:true}; dirty=true;
+  updateProgress(); draw();
+  document.getElementById('saveState').innerHTML='<span class="ok">✓ frame '+f+' set — press → for next</span>';
 });
 function markHidden(){ setLabel({x:null,y:null,visible:false}); advance(); }
 function acceptSeed(){ var s=seed[curFrame()]; if(s&&s.visible){ setLabel({x:s.x,y:s.y,visible:true}); } else { setLabel({x:null,y:null,visible:false}); } advance(); }
