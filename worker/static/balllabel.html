@@ -13,8 +13,8 @@
   .muted { color:#8a8f98; font-size:.85em; }
   .wrap { max-width:1100px; margin:0 auto; padding:12px; }
   .stage { position:relative; line-height:0; }
-  video { width:100%; background:#000; border-radius:8px; display:block; }
-  canvas#ov { position:absolute; left:0; top:0; cursor:crosshair; touch-action:none; outline:1px solid rgba(55,192,255,.2); }
+  video { width:100%; background:#000; border-radius:8px; display:block; pointer-events:none; }
+  canvas#ov { position:absolute; left:0; top:0; width:100%; height:100%; cursor:crosshair; touch-action:none; outline:1px solid rgba(55,192,255,.3); }
   .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:10px 0; line-height:1.4; }
   button { background:#1c1c1e; color:#d2d2d6; border:1px solid #2a2a2e; border-radius:7px; padding:7px 11px; font-size:.85em; cursor:pointer; }
   button:hover { border-color:#3a3a40; } button:active { transform:scale(.97); }
@@ -61,7 +61,7 @@
     <button class="prim" onclick="save()">💾 Save (s)</button>
   </div>
   <div class="help">
-    <b>Click the ball</b> in the frame to place it → auto-advances. <kbd>n</kbd> = ball not visible (occluded/blurred-out) + advance ·
+    <b>Tap/click the ball</b> in the frame → a green crosshair drops and stays. Then <kbd>→</kbd> to the next frame and tap again. <kbd>n</kbd> = ball not visible (occluded/blurred-out) ·
     <kbd>a</kbd> = accept the blue seed dot · <kbd>g</kbd> = jump to next frame missing a label · <kbd>←</kbd>/<kbd>→</kbd> step · <kbd>s</kbd> save.<br>
     Focus on the frames around contact where the seed is missing or wrong — that's the training data the tracker needs. You don't have to label every frame.
   </div>
