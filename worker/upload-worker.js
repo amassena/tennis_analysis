@@ -1770,10 +1770,15 @@ async function handleClipsList(request, env, cors) {
   let ready = [];
   try { const f = await env.BUCKET.get('uploads/proxy_status.json'); if (f) ready = (await f.json()).ready || []; } catch {}
   const readySet = new Set(ready);
-  const clips = (man.clips || []).map((c) => ({
-    ...c, proxy_ready: readySet.has(c.vid),
-    proxy_url: `/uploads/proxy_${c.vid}.mp4`,
-  }));
+  // proxies are keyed by the short id (no 'iphone_' prefix), e.g. proxy_cb78c829.mp4
+  const clips = (man.clips || []).map((c) => {
+    const sid = c.vid.replace(/^iphone_/, '');
+    return {
+      ...c,
+      proxy_ready: readySet.has(sid) || readySet.has(c.vid),
+      proxy_url: `/uploads/proxy_${sid}.mp4`,
+    };
+  });
   return jsonResponse({ clips }, 200, { ...cors, 'cache-control': 'no-store' });
 }
 
