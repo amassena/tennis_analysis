@@ -108,6 +108,7 @@ async function handleAsset(request, env, path) {
     : (path === '/stats' || path === '/stats/' || path === '/stats.html') ? '/stats'
     : (path === '/label' || path === '/label/' || path === '/label.html') ? '/label'
     : (path === '/clips' || path === '/clips/' || path === '/clips.html') ? '/clips'
+    : (path === '/balllabel' || path === '/balllabel/' || path === '/balllabel.html') ? '/balllabel'
     : null;
   if (adminTool) {
     const u = new URL(request.url);
@@ -143,6 +144,8 @@ async function handleAsset(request, env, path) {
     key = 'static/label.html';
   } else if (path === '/clips' || path === '/clips/' || path === '/clips.html') {
     key = 'static/clips.html';
+  } else if (path === '/balllabel' || path === '/balllabel/' || path === '/balllabel.html') {
+    key = 'static/balllabel.html';
   } else if (path === '/privacy' || path === '/privacy.html') {
     key = 'static/privacy.html';
   } else if (path === '/support' || path === '/support.html') {
@@ -565,6 +568,16 @@ async function handleApi(request, env, path) {
     // (for the strike-picker UI). Any signed-in user.
     if (path === '/api/clips' && request.method === 'GET') {
       return await handleClipsList(request, env, cors);
+    }
+
+    // Ball-position labels (from the ball labeler) — per-frame {x,y,visible}
+    // training data to fine-tune the tracker. ball_labels/<clip>.json.
+    const blMatch = path.match(/^\/api\/ball-labels\/([A-Za-z0-9_-]+)$/);
+    if (blMatch && request.method === 'POST') {
+      return await handleBallLabelsPost(request, env, cors, blMatch[1]);
+    }
+    if (blMatch && request.method === 'GET') {
+      return await handleBallLabelsGet(request, env, cors, blMatch[1]);
     }
 
     // GET /api/u/<hash>/recent — user's recent upload markers (PR-B).
@@ -1762,6 +1775,37 @@ async function handleContactGtGet(request, env, cors) {
   if (!claims) return jsonResponse({ error: 'unauthorized' }, 401, cors);
   let doc = { labels: {} };
   try { const f = await env.BUCKET.get(CONTACT_GT_KEY); if (f) doc = await f.json(); } catch {}
+  return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
+}
+
+// Ball labels: ball_labels/<clip>.json = { clip, fps, width, height,
+//   frames: { <frame>: {x,y,visible} }, by, at }. Per-frame ball positions
+//   (normalized 0..1) — the fine-tune training data. Latest write wins.
+async function handleBallLabelsPost(request, env, cors, clip) {
+  const claims = await _gtAuth(request, env);
+  if (!claims) return jsonResponse({ error: 'unauthorized' }, 401, cors);
+  let body;
+  try { body = await request.json(); } catch { return jsonResponse({ error: 'bad json' }, 400, cors); }
+  const doc = {
+    clip,
+    fps: body.fps == null ? null : Number(body.fps),
+    width: body.width == null ? null : Number(body.width),
+    height: body.height == null ? null : Number(body.height),
+    frames: (body.frames && typeof body.frames === 'object') ? body.frames : {},
+    by: claims.sub || 'unknown',
+    at: new Date().toISOString(),
+  };
+  await env.BUCKET.put(`ball_labels/${clip}.json`, JSON.stringify(doc),
+    { httpMetadata: { contentType: 'application/json' } });
+  const n = Object.keys(doc.frames).length;
+  return jsonResponse({ ok: true, clip, frames: n }, 200, { ...cors, 'cache-control': 'no-store' });
+}
+
+async function handleBallLabelsGet(request, env, cors, clip) {
+  const claims = await _gtAuth(request, env);
+  if (!claims) return jsonResponse({ error: 'unauthorized' }, 401, cors);
+  let doc = { clip, frames: {} };
+  try { const f = await env.BUCKET.get(`ball_labels/${clip}.json`); if (f) doc = await f.json(); } catch {}
   return jsonResponse(doc, 200, { ...cors, 'cache-control': 'no-store' });
 }
 

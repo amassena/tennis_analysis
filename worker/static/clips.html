@@ -49,6 +49,8 @@ async function load(){
         var rl = '/label?src='+encodeURIComponent(c.window.url)+'&fps='+(c.window.fps||120)
           +'&clip='+encodeURIComponent(c.vid)+'&offset='+(c.window.offset||0)+'&pred='+(c.window.pred||0);
         refine = '<a class="go" style="background:#3b2d5a;color:#c79bff;border-color:#5a3b6b" href="'+rl+'">🎯 refine @120fps →</a>';
+        var bl = '/balllabel?clip='+encodeURIComponent(c.vid.replace(/^iphone_/,''));
+        refine += ' <a class="go" style="background:#1c2e3a;color:#37c0ff;border-color:#2f5a7d" href="'+bl+'">⚪ label ball →</a>';
       }
       html += '<div class="clip"><div class="meta"><div class="vid">'+c.vid+(c.window?' <span style="color:#c79bff">· tagged</span>':'')+'</div>'
         + '<div class="dur">'+fmtDur(c.duration)+' · '+(c.res||'')+' '+(c.fps||'')+'fps</div></div>'

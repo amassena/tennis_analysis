@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Ball Labeler</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0c0c0e; color:#e8e8ea; font:14px -apple-system,system-ui,sans-serif; }
+  header { padding:9px 14px; border-bottom:1px solid #1f1f22; display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; }
+  h1 { font-size:15px; margin:0; }
+  .muted { color:#8a8f98; font-size:.85em; }
+  .wrap { max-width:1100px; margin:0 auto; padding:12px; }
+  .stage { position:relative; line-height:0; }
+  video { width:100%; background:#000; border-radius:8px; display:block; }
+  canvas#ov { position:absolute; left:0; top:0; cursor:crosshair; }
+  .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:10px 0; line-height:1.4; }
+  button { background:#1c1c1e; color:#d2d2d6; border:1px solid #2a2a2e; border-radius:7px; padding:7px 11px; font-size:.85em; cursor:pointer; }
+  button:hover { border-color:#3a3a40; } button:active { transform:scale(.97); }
+  button.prim { background:#13361f; color:#3ddc84; border-color:#2f7d4f; }
+  button.warn { background:#3a1f1f; color:#ff8a8a; border-color:#7d2f2f; }
+  .frame { font-variant-numeric:tabular-nums; font-size:1.5em; font-weight:700; }
+  .stat { font-variant-numeric:tabular-nums; }
+  .ok { color:#3ddc84; } .err { color:#ff6b6b; }
+  .help { color:#6a6f78; font-size:.8em; line-height:1.8; margin-top:10px; }
+  kbd { background:#222; border:1px solid #333; border-radius:4px; padding:1px 5px; font-size:.85em; }
+  .legend span { margin-right:14px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; margin-right:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚪ Ball Labeler</h1>
+  <span class="muted" id="clipName">—</span>
+  <span class="muted">frame <b id="frameNum">0</b>/<span id="totFrames">?</span></span>
+  <span class="muted stat" id="progress">labeled 0</span>
+  <span class="muted" id="saveState"></span>
+</header>
+<div class="wrap">
+  <div id="noclip" class="help" style="display:none">Open with <code>?clip=&lt;shortid&gt;</code> (uses /uploads/strike_&lt;id&gt;.mp4 + ball_seed_&lt;id&gt;.json).</div>
+  <div class="stage">
+    <video id="v" playsinline preload="auto"></video>
+    <canvas id="ov"></canvas>
+  </div>
+  <div class="bar">
+    <button onclick="step(-5)">⏮ −5</button>
+    <button onclick="step(-1)">◀ −1</button>
+    <button onclick="step(1)">+1 ▶</button>
+    <button onclick="step(5)">+5 ⏭</button>
+    <button class="warn" onclick="markHidden()">✕ not visible (n)</button>
+    <button onclick="acceptSeed()">✓ accept seed (a)</button>
+    <button onclick="jumpGap()">↳ next gap (g)</button>
+    <span class="frame" id="frameBig">0</span>
+  </div>
+  <div class="bar legend">
+    <span><span class="dot" style="background:#37c0ff"></span>seed (TrackNet)</span>
+    <span><span class="dot" style="background:#3ddc84"></span>your label</span>
+    <span><span class="dot" style="background:#ff6b6b"></span>marked hidden</span>
+    <button onclick="acceptAllSeed()">accept ALL seed</button>
+    <button class="prim" onclick="save()">💾 Save (s)</button>
+  </div>
+  <div class="help">
+    <b>Click the ball</b> in the frame to place it → auto-advances. <kbd>n</kbd> = ball not visible (occluded/blurred-out) + advance ·
+    <kbd>a</kbd> = accept the blue seed dot · <kbd>g</kbd> = jump to next frame missing a label · <kbd>←</kbd>/<kbd>→</kbd> step · <kbd>s</kbd> save.<br>
+    Focus on the frames around contact where the seed is missing or wrong — that's the training data the tracker needs. You don't have to label every frame.
+  </div>
+</div>
+<script>
+var qp=new URLSearchParams(location.search);
+var CLIP=qp.get('clip');
+var SRC=qp.get('src')||('/uploads/strike_'+CLIP+'.mp4');
+var SEED_URL='/uploads/ball_seed_'+CLIP+'.json';
+var v=document.getElementById('v'), ov=document.getElementById('ov'), ctx=ov.getContext('2d');
+var FPS=120, TOT=0, W=1280, H=720;
+var seed={};       // frame -> {x,y,visible} (normalized)
+var labels={};     // frame -> {x,y,visible} (normalized) — what we save
+var dirty=false;
+
+if(!CLIP){ document.getElementById('noclip').style.display='block'; }
+else { document.getElementById('clipName').textContent='strike_'+CLIP; init(); }
+
+async function init(){
+  v.src=SRC;
+  try{ var s=await (await fetch(SEED_URL)).json();
+    FPS=s.fps||120; W=s.width||1280; H=s.height||720;
+    (s.track||[]).forEach(function(t){ seed[t.frame]={x:t.x,y:t.y,visible:t.visible}; });
+  }catch(e){}
+  // load any prior labels
+  try{ var d=await (await fetch('/api/ball-labels/'+encodeURIComponent(CLIP),{credentials:'include'})).json();
+    if(d&&d.frames) labels=d.frames;
+  }catch(e){}
+  v.addEventListener('loadedmetadata', function(){
+    TOT=Math.round(v.duration*FPS); document.getElementById('totFrames').textContent=TOT;
+    syncCanvas(); draw(); updateProgress();
+  });
+  window.addEventListener('resize', function(){ syncCanvas(); draw(); });
+}
+function syncCanvas(){ var r=v.getBoundingClientRect(); ov.width=r.width; ov.height=r.height; ov.style.width=r.width+'px'; ov.style.height=r.height+'px'; }
+function curFrame(){ return Math.round(v.currentTime*FPS); }
+function setFrameUI(){ var f=curFrame(); document.getElementById('frameNum').textContent=f; document.getElementById('frameBig').textContent=f; }
+
+function dot(nx,ny,color,r){ ctx.beginPath(); ctx.arc(nx*ov.width, ny*ov.height, r, 0, 7); ctx.fillStyle=color; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#000'; ctx.stroke(); }
+function draw(){
+  ctx.clearRect(0,0,ov.width,ov.height); setFrameUI();
+  var f=curFrame();
+  var s=seed[f]; if(s&&s.visible) dot(s.x,s.y,'rgba(55,192,255,.65)',7);
+  var l=labels[f];
+  if(l){ if(l.visible) dot(l.x,l.y,'#3ddc84',6);
+    else { ctx.fillStyle='#ff6b6b'; ctx.font='bold 15px sans-serif'; ctx.fillText('✕ hidden', 8, 20); } }
+}
+if('requestVideoFrameCallback' in HTMLVideoElement.prototype){ var rv=function(){ draw(); v.requestVideoFrameCallback(rv); }; v.requestVideoFrameCallback(rv); }
+else { v.addEventListener('seeked', draw); }
+
+function step(n){ v.pause(); v.currentTime=Math.max(0,Math.min((v.duration||1e9), v.currentTime+n/FPS)); }
+function advance(){ step(1); }
+function setLabel(o){ labels[curFrame()]=o; dirty=true; updateProgress(); draw(); }
+
+ov.addEventListener('click', function(e){
+  var r=ov.getBoundingClientRect();
+  var nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
+  labels[curFrame()]={x:+nx.toFixed(5), y:+ny.toFixed(5), visible:true}; dirty=true;
+  updateProgress(); draw(); advance();      // place + auto-advance
+});
+function markHidden(){ setLabel({x:null,y:null,visible:false}); advance(); }
+function acceptSeed(){ var s=seed[curFrame()]; if(s&&s.visible){ setLabel({x:s.x,y:s.y,visible:true}); } else { setLabel({x:null,y:null,visible:false}); } advance(); }
+function acceptAllSeed(){ Object.keys(seed).forEach(function(f){ if(!(f in labels)){ var s=seed[f]; labels[f]=s.visible?{x:s.x,y:s.y,visible:true}:{x:null,y:null,visible:false}; } }); dirty=true; updateProgress(); draw(); document.getElementById('saveState').innerHTML='<span class="muted">seed accepted into labels — fix the wrong/missing ones, then Save</span>'; }
+function jumpGap(){ var f=curFrame(); for(var i=f+1;i<TOT;i++){ if(!(i in labels)){ v.currentTime=i/FPS; return; } } document.getElementById('saveState').innerHTML='<span class="ok">no more gaps to end</span>'; }
+function updateProgress(){ var n=Object.keys(labels).length; var vis=Object.values(labels).filter(function(l){return l.visible;}).length; document.getElementById('progress').textContent='labeled '+n+' ('+vis+' visible)'; }
+
+async function save(){
+  try{
+    var r=await fetch('/api/ball-labels/'+encodeURIComponent(CLIP),{method:'POST',credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({fps:FPS,width:W,height:H,frames:labels})});
+    var d=await r.json();
+    document.getElementById('saveState').innerHTML=r.ok?'<span class="ok">✓ saved '+d.frames+' frames</span>':'<span class="err">save failed</span>';
+    dirty=false;
+  }catch(e){ document.getElementById('saveState').innerHTML='<span class="err">'+e+'</span>'; }
+}
+document.addEventListener('keydown', function(e){
+  if(e.target.tagName==='INPUT') return;
+  if(e.key==='ArrowLeft'){ step(e.shiftKey?-5:-1); e.preventDefault(); }
+  else if(e.key==='ArrowRight'){ step(e.shiftKey?5:1); e.preventDefault(); }
+  else if(e.key==='n') markHidden();
+  else if(e.key==='a') acceptSeed();
+  else if(e.key==='g'){ jumpGap(); e.preventDefault(); }
+  else if(e.key==='s'){ save(); e.preventDefault(); }
+});
+window.addEventListener('beforeunload', function(e){ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+</script>
+</body>
+</html>
