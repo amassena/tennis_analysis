@@ -1739,6 +1739,7 @@ async function handleContactGtPost(request, env, cors) {
     contact_frame: body.contact_frame == null ? null : Number(body.contact_frame),
     occluded_from: body.occluded_from == null ? null : Number(body.occluded_from),
     occluded_to: body.occluded_to == null ? null : Number(body.occluded_to),
+    shot_type: body.shot_type ? body.shot_type.toString().slice(0, 20) : null,
     flag: body.flag ? body.flag.toString().slice(0, 40) : null,
     note: body.note ? body.note.toString().slice(0, 500) : '',
     by: claims.sub || 'unknown',

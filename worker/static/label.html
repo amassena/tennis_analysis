@@ -69,13 +69,24 @@
       <span class="pred" id="predChip"></span></span>
     <span class="muted">Occlusion</span>
     <span class="chip occ" id="occChip">none</span>
+    <span class="muted">Shot type</span>
+    <span>
+      <select id="shotType">
+        <option value="">— pick —</option>
+        <option value="forehand">forehand</option>
+        <option value="backhand">backhand</option>
+        <option value="serve">serve</option>
+        <option value="slice">slice</option>
+        <option value="volley">volley</option>
+        <option value="overhead">overhead</option>
+      </select>
+    </span>
     <span class="muted">Flag</span>
     <span>
       <select id="flag">
         <option value="">— ok / no flag —</option>
         <option value="ball_invisible_at_contact">ball invisible at contact</option>
         <option value="no_clear_contact">no clear contact in clip</option>
-        <option value="wrong_stroke">wrong stroke label</option>
         <option value="bad_clip">bad clip (cut)</option>
         <option value="multiple_shots">multiple shots</option>
       </select>
@@ -166,6 +177,7 @@ async function loadExisting() {
       if (lab.contact_frame != null) { v.currentTime = lab.contact_frame / FPS; setTimeout(markContact, 60); }
       occFrom = lab.occluded_from; occTo = lab.occluded_to;
       if (occFrom != null || occTo != null) markOcc('from');
+      if (lab.shot_type) document.getElementById('shotType').value = lab.shot_type;
       if (lab.flag) document.getElementById('flag').value = lab.flag;
       if (lab.note) document.getElementById('note').value = lab.note;
       document.getElementById('saveState').innerHTML = '<span class="muted">loaded prior label (' + lab.by + ')</span>';
@@ -181,6 +193,7 @@ async function save() {
   var body = {
     clip: CLIP, fps: FPS, contact_frame: contact,
     occluded_from: occFrom, occluded_to: occTo,
+    shot_type: document.getElementById('shotType').value || null,
     flag: document.getElementById('flag').value || null,
     note: document.getElementById('note').value || ''
   };
