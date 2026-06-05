@@ -44,11 +44,18 @@ async function load(){
     var html='';
     clips.forEach(function(c){
       var label = '/label?src='+encodeURIComponent(c.proxy_url)+'&fps=30&clip='+encodeURIComponent(c.vid);
-      html += '<div class="clip"><div class="meta"><div class="vid">'+c.vid+'</div>'
+      var refine = '';
+      if (c.window && c.window.url) {
+        var rl = '/label?src='+encodeURIComponent(c.window.url)+'&fps='+(c.window.fps||120)
+          +'&clip='+encodeURIComponent(c.vid)+'&offset='+(c.window.offset||0)+'&pred='+(c.window.pred||0);
+        refine = '<a class="go" style="background:#3b2d5a;color:#c79bff;border-color:#5a3b6b" href="'+rl+'">🎯 refine @120fps →</a>';
+      }
+      html += '<div class="clip"><div class="meta"><div class="vid">'+c.vid+(c.window?' <span style="color:#c79bff">· tagged</span>':'')+'</div>'
         + '<div class="dur">'+fmtDur(c.duration)+' · '+(c.res||'')+' '+(c.fps||'')+'fps</div></div>'
         + (c.proxy_ready
             ? '<a class="go" href="'+label+'">🎾 mark strikes →</a>'
             : '<span class="pending">⏳ rendering…</span>')
+        + refine
         + '</div>';
     });
     document.getElementById('list').innerHTML = html;

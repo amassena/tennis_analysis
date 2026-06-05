@@ -113,6 +113,9 @@ var SRC = qp.get('src');
 var FPS = parseFloat(qp.get('fps') || '120');
 var CLIP = qp.get('clip') || SRC || 'unknown';
 var PRED = qp.get('pred') !== null ? parseFloat(qp.get('pred')) : null;
+// When labeling a short window cut from a longer source, OFFSET (seconds) is the
+// window's start in the source, so session_time = OFFSET + contact_frame/fps.
+var OFFSET = qp.get('offset') !== null ? parseFloat(qp.get('offset')) : 0;
 var v = document.getElementById('v');
 var contact = null, occFrom = null, occTo = null;
 
@@ -192,6 +195,8 @@ async function save() {
   }
   var body = {
     clip: CLIP, fps: FPS, contact_frame: contact,
+    offset: OFFSET,
+    contact_time: contact != null ? +(OFFSET + contact / FPS).toFixed(4) : null,
     occluded_from: occFrom, occluded_to: occTo,
     shot_type: document.getElementById('shotType').value || null,
     flag: document.getElementById('flag').value || null,

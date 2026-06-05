@@ -1737,6 +1737,8 @@ async function handleContactGtPost(request, env, cors) {
     clip,
     fps: body.fps == null ? null : Number(body.fps),
     contact_frame: body.contact_frame == null ? null : Number(body.contact_frame),
+    offset: body.offset == null ? 0 : Number(body.offset),
+    contact_time: body.contact_time == null ? null : Number(body.contact_time),
     occluded_from: body.occluded_from == null ? null : Number(body.occluded_from),
     occluded_to: body.occluded_to == null ? null : Number(body.occluded_to),
     shot_type: body.shot_type ? body.shot_type.toString().slice(0, 20) : null,
@@ -1770,14 +1772,19 @@ async function handleClipsList(request, env, cors) {
   try { const f = await env.BUCKET.get('clips_manifest.json'); if (f) man = await f.json(); } catch {}
   let ready = [];
   try { const f = await env.BUCKET.get('uploads/proxy_status.json'); if (f) ready = (await f.json()).ready || []; } catch {}
+  let windows = {};
+  try { const f = await env.BUCKET.get('uploads/strike_windows.json'); if (f) windows = await f.json(); } catch {}
   const readySet = new Set(ready);
   // proxies are keyed by the short id (no 'iphone_' prefix), e.g. proxy_cb78c829.mp4
   const clips = (man.clips || []).map((c) => {
     const sid = c.vid.replace(/^iphone_/, '');
+    const w = windows[c.vid]; // 120fps frame-exact re-tag window, if a strike was tagged
     return {
       ...c,
       proxy_ready: readySet.has(sid) || readySet.has(c.vid),
       proxy_url: `/uploads/proxy_${sid}.mp4`,
+      window: w ? { url: w.window_url, offset: w.offset, fps: w.fps,
+        pred: Math.round(((w.tag_t || 0) - (w.offset || 0)) * (w.fps || 120)) } : null,
     };
   });
   return jsonResponse({ clips }, 200, { ...cors, 'cache-control': 'no-store' });
