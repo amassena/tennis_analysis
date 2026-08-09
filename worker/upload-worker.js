@@ -2496,9 +2496,11 @@ async function handleAuthApple(request, env, cors) {
       400, cors,
     );
   }
-  // Identity = sha256(email). SIWA + magic-link share this hash so the
-  // same email always resolves to the same gallery.
-  const userHash = await userHashFromEmail(email);
+  // Identity defaults to sha256(email), but an existing account's STORED
+  // user_hash always wins. That is what makes email aliases possible (two
+  // addresses, one gallery) and stops a recomputed hash from silently
+  // orphaning a gallery that already has videos under the old hash.
+  const derivedHash = await userHashFromEmail(email);
 
   // Allowlist check. Supports `subs` (apple_sub list) AND `emails` (email
   // list) for invite-only mode. Either match grants access. Anyone with an
@@ -2533,7 +2535,6 @@ async function handleAuthApple(request, env, cors) {
   if (existingRecord) {
     userRecord = existingRecord;
     userRecord.last_seen = nowIso;
-    userRecord.user_hash = userHash;
     if (email && !userRecord.email) userRecord.email = email;
     if (userRecord.deleted_at && userRecord.status !== 'banned') {
       delete userRecord.deleted_at;
@@ -2543,7 +2544,7 @@ async function handleAuthApple(request, env, cors) {
   } else {
     userRecord = {
       apple_sub: appleSub,
-      user_hash: userHash,
+      user_hash: derivedHash,
       created_at: nowIso,
       last_seen: nowIso,
       video_count: 0,
@@ -2554,6 +2555,9 @@ async function handleAuthApple(request, env, cors) {
       auth_methods: ['apple'],
     };
   }
+  // Stored hash wins; the derived one is only a seed for brand-new accounts.
+  const userHash = userRecord.user_hash || derivedHash;
+  userRecord.user_hash = userHash;
   // Track that this account has authenticated via apple at least once.
   userRecord.auth_methods = Array.from(new Set([...(userRecord.auth_methods || []), 'apple']));
   await env.BUCKET.put(userKey, JSON.stringify(userRecord), {
@@ -2728,7 +2732,9 @@ async function handleMagicConsume(request, env, cors) {
   });
 
   const email = record.email;
-  const userHash = await userHashFromEmail(email);
+  // Seed only — an existing account's stored user_hash takes precedence, so
+  // an alias address resolves to the canonical gallery instead of a new one.
+  const derivedHash = await userHashFromEmail(email);
 
   // Find-or-create a user record. For magic-link-only users we key the
   // user record on a synthetic `magic:<email>` instead of an apple_sub.
@@ -2752,7 +2758,6 @@ async function handleMagicConsume(request, env, cors) {
       return new Response('Your account has been banned by the administrator.', { status: 403 });
     }
     userRecord.last_seen = nowIso;
-    userRecord.user_hash = userHash;
     if (userRecord.deleted_at) {
       delete userRecord.deleted_at;
       userRecord.status = 'active';
@@ -2761,7 +2766,7 @@ async function handleMagicConsume(request, env, cors) {
   } else {
     userRecord = {
       email,
-      user_hash: userHash,
+      user_hash: derivedHash,
       created_at: nowIso,
       last_seen: nowIso,
       video_count: 0,
@@ -2769,6 +2774,10 @@ async function handleMagicConsume(request, env, cors) {
       auth_methods: ['magic'],
     };
   }
+  // Stored hash wins — this is what lets an alias email land on the
+  // canonical gallery rather than minting an empty one.
+  const userHash = userRecord.user_hash || derivedHash;
+  userRecord.user_hash = userHash;
   userRecord.auth_methods = Array.from(new Set([...(userRecord.auth_methods || []), 'magic']));
   await env.BUCKET.put(userKey, JSON.stringify(userRecord), {
     httpMetadata: { contentType: 'application/json' },
