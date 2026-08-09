@@ -35,6 +35,10 @@
     .msg { font-size: 14px; min-height: 1.5em; margin-top: 8px; }
     .msg.ok { color: #1e8b3a; }
     .msg.err { color: #b00020; }
+    /* Nothing was sent (throttled, or address not on the invite list). Must
+       NOT look like success — a green "Sent" on a rejected address reads as
+       "the site is broken" rather than "wrong email". */
+    .msg.warn { color: #8a5a00; }
     .footer { margin-top: 32px; color: #6b7280; font-size: 13px; }
     .secondary { color: #6b7280; font-size: 14px; margin-top: 28px; }
     a { color: #0a84ff; }
@@ -46,6 +50,7 @@
       .footer, .secondary { color: #9aa0a6; }
       .msg.ok { color: #4cd964; }
       .msg.err { color: #ff453a; }
+      .msg.warn { color: #ffb340; }
     }
   </style>
 </head>
@@ -85,10 +90,20 @@
           body: JSON.stringify({email: email}),
         });
         var data = await resp.json().catch(function(){ return {}; });
-        if (resp.ok) {
+        // The request endpoint answers 200 even when it deliberately sends
+        // nothing (throttled, or address not on the invite list), so `resp.ok`
+        // alone is not success — `data.sent` is. Trusting resp.ok here painted
+        // a rejected address green and locked the button on "Sent", which
+        // looks exactly like a dead site.
+        if (resp.ok && data.sent === true) {
           msg.className = 'msg ok';
           msg.textContent = data.message || 'Check your inbox.';
           btn.textContent = 'Sent — check your email';
+        } else if (resp.ok) {
+          msg.className = 'msg warn';
+          msg.textContent = (data.message || 'No sign-in link was sent.')
+            + ' If nothing arrives, check the address matches your account.';
+          btn.disabled = false; btn.textContent = 'Email me a sign-in link';
         } else {
           msg.className = 'msg err';
           msg.textContent = data.detail || data.error || ('Error: ' + resp.status);
