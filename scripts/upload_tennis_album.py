@@ -24,7 +24,9 @@ Ergonomics:
     when there are a lot to backfill).
   - `--dry-run` lists what would be uploaded without actually uploading.
 
-Auth: token comes from /tmp/iphone_upload_token.txt (or override with --token).
+Auth: token comes from ~/.config/tennis/iphone_upload_token.txt, or the
+  $IPHONE_UPLOAD_TOKEN env var, or --token. Must match the Worker's
+  IPHONE_UPLOAD_TOKEN secret.
 
 Run:
     .venv/bin/python scripts/upload_tennis_album.py
@@ -53,18 +55,29 @@ from Photos import (
 from Foundation import NSURL
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TOKEN_PATH = Path("/tmp/iphone_upload_token.txt")
+# Persistent home for the upload token. This used to live in /tmp, which macOS
+# purges — the token vanished and the launchd job crash-looped for two months
+# before anyone noticed. Never put a long-lived credential in /tmp.
+DEFAULT_TOKEN_PATH = Path.home() / ".config" / "tennis" / "iphone_upload_token.txt"
+LEGACY_TOKEN_PATH = Path("/tmp/iphone_upload_token.txt")
 WORKER_BASE = "https://tennis.playfullife.com"
 
 
 def load_token(token_arg: str | None) -> str:
     if token_arg:
         return token_arg.strip()
-    if DEFAULT_TOKEN_PATH.exists():
-        return DEFAULT_TOKEN_PATH.read_text().strip()
+    env_token = os.environ.get("IPHONE_UPLOAD_TOKEN", "").strip()
+    if env_token:
+        return env_token
+    for path in (DEFAULT_TOKEN_PATH, LEGACY_TOKEN_PATH):
+        if path.exists():
+            return path.read_text().strip()
     raise SystemExit(
-        f"Token not found at {DEFAULT_TOKEN_PATH} and --token not provided. "
-        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        f"Token not found at {DEFAULT_TOKEN_PATH} (or $IPHONE_UPLOAD_TOKEN) and "
+        "--token not provided. Generate one with: "
+        "python -c \"import secrets; print(secrets.token_urlsafe(32))\" — then store it "
+        f"at {DEFAULT_TOKEN_PATH} and set the matching Worker secret with "
+        "`npx wrangler secret put IPHONE_UPLOAD_TOKEN`."
     )
 
 
@@ -378,7 +391,7 @@ def scan_once(token: str, dry_run: bool, limit: int | None,
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--token", help="Bearer token (default: read /tmp/iphone_upload_token.txt)")
+    parser.add_argument("--token", help=f"Bearer token (default: read {DEFAULT_TOKEN_PATH})")
     parser.add_argument("--dry-run", action="store_true", help="List what would be uploaded; don't upload")
     parser.add_argument("--limit", type=int, default=None,
                         help="Cap number of uploads in this run")
