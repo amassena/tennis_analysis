@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ops Dashboard — Tennis Uploader</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0b;color:#f5f5f7;padding:16px 18px 60px}
+h1{font-size:1.2em;font-weight:800;color:#c7ff00;margin-bottom:2px}
+.sub{color:#9aa0a6;font-size:.8em;margin-bottom:18px}
+.sub b{color:#f5f5f7}
+.err{color:#ff6b6b;padding:24px;text-align:center;font-size:.95em}
+section{margin-bottom:22px}
+h2{font-size:.72em;text-transform:uppercase;letter-spacing:.09em;color:#9aa0a6;margin-bottom:8px;display:flex;gap:8px;align-items:center}
+h2 .n{background:#1c1c1e;color:#c7ff00;border-radius:10px;padding:1px 8px;font-size:.95em;font-weight:700}
+.row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#141416;border:1px solid #1f1f22;border-radius:8px;margin-bottom:5px;font-size:.85em}
+.row .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.row .f{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .meta{color:#9aa0a6;font-size:.85em;white-space:nowrap}
+.row .u{color:#7a7f85;font-family:monospace;font-size:.8em}
+.row.err-row{border-color:#5a2020}
+.row .errmsg{color:#ff8888;font-size:.8em}
+.d-up{background:#c7ff00}.d-proc{background:#f5a623}.d-fail{background:#ff4d4d}.d-done{background:#3ddc84}
+.stuck{background:#5a2020;color:#ff8888;border:1px solid #ff4d4d;border-radius:4px;padding:0 5px;font-size:.7em;font-weight:800;letter-spacing:.04em;margin-right:6px}
+.chips{margin:2px 0 8px;display:flex;flex-wrap:wrap;gap:5px}
+.chip{background:#1c1c1e;color:#f5a623;border-radius:10px;padding:1px 9px;font-size:.78em;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:.82em}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #1f1f22}
+th{color:#9aa0a6;font-weight:600;font-size:.85em}
+td.n{font-variant-numeric:tabular-nums}
+.empty{color:#5a5f65;font-size:.85em;padding:6px 2px}
+.refresh{position:fixed;bottom:0;left:0;right:0;background:#0a0a0b;border-top:1px solid #1f1f22;padding:8px;text-align:center;color:#9aa0a6;font-size:.75em}
+</style>
+</head><body>
+<h1>Ops Dashboard</h1>
+<div class="sub" id="sub">loading…</div>
+<div id="content"></div>
+<div class="refresh" id="refresh">auto-refresh 10s</div>
+<script>
+// Pre-pipeline states: registered with the coordinator but a worker hasn't
+// started processing yet. These should clear fast; if not, it's stuck.
+var PRE_STATES=['coordinator_registered','awaiting_coordinator','queued','pending','queued_no_marker'];
+function ageSec(iso){ if(!iso) return Infinity; return Math.max(0,(Date.now()-new Date(iso).getTime())/1000); }
+function fmtAge(iso){
+  var s=ageSec(iso); if(s===Infinity) return '—';
+  if(s<60) return Math.round(s)+'s ago';
+  if(s<3600) return Math.round(s/60)+'m ago';
+  if(s<86400) return Math.round(s/3600)+'h ago';
+  return Math.round(s/86400)+'d ago';
+}
+function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function lastActivity(it){ return it.updated_at || it.uploaded_at; }
+// A non-terminal video that hasn't advanced in too long: 15m if it never
+// started processing (pre-state), 60m if mid-pipeline (big videos are slow).
+// This also surfaces coordinator/marker mismatches — a marker frozen at
+// coordinator_registered while the coordinator already failed shows up here.
+function isStuck(it){
+  if(it.inflight) return false;
+  if(it.status==='complete'||it.status==='failed') return false;
+  var s=ageSec(lastActivity(it));
+  return (PRE_STATES.indexOf(it.status)>=0) ? s>15*60 : s>60*60;
+}
+function row(it){
+  var stuck=isStuck(it);
+  var cls = stuck?'d-fail':it.inflight?'d-up':it.status==='failed'?'d-fail':it.status==='complete'?'d-done':'d-proc';
+  var meta = it.inflight ? 'uploading'+(it.progress!=null?' '+it.progress+'%':'')
+    : (it.stage?esc(it.stage):esc(it.status))+(it.progress!=null?' '+it.progress+'%':'');
+  var err = it.error?'<div class="errmsg">'+esc(it.error)+'</div>':'';
+  var badge = stuck?'<span class="stuck">STUCK</span>':'';
+  return '<div class="row '+(it.status==='failed'||stuck?'err-row':'')+'">'
+    +'<span class="dot '+cls+'"></span>'
+    +'<span class="f">'+esc(it.filename)+' <span class="u">'+esc((it.user_hash||'?').slice(0,10))+'</span>'+err+'</span>'
+    +'<span class="meta">'+badge+meta+' · '+fmtAge(lastActivity(it))+'</span></div>';
+}
+function sectionHTML(title,arr){
+  var body = arr.length ? arr.map(function(it){return row(it);}).join('') : '<div class="empty">none</div>';
+  return '<section><h2>'+title+' <span class="n">'+arr.length+'</span></h2>'+body+'</section>';
+}
+async function load(){
+  try{
+    var r=await fetch('/api/admin/queue',{credentials:'include',cache:'no-store'});
+    if(r.status===401||r.status===403){
+      document.getElementById('sub').textContent='';
+      document.getElementById('content').innerHTML='<div class="err">Not authorized. Sign in as an admin on tennis.playfullife.com first, then reload.</div>';
+      return;
+    }
+    var d=await r.json();
+    var items=d.items||[];
+    var uploading=items.filter(function(x){return x.inflight;});
+    var failed=items.filter(function(x){return !x.inflight&&x.status==='failed';});
+    var stuck=items.filter(isStuck);
+    var processing=items.filter(function(x){return !x.inflight&&x.status!=='failed'&&x.status!=='complete'&&!isStuck(x);});
+    var complete=items.filter(function(x){return x.status==='complete';}).slice(0,15);
+    document.getElementById('sub').innerHTML='<b>'+items.length+'</b> videos · <b>'+(d.users||[]).length+'</b> users · '
+      +(stuck.length?'<b style="color:#ff4d4d">'+stuck.length+' stuck</b> · ':'')
+      +(failed.length?'<b style="color:#ff8888">'+failed.length+' failed</b> · ':'')
+      +'updated '+fmtAge(d.generated_at);
+    var html='';
+    // Stuck/stale first — the thing you actually need to see.
+    if(stuck.length) html+=sectionHTML('⚠️ Stuck / stale',stuck);
+    html+=sectionHTML('Uploading now',uploading);
+    html+=sectionHTML('Processing',processing);
+    // Failed, with a by-stage breakdown so patterns pop (e.g. "3 at detecting_shots").
+    if(failed.length){
+      var byStage={};
+      failed.forEach(function(f){var s=f.stage||f.status||'unknown'; byStage[s]=(byStage[s]||0)+1;});
+      var chips=Object.keys(byStage).sort(function(a,b){return byStage[b]-byStage[a];})
+        .map(function(s){return '<span class="chip">'+esc(s)+' · '+byStage[s]+'</span>';}).join('');
+      html+='<section><h2>Failed <span class="n">'+failed.length+'</span></h2>'
+        +'<div class="chips">'+chips+'</div>'
+        +failed.map(function(it){return row(it);}).join('')+'</section>';
+    } else { html+=sectionHTML('Failed',failed); }
+    // per-user rollup
+    var u=(d.users||[]).sort(function(a,b){return b.total-a.total;});
+    html+='<section><h2>By user <span class="n">'+u.length+'</span></h2>';
+    if(u.length){
+      html+='<table><tr><th>user</th><th class="n">up</th><th class="n">proc</th><th class="n">fail</th><th class="n">done</th><th class="n">total</th></tr>';
+      u.forEach(function(x){html+='<tr><td style="font-family:monospace">'+esc(x.user_hash)+'</td><td class="n">'+x.uploading+'</td><td class="n">'+x.processing+'</td><td class="n">'+x.failed+'</td><td class="n">'+x.complete+'</td><td class="n">'+x.total+'</td></tr>';});
+      html+='</table>';
+    } else html+='<div class="empty">none</div>';
+    html+='</section>';
+    html+=sectionHTML('Recent complete',complete);
+    document.getElementById('content').innerHTML=html;
+  }catch(e){
+    document.getElementById('content').innerHTML='<div class="err">Error: '+esc(String(e))+'</div>';
+  }
+}
+load();
+setInterval(load,10000);
+</script>
+</body></html>

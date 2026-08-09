@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inspect — per-video report</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0b;color:#f5f5f7;padding:14px 14px 60px}
+h1{font-size:1.15em;font-weight:800;color:#c7ff00}
+.sub{color:#9aa0a6;font-size:.82em;margin:2px 0 14px}
+.sub b{color:#f5f5f7}
+.err{color:#ff6b6b;padding:20px;text-align:center}
+input,button{font:inherit}
+.bar{display:flex;gap:8px;margin-bottom:14px}
+.bar input{flex:1;min-width:0;background:#141416;border:1px solid #2a2a2e;color:#f5f5f7;border-radius:8px;padding:9px 12px}
+.bar button{background:#c7ff00;color:#0a0a0b;font-weight:700;border:0;border-radius:8px;padding:9px 14px}
+section{margin-bottom:24px}
+h2{font-size:.74em;text-transform:uppercase;letter-spacing:.09em;color:#9aa0a6;margin-bottom:9px;display:flex;gap:8px;align-items:center}
+h2 .n{background:#1c1c1e;color:#c7ff00;border-radius:10px;padding:1px 8px;font-size:.95em;font-weight:700}
+.kpis{display:flex;flex-wrap:wrap;gap:8px}
+.kpi{background:#141416;border:1px solid #1f1f22;border-radius:10px;padding:10px 14px;min-width:96px}
+.kpi .v{font-size:1.5em;font-weight:800}
+.kpi .l{color:#9aa0a6;font-size:.72em;text-transform:uppercase;letter-spacing:.06em}
+.coach{background:#101810;border-left:3px solid #3ddc84;border-radius:8px;padding:12px 14px;font-size:.92em;line-height:1.4}
+.coach .hl{font-weight:700;color:#c7ff00;margin-bottom:6px}
+video{width:100%;border-radius:8px;background:#000;display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shot{background:#141416;border:1px solid #1f1f22;border-radius:10px;padding:10px;margin-bottom:10px}
+.shot .hd{display:flex;justify-content:space-between;align-items:center;font-size:.82em;margin-bottom:7px}
+.shot .ty{font-weight:700}
+.shot .ty.forehand{color:#b07cd6}.shot .ty.backhand{color:#5fd493}.shot .ty.serve{color:#ffa64d}
+.shot .meta{color:#9aa0a6;font-size:.92em}
+.conf{font-variant-numeric:tabular-nums}
+.conf.low{color:#ff8888}
+.film{width:100%;border-radius:6px;display:block;margin-bottom:5px;background:#1c1c1e}
+.tog{display:flex;gap:6px;margin-bottom:6px}
+.tog button{flex:1;background:#1c1c1e;color:#9aa0a6;border:1px solid #2a2a2e;border-radius:6px;padding:4px;font-size:.72em}
+.tog button.on{background:#2a2a2e;color:#c7ff00}
+.cmp{border:1px solid #5a3b6b;border-radius:8px;padding:7px;margin-top:7px}
+.cmp .lab{color:#c79bff;font-size:.72em;font-weight:700;margin-bottom:5px}
+.cmp .cmpfs{width:100%;border-radius:6px;display:block;margin-bottom:6px;background:#1c1c1e}
+.empty{color:#5a5f65;font-size:.85em;padding:6px 2px}
+.flag{background:#5a2020;color:#ff8888;border-radius:5px;padding:1px 6px;font-size:.68em;font-weight:700;margin-left:6px}
+.fb{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;border-top:1px solid #1f1f22;padding-top:7px}
+.fb button{background:#1c1c1e;color:#9aa0a6;border:1px solid #2a2a2e;border-radius:6px;padding:4px 9px;font-size:.72em}
+.fb button:active{transform:scale(.96)}
+.fb button.sent{background:#13361f;color:#3ddc84;border-color:#2f7d4f}
+.fb button.good.sent{background:#13361f}
+.fb button.feed.sent{background:#3a2d12;color:#f5a623;border-color:#f5a623}
+/* Feed shots are hidden from the list by default (distracting); the header
+   toggle reveals them (dashed/dimmed) so they can still be un-flagged. */
+.shot.feed-hidden{display:none}
+body.show-feeds .shot.feed-hidden{display:block;opacity:.55;border:1px dashed #f5a623;border-radius:8px;padding:6px}
+.feedtog{background:#3a2d12;color:#f5a623;border:1px solid #f5a623;border-radius:6px;padding:3px 9px;font-size:.5em;margin-left:10px;vertical-align:middle;cursor:pointer}
+.fb .note{flex:1;min-width:120px;background:#0f0f10;border:1px solid #2a2a2e;color:#f5f5f7;border-radius:6px;padding:4px 8px;font-size:.75em}
+.adj{margin-top:8px;border:1px solid #3b2d5a;border-radius:8px;padding:8px;background:#120f18}
+.stripwrap{position:relative;line-height:0;margin-bottom:6px}
+.stripwrap img{width:100%;border-radius:6px;display:block}
+.pz{position:absolute;top:0;bottom:0;cursor:pointer;border-left:1px solid rgba(255,255,255,.06)}
+.pz[data-cur="1"]{box-shadow:inset 0 0 0 2px rgba(255,140,0,.5)}
+.pz:hover{background:rgba(199,255,0,.12)}
+.pz.sel{box-shadow:inset 0 0 0 3px #c7ff00;background:rgba(199,255,0,.15)}
+.adj .ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.adj .ctl .save{background:#c7ff00;color:#0a0a0b;font-weight:700;border:0;border-radius:6px;padding:5px 12px;font-size:.8em}
+.adj .ctl .save:disabled{opacity:.4}
+.adj .ctl .t{color:#c79bff;font-size:.78em;font-variant-numeric:tabular-nums}
+.adj .saved{color:#3ddc84;font-size:.78em;margin-left:6px}
+details summary{cursor:pointer;color:#9aa0a6;font-size:.85em;padding:4px 0}
+.thumb{width:100%;border-radius:8px;display:block;margin-bottom:10px;background:#1c1c1e}
+.muted{color:#6a6f75}
+</style>
+</head><body>
+<h1>Per-video Inspector</h1>
+<div class="sub" id="sub">Enter a video id (e.g. iphone_9ca0a615). User hash defaults to yours.</div>
+<div class="bar">
+  <input id="vid" placeholder="video id (iphone_xxxxxxxx)" autocapitalize="off" autocorrect="off">
+  <button onclick="go()">Load</button>
+</div>
+<div id="content"></div>
+
+<script>
+var BASE='https://tennis.playfullife.com';
+var CURRENT_UH=null;
+var STRIPS=null, STRIP_BY_IDX={}, CORR_BY_IDX={};
+var FB=null, FEED_SET={}, FB_KINDS={};
+// Fallback panel offsets (matches swing_composite PANEL_OFFSETS_SEC) for strips
+// rendered before strips.json existed.
+var DEFAULT_OFFSETS=[-0.700,-0.350,-0.150,-0.075,-0.037,0.0,0.037,0.075,0.150,0.350,0.700];
+function qp(k){return new URL(location.href).searchParams.get(k);}
+function esc(s){return (s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function pad3(n){return String(n).padStart(3,'0');}
+
+async function fetchJSON(url){
+  var r=await fetch(url,{credentials:'include',cache:'no-store'});
+  if(!r.ok) return null;
+  try{return await r.json();}catch(e){return null;}
+}
+async function head(url){ try{var r=await fetch(url,{method:'HEAD',credentials:'include',cache:'no-store'}); return r.ok;}catch(e){return false;} }
+
+function go(){
+  var v=document.getElementById('vid').value.trim();
+  if(!v) return;
+  var u=qp('u')||'__SELF__';
+  var url=new URL(location.href); url.searchParams.set('vid',v); if(qp('u'))url.searchParams.set('u',qp('u'));
+  history.replaceState(null,'',url); load();
+}
+
+async function resolveUserHash(vid){
+  // explicit ?u= wins; else discover from the upload marker via /api/queue-less path:
+  if(qp('u')) return qp('u');
+  // try the admin queue to find this vid's owner
+  var d=await fetchJSON(BASE+'/api/admin/queue');
+  if(d&&d.items){ var it=d.items.find(function(x){return x.video_id===vid;}); if(it&&it.user_hash) return it.user_hash; }
+  return null;
+}
+
+async function load(){
+  var vid=qp('vid'); var c=document.getElementById('content');
+  if(!vid){ c.innerHTML=''; return; }
+  document.getElementById('vid').value=vid;
+  c.innerHTML='<div class="muted">Loading '+esc(vid)+'…</div>';
+
+  var uh=await resolveUserHash(vid);
+  if(!uh){ c.innerHTML='<div class="err">Could not resolve user for '+esc(vid)+'. Add ?u=u_xxxx to the URL, or sign in as admin.</div>'; return; }
+  CURRENT_UH=uh;
+  var P=BASE+'/u/'+uh+'/'+vid+'/';           // per-user asset prefix
+  document.getElementById('sub').innerHTML='<b>'+esc(vid)+'</b> · user <b>'+esc(uh)+'</b>';
+
+  var meta=await fetchJSON(P+'meta.json');
+  var shots=await fetchJSON(P+'shots.json');
+  var coaching=await fetchJSON(P+'coaching.json');
+  var cmpIdx=await fetchJSON(P+vid+'_comparisons_index.json');
+  var cmpShots=(cmpIdx&&cmpIdx.shots)||[];
+  // Per-shot contact error (audio-strike truth). Index by shot order so each
+  // card can show how far the detected contact is from the ball-strike sound.
+  var contact=await fetchJSON(P+'contact.json');
+  var contactByIdx={};
+  if(contact&&contact.per_shot){ contact.per_shot.forEach(function(s,i){ contactByIdx[i]=s; }); }
+  var ca=(meta&&meta.contact_accuracy)||null;
+  // Strip geometry (panel offsets + per-shot contact anchor) for the adjuster.
+  STRIPS=await fetchJSON(P+'sequences/strips.json');
+  STRIP_BY_IDX={};
+  if(STRIPS&&STRIPS.shots){ STRIPS.shots.forEach(function(s){ STRIP_BY_IDX[s.shot_idx]=s; }); }
+  // Already-saved corrections → mark them.
+  var corr=await fetchJSON(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/contact-correction');
+  CORR_BY_IDX={};
+  if(corr&&corr.corrections){ corr.corrections.forEach(function(c){ CORR_BY_IDX[c.shot_idx]=c; }); }
+  // Feedback (loaded BEFORE the shot loop so feed-flagged shots hide their
+  // pro comparison). FEED_SET = shots the user marked as a self-feed.
+  FB=await fetchJSON(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback');
+  FEED_SET={}; FB_KINDS={};
+  if(FB&&FB.entries){ FB.entries.forEach(function(e){
+    (FB_KINDS[e.shot_idx]=FB_KINDS[e.shot_idx]||{})[e.kind]=true;
+    // entries are append-ordered → last 'feed' value for a shot wins (toggle).
+    if(e.kind==='feed') FEED_SET[e.shot_idx]=(e.value!==false);
+  }); }
+
+  var html='';
+
+  // KPIs
+  var bd=(meta&&meta.breakdown)||{};
+  html+='<section><div class="kpis">'
+    +kpi(meta?meta.shots:'—','shots')
+    +kpi(meta&&meta.duration?Math.round(meta.duration)+'s':'—','duration')
+    +Object.keys(bd).map(function(k){return kpi(bd[k],k);}).join('')
+    +kpi(cmpShots.length,'comparisons')
+    +(ca&&ca.median_abs_error_ms!=null?kpi(ca.median_abs_error_ms+'ms','contact err (med)'):'')
+    +'</div>';
+  if(ca){
+    html+='<div class="muted" style="margin-top:6px">Contact accuracy: '+ca.confident_matches+'/'+ca.shots
+      +' shots audio-confirmed · median |err| '+ca.median_abs_error_ms+'ms · bias '
+      +(ca.median_signed_error_ms>0?'+':'')+ca.median_signed_error_ms+'ms '
+      +'('+(ca.median_signed_error_ms<0?'detection early':'detection late')+')</div>';
+  }
+  if(meta&&(meta.shots===0)) html+='<div class="empty">⚠️ 0 shots — would be hidden from the gallery.</div>';
+  html+='</section>';
+
+  // Timeline video + thumbnail
+  html+='<section><h2>Timeline</h2>'
+    +'<img class="thumb" src="'+BASE+'/u/'+uh+'/thumbs/'+vid+'.jpg" onerror="this.style.display=\'none\'">'
+    +'<video controls preload="metadata" src="'+P+vid+'_timeline.mp4"></video></section>';
+
+  // Coach
+  if(coaching){
+    html+='<section><h2>Coach</h2><div class="coach"><div class="hl">'+esc(coaching.headline||'')+'</div>';
+    (coaching.strengths||[]).forEach(function(s){ html+='✅ <b>'+esc(s.point||'')+'</b> — '+esc(s.detail||'')+'<br>'; });
+    (coaching.work_on||[]).forEach(function(s){ html+='🔧 <b>'+esc(s.point||'')+'</b> — '+esc(s.detail||'')+'<br>'; });
+    html+='</div></section>';
+  }
+
+  // Per-shot: filmstrip + contact + comparison
+  var sl=(shots&&shots.shots)||[];
+  var visCount=sl.filter(function(s){return !FEED_SET[s.idx];}).length;
+  html+='<section><h2>Shots <span class="n">'+visCount+'</span>'
+    +'<button id="feedToggle" class="feedtog" onclick="toggleShowFeeds()" style="display:none">🎾</button></h2>';
+  if(!sl.length) html+='<div class="empty">no shots.json / 0 shots</div>';
+  sl.forEach(function(s){
+    var idx=s.idx, ty=s.type||'?', conf=s.confidence;
+    var film=P+'sequences/shot_'+pad3(idx)+'_'+ty+'.jpg';
+    var skel=P+'sequences/shot_'+pad3(idx)+'_'+ty+'_skel.jpg';
+    // A shot flagged as a self-feed shouldn't be compared to a pro (no one
+    // compares their drop-feed to a pro shot) — but stays in the timeline.
+    var isFeed=!!FEED_SET[idx];
+    var hasCmp=cmpShots.indexOf(idx)>=0 && !isFeed;
+    var lowConf = (conf!=null && conf<0.6);
+    // Contact-error badge: how far the detected contact is from the audio
+    // strike (only for audio-confirmed shots). Green <80ms, amber <150, red >=150.
+    var cs=contactByIdx[idx];
+    var ceBadge='';
+    if(cs&&cs.confident&&cs.contact_error_ms!=null){
+      var e=cs.contact_error_ms, ae=Math.abs(e);
+      var col=ae<80?'#3ddc84':ae<150?'#f5a623':'#ff4d4d';
+      ceBadge='<span class="flag" style="background:#1c1c1e;color:'+col+';border:1px solid '+col+'">'
+        +(e>0?'+':'')+e+'ms</span>';
+    }
+    html+='<div class="shot'+(isFeed?' feed-hidden':'')+'" data-card="'+idx+'"><div class="hd">'
+      +'<span class="ty '+ty+'">#'+idx+' '+esc(ty)+'</span>'
+      +'<span class="meta">t='+(s.t!=null?s.t.toFixed(1):'?')+'s · <span class="conf'+(lowConf?' low':'')+'">conf '+(conf!=null?conf.toFixed(2):'?')+'</span>'
+      +(lowConf?'<span class="flag">LOW</span>':'')+ceBadge
+      +(isFeed?'<span class="flag feed-badge" style="background:#3a2d12;color:#f5a623;border:1px solid #f5a623">FEED</span>':'')
+      +(hasCmp?'<span class="flag" style="background:#3b2d5a;color:#c79bff">vs pro</span>':'')+'</span></div>';
+    html+='<div class="tog"><button class="on" data-f="'+film+'" onclick="swap(this,0)">film</button>'
+      +'<button data-s="'+skel+'" onclick="swap(this,1)">skeleton</button></div>';
+    html+='<img class="film" src="'+film+'" loading="lazy" data-film="'+film+'" data-skel="'+skel+'" onerror="this.style.opacity=.3">';
+    if(hasCmp){
+      html+='<div class="cmp"><div class="lab">PRO COMPARISON — your swing above, matched pro below (same contact column)</div>'
+        +'<img class="cmpfs" src="'+P+'sequences/compare_shot_'+pad3(idx)+'.jpg" '
+        +'loading="lazy" onerror="this.style.display=\'none\'" '
+        +'title="Matched pro filmstrip, contact-aligned to your strip above"></div>';
+    }
+    // Feedback row — per-shot corrections feed a ground-truth loop.
+    var st = (s.t!=null?s.t:0);
+    html+='<div class="fb" data-shot="'+idx+'">'
+      +fbBtn(idx,'wrong_type','wrong type')
+      +fbBtn(idx,'not_a_shot','not a shot')
+      +fbBtn(idx,'contact_off','contact off')
+      +(hasCmp?fbBtn(idx,'bad_comparison','bad compare'):'')
+      +'<button data-kind="feed" class="feed'+(isFeed?' sent':'')+'" onclick="toggleFeed('+idx+')">🎾 feed (don’t compare)</button>'
+      +fbBtn(idx,'good','👍')
+      +'<button onclick="openAdjust('+idx+','+st+',this)">✎ adjust contact</button>'
+      +'<input class="note" placeholder="note… (Enter to send)" onkeydown="if(event.key===\'Enter\'){sendFb('+idx+',\'note\',this.value);this.value=\'\';}">'
+      +'</div>';
+    html+='<div class="adj" id="adj-'+idx+'" style="display:none"></div>';
+    html+='</div>';
+  });
+  html+='</section>';
+
+  c.innerHTML=html;
+  updateFeedToggle();
+
+  // Mark buttons that already have feedback from a prior session.
+  var fb=await fetchJSON(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback');
+  if(fb&&fb.entries){
+    fb.entries.forEach(function(e){
+      var row=c.querySelector('.fb[data-shot="'+e.shot_idx+'"]');
+      if(row){ var b=row.querySelector('button[data-kind="'+e.kind+'"]'); if(b) b.classList.add('sent'); }
+    });
+  }
+}
+
+// Toggle the self-feed flag (kind='feed'). A feed shouldn't be compared to a
+// pro AND is distracting in the list, so flagging HIDES the whole shot card.
+// It stays in the timeline + the underlying data; the header "show feeds"
+// toggle reveals hidden feeds so they can be un-flagged.
+async function toggleFeed(idx){
+  var vid=qp('vid');
+  var on=!FEED_SET[idx];
+  var card=document.querySelector('[data-card="'+idx+'"]');
+  try{
+    var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:'feed', shot_idx:idx, value:on, note:on?'self-feed; exclude from comparison':'unflagged'})
+    });
+    if(!r.ok){ alert('Feed flag failed: HTTP '+r.status); return; }
+    FEED_SET[idx]=on;
+    if(card){
+      var btn=card.querySelector('button[data-kind="feed"]');
+      if(btn) btn.classList.toggle('sent', on);
+      card.classList.toggle('feed-hidden', on);  // hide the whole card when fed
+    }
+    updateFeedToggle();
+  }catch(e){ alert('Feed flag error: '+e); }
+}
+
+// Reveal/collapse the hidden feed cards.
+function toggleShowFeeds(){
+  document.body.classList.toggle('show-feeds');
+  updateFeedToggle();
+}
+
+// Sync the header chip (count, label, visibility) + the visible-shot count to
+// the current set of feed-hidden cards.
+function updateFeedToggle(){
+  var b=document.getElementById('feedToggle'); if(!b) return;
+  var n=document.querySelectorAll('.shot.feed-hidden').length;
+  var shown=document.body.classList.contains('show-feeds');
+  if(n===0){ b.style.display='none'; document.body.classList.remove('show-feeds'); }
+  else { b.style.display=''; b.textContent='🎾 '+n+' feed'+(n>1?'s':'')+(shown?' shown — hide':' hidden — show'); }
+  var total=document.querySelectorAll('.shot').length;
+  var nc=document.querySelector('section h2 .n'); if(nc) nc.textContent=(total-n);
+}
+
+function fbBtn(idx,kind,label){
+  return '<button data-kind="'+kind+'" class="'+kind+'" onclick="sendFb('+idx+',\''+kind+'\')">'+esc(label)+'</button>';
+}
+
+async function sendFb(shotIdx, kind, note){
+  var vid=qp('vid'); if(!vid) return;
+  var row=document.querySelector('.fb[data-shot="'+shotIdx+'"]');
+  try{
+    var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/feedback',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:kind, shot_idx:shotIdx, note:note||''})
+    });
+    if(r.ok && row){ var b=row.querySelector('button[data-kind="'+kind+'"]'); if(b){ b.classList.add('sent'); b.textContent=b.textContent.replace(/ ✓$/,'')+' ✓'; } }
+    else if(!r.ok){ alert('Feedback failed: HTTP '+r.status+(r.status===403?' (sign in as owner/admin)':'')); }
+  }catch(e){ alert('Feedback error: '+e); }
+}
+
+// Contact-frame adjuster — print the filmstrip and let the user TAP the panel
+// that's actually contact (move the orange keyframe). Each panel is at a known
+// time offset from the strip's contact anchor, so a tap → corrected contact time.
+function openAdjust(idx, contactT, btn){
+  var card=btn.closest('.shot');
+  var img=card.querySelector('.film');
+  var box=document.getElementById('adj-'+idx);
+  // Toggle OFF: remove the zone overlay from the existing strip + clear box.
+  if(box.style.display!=='none'){
+    box.style.display='none'; box.innerHTML='';
+    var w=card.querySelector('.stripwrap');
+    if(w){ w.parentNode.insertBefore(img, w); w.remove(); }
+    return;
+  }
+  box.style.display='block';
+  var strip=STRIP_BY_IDX[idx];
+  var offsets=(STRIPS&&STRIPS.panel_offsets_sec)||DEFAULT_OFFSETS;
+  // anchor = the contact time the strip was actually built around (audio-snapped).
+  var anchor=(strip&&strip.contact_timestamp!=null)?strip.contact_timestamp:contactT;
+  var n=offsets.length;
+  var curIdx=(STRIPS&&STRIPS.contact_panel_idx!=null)?STRIPS.contact_panel_idx:offsets.indexOf(0.0);
+  // Make the EXISTING filmstrip clickable: wrap it + overlay N tap-zones.
+  if(!card.querySelector('.stripwrap')){
+    var wrap=document.createElement('div'); wrap.className='stripwrap';
+    img.parentNode.insertBefore(wrap, img); wrap.appendChild(img);
+    for(var k=0;k<n;k++){
+      var z=document.createElement('div'); z.className='pz'; z.dataset.k=k;
+      z.style.left=(k*100/n)+'%'; z.style.width=(100/n)+'%';
+      if(k===curIdx) z.dataset.cur='1';
+      z.onclick=(function(kk){return function(){pickPanel(idx,kk,anchor);};})(k);
+      wrap.appendChild(z);
+    }
+  }
+  var saved=CORR_BY_IDX[idx];
+  box.innerHTML=
+    '<div class="muted" style="font-size:.74em;margin-bottom:5px">Tap the panel in the filmstrip above where the ball meets the racket. Orange = current. Saved as a ground-truth label.</div>'
+    +'<div class="ctl"><span class="t" id="adjt-'+idx+'">current contact: panel '+curIdx+' ('+anchor.toFixed(2)+'s)</span>'
+    +'<button class="save" id="adjsave-'+idx+'" onclick="saveContact('+idx+','+contactT+')" disabled>Save</button>'
+    +'<span class="saved" id="adjsaved-'+idx+'">'+(saved?'previously: '+(saved.delta_ms>0?'+':'')+saved.delta_ms+'ms':'')+'</span></div>';
+  box._pick=null;
+}
+function pickPanel(idx, k, anchor){
+  var offsets=(STRIPS&&STRIPS.panel_offsets_sec)||DEFAULT_OFFSETS;
+  var box=document.getElementById('adj-'+idx);
+  var card=box.closest('.shot');
+  var corrT=anchor + offsets[k];
+  box._pick=corrT;
+  // zones live in the card's filmstrip wrap (not the box)
+  card.querySelectorAll('.stripwrap .pz').forEach(function(z){ z.classList.toggle('sel', +z.dataset.k===k); });
+  var d=Math.round(offsets[k]*1000);
+  document.getElementById('adjt-'+idx).textContent='panel '+k+' → '+corrT.toFixed(2)+'s ('+(d>0?'+':'')+d+'ms from current)';
+  document.getElementById('adjsave-'+idx).disabled=false;
+}
+async function saveContact(idx, origT){
+  var box=document.getElementById('adj-'+idx);
+  if(box._pick==null) return;
+  var vid=qp('vid');
+  try{
+    var r=await fetch(BASE+'/api/inspect/'+encodeURIComponent(vid)+'/contact-correction',{
+      method:'POST', credentials:'include', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({shot_idx:idx, original_t:origT, corrected_t:box._pick})
+    });
+    var el=document.getElementById('adjsaved-'+idx);
+    if(r.ok){ var d=Math.round((box._pick-origT)*1000); el.textContent='✓ saved ('+(d>0?'+':'')+d+'ms)'; el.style.color='#3ddc84'; }
+    else { el.textContent='✗ HTTP '+r.status+(r.status===403?' (sign in)':''); el.style.color='#ff6b6b'; }
+  }catch(e){ alert('Save error: '+e); }
+}
+
+function swap(btn,toSkel){
+  var film=btn.closest('.shot').querySelector('.film');
+  film.src = toSkel ? film.dataset.skel : film.dataset.film;
+  btn.parentNode.querySelectorAll('button').forEach(function(b){b.classList.remove('on');});
+  btn.classList.add('on');
+}
+function kpi(v,l){return '<div class="kpi"><div class="v">'+esc(String(v))+'</div><div class="l">'+esc(l)+'</div></div>';}
+
+load();
+</script>
+</body></html>

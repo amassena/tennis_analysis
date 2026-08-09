@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Contact Labeler</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0c0c0e; color:#e8e8ea; font:14px -apple-system,system-ui,sans-serif; }
+  header { padding:10px 14px; border-bottom:1px solid #1f1f22; display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; }
+  h1 { font-size:15px; margin:0; }
+  .muted { color:#8a8f98; font-size:.85em; }
+  .wrap { max-width:1000px; margin:0 auto; padding:14px; }
+  video { width:100%; background:#000; border-radius:8px; display:block; }
+  .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  button { background:#1c1c1e; color:#d2d2d6; border:1px solid #2a2a2e; border-radius:7px; padding:7px 11px; font-size:.85em; cursor:pointer; }
+  button:hover { border-color:#3a3a40; }
+  button.prim { background:#13361f; color:#3ddc84; border-color:#2f7d4f; }
+  button.warn { background:#3a2d12; color:#f5a623; border-color:#f5a623; }
+  button:active { transform:scale(.97); }
+  .frame { font-variant-numeric:tabular-nums; font-size:1.6em; font-weight:700; }
+  .chip { display:inline-block; padding:3px 9px; border-radius:6px; background:#1c1c1e; border:1px solid #2a2a2e; font-variant-numeric:tabular-nums; }
+  .chip b { color:#3ddc84; }
+  .occ { color:#f5a623; }
+  .pred { color:#c79bff; }
+  input.note { flex:1; min-width:180px; background:#141416; color:#e8e8ea; border:1px solid #2a2a2e; border-radius:7px; padding:7px 9px; }
+  select { background:#141416; color:#e8e8ea; border:1px solid #2a2a2e; border-radius:7px; padding:7px; }
+  .grid { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; align-items:center; margin-top:8px; }
+  kbd { background:#222; border:1px solid #333; border-radius:4px; padding:1px 5px; font-size:.8em; }
+  .ok { color:#3ddc84; } .err { color:#ff6b6b; }
+  .help { color:#6a6f78; font-size:.8em; margin-top:10px; line-height:1.7; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎾 Contact Labeler</h1>
+  <span class="muted" id="clipName">no clip</span>
+  <span class="muted">fps <b id="fps">—</b></span>
+  <span class="muted" id="saveState"></span>
+</header>
+<div class="wrap">
+  <div id="noclip" class="help" style="display:none">
+    Open with <code>?src=&lt;video-url&gt;&amp;fps=120&amp;clip=&lt;label-id&gt;</code>.
+    Optional <code>&amp;pred=&lt;frame&gt;</code> to score a prediction against your label.
+  </div>
+  <video id="v" playsinline preload="auto"></video>
+
+  <div class="bar">
+    <button onclick="step(-10)">⏮ −10</button>
+    <button onclick="step(-1)">◀ −1</button>
+    <button onclick="togglePlay()" id="playBtn">▶ play</button>
+    <button onclick="step(1)">+1 ▶</button>
+    <button onclick="step(10)">+10 ⏭</button>
+    <span class="frame" id="frameNum">0</span>
+    <span class="muted" id="timeNum">0.000s</span>
+  </div>
+
+  <div class="bar">
+    <button class="prim" onclick="markContact()">● Mark CONTACT (c)</button>
+    <button class="warn" onclick="markOcc('from')">[ occluded from</button>
+    <button class="warn" onclick="markOcc('to')">occluded to ]</button>
+    <button onclick="clearOcc()">clear occ</button>
+  </div>
+
+  <div class="grid">
+    <span class="muted">Contact</span>
+    <span><span class="chip" id="contactChip">—</span>
+      <span class="pred" id="predChip"></span></span>
+    <span class="muted">Occlusion</span>
+    <span class="chip occ" id="occChip">none</span>
+    <span class="muted">Shot type</span>
+    <span>
+      <select id="shotType">
+        <option value="">— pick —</option>
+        <option value="forehand">forehand</option>
+        <option value="backhand">backhand</option>
+        <option value="serve">serve</option>
+        <option value="slice">slice</option>
+        <option value="volley">volley</option>
+        <option value="overhead">overhead</option>
+      </select>
+    </span>
+    <span class="muted">Flag</span>
+    <span>
+      <select id="flag">
+        <option value="">— ok / no flag —</option>
+        <option value="ball_invisible_at_contact">ball invisible at contact</option>
+        <option value="no_clear_contact">no clear contact in clip</option>
+        <option value="bad_clip">bad clip (cut)</option>
+        <option value="multiple_shots">multiple shots</option>
+      </select>
+    </span>
+  </div>
+
+  <div class="bar" style="margin-top:12px">
+    <input class="note" id="note" placeholder="note (optional)">
+    <button class="prim" onclick="save()">💾 Save (s)</button>
+  </div>
+
+  <div class="help">
+    <b>Keys:</b> <kbd>←</kbd>/<kbd>→</kbd> ±1 frame · <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> ±10 ·
+    <kbd>space</kbd> play/pause · <kbd>c</kbd> mark contact · <kbd>[</kbd>/<kbd>]</kbd> occlusion start/end ·
+    <kbd>x</kbd> flag bad-clip · <kbd>s</kbd> save.<br>
+    Step to the exact frame where the ball meets the strings. If the ball is hidden at impact, bracket the
+    invisible frames with <kbd>[</kbd> … <kbd>]</kbd> and put your best contact estimate at the middle.
+  </div>
+</div>
+
+<script>
+var qp = new URLSearchParams(location.search);
+var SRC = qp.get('src');
+var FPS = parseFloat(qp.get('fps') || '120');
+var CLIP = qp.get('clip') || SRC || 'unknown';
+var PRED = qp.get('pred') !== null ? parseFloat(qp.get('pred')) : null;
+// When labeling a short window cut from a longer source, OFFSET (seconds) is the
+// window's start in the source, so session_time = OFFSET + contact_frame/fps.
+var OFFSET = qp.get('offset') !== null ? parseFloat(qp.get('offset')) : 0;
+var v = document.getElementById('v');
+var contact = null, occFrom = null, occTo = null;
+
+document.getElementById('fps').textContent = FPS;
+document.getElementById('clipName').textContent = CLIP.split('/').pop();
+if (PRED !== null) document.getElementById('predChip').textContent = 'pred ' + PRED;
+
+if (!SRC) {
+  document.getElementById('noclip').style.display = 'block';
+} else {
+  v.src = SRC;
+  v.addEventListener('loadedmetadata', loadExisting);
+}
+
+function curFrame() { return Math.round(v.currentTime * FPS); }
+function render() {
+  document.getElementById('frameNum').textContent = curFrame();
+  document.getElementById('timeNum').textContent = v.currentTime.toFixed(3) + 's';
+}
+// requestVideoFrameCallback gives the precise displayed frame when available.
+if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+  var rvfc = function(){ render(); v.requestVideoFrameCallback(rvfc); };
+  v.requestVideoFrameCallback(rvfc);
+} else {
+  v.addEventListener('timeupdate', render); v.addEventListener('seeked', render);
+}
+
+function step(n) {
+  v.pause(); setPlayLabel();
+  v.currentTime = Math.max(0, Math.min((v.duration||1e9), v.currentTime + n / FPS));
+}
+function togglePlay() { if (v.paused) v.play(); else v.pause(); setPlayLabel(); }
+function setPlayLabel(){ document.getElementById('playBtn').textContent = v.paused ? '▶ play' : '⏸ pause'; }
+v.addEventListener('play', setPlayLabel); v.addEventListener('pause', setPlayLabel);
+
+function markContact() {
+  contact = curFrame();
+  var s = '<b>' + contact + '</b> @ ' + (contact / FPS).toFixed(3) + 's';
+  document.getElementById('contactChip').innerHTML = s;
+  if (PRED !== null) {
+    var errMs = Math.abs(PRED - contact) / FPS * 1000;
+    document.getElementById('predChip').innerHTML =
+      'pred ' + PRED + ' · <span class="' + (errMs < 8 ? 'ok' : 'err') + '">err ' + errMs.toFixed(1) + 'ms</span>';
+  }
+}
+function markOcc(which) {
+  if (which === 'from') occFrom = curFrame(); else occTo = curFrame();
+  document.getElementById('occChip').textContent =
+    (occFrom == null ? '?' : occFrom) + ' … ' + (occTo == null ? '?' : occTo) +
+    (occFrom != null && occTo != null ? '  (' + ((occTo - occFrom) / FPS * 1000).toFixed(0) + 'ms)' : '');
+}
+function clearOcc() { occFrom = occTo = null; document.getElementById('occChip').textContent = 'none'; }
+
+async function loadExisting() {
+  render();
+  try {
+    var r = await fetch('/api/contact-gt', { credentials: 'include' });
+    if (!r.ok) return;
+    var doc = await r.json();
+    var lab = doc.labels && doc.labels[CLIP];
+    if (lab) {
+      if (lab.contact_frame != null) { v.currentTime = lab.contact_frame / FPS; setTimeout(markContact, 60); }
+      occFrom = lab.occluded_from; occTo = lab.occluded_to;
+      if (occFrom != null || occTo != null) markOcc('from');
+      if (lab.shot_type) document.getElementById('shotType').value = lab.shot_type;
+      if (lab.flag) document.getElementById('flag').value = lab.flag;
+      if (lab.note) document.getElementById('note').value = lab.note;
+      document.getElementById('saveState').innerHTML = '<span class="muted">loaded prior label (' + lab.by + ')</span>';
+    }
+  } catch (e) {}
+}
+
+async function save() {
+  if (contact == null && !document.getElementById('flag').value) {
+    document.getElementById('saveState').innerHTML = '<span class="err">mark a contact or a flag first</span>';
+    return;
+  }
+  var body = {
+    clip: CLIP, fps: FPS, contact_frame: contact,
+    offset: OFFSET,
+    contact_time: contact != null ? +(OFFSET + contact / FPS).toFixed(4) : null,
+    occluded_from: occFrom, occluded_to: occTo,
+    shot_type: document.getElementById('shotType').value || null,
+    flag: document.getElementById('flag').value || null,
+    note: document.getElementById('note').value || ''
+  };
+  try {
+    var r = await fetch('/api/contact-gt', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    var d = await r.json();
+    document.getElementById('saveState').innerHTML = r.ok
+      ? '<span class="ok">✓ saved (' + d.count + ' labels total)</span>'
+      : '<span class="err">save failed: ' + (d.error || r.status) + '</span>';
+  } catch (e) {
+    document.getElementById('saveState').innerHTML = '<span class="err">save error: ' + e + '</span>';
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowLeft') { step(e.shiftKey ? -10 : -1); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { step(e.shiftKey ? 10 : 1); e.preventDefault(); }
+  else if (e.key === ' ') { togglePlay(); e.preventDefault(); }
+  else if (e.key === 'c') markContact();
+  else if (e.key === '[') markOcc('from');
+  else if (e.key === ']') markOcc('to');
+  else if (e.key === 'x') { document.getElementById('flag').value = 'bad_clip'; }
+  else if (e.key === 's') { save(); e.preventDefault(); }
+});
+</script>
+</body>
+</html>

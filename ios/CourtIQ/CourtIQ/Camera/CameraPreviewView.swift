@@ -1,31 +1,29 @@
 import SwiftUI
 import AVFoundation
 
+/// Thin SwiftUI wrapper around AVCaptureVideoPreviewLayer.
 struct CameraPreviewView: UIViewRepresentable {
-    @ObservedObject var session: TennisSession
+    let session: AVCaptureSession
 
-    func makeUIView(context: Context) -> CameraPreviewUIView {
-        let view = CameraPreviewUIView()
-        view.session = session.cameraManager.captureSession
-        return view
+    func makeUIView(context: Context) -> PreviewUIView {
+        let v = PreviewUIView()
+        v.attach(session: session)
+        return v
     }
 
-    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {}
+    func updateUIView(_ uiView: PreviewUIView, context: Context) {}
 }
 
-class CameraPreviewUIView: UIView {
-    var session: AVCaptureSession? {
-        didSet {
-            guard let session = session else { return }
-            let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-            previewLayer.videoGravity = .resizeAspectFill
-            previewLayer.frame = bounds
-            layer.addSublayer(previewLayer)
-            self.previewLayer = previewLayer
-        }
-    }
-
+final class PreviewUIView: UIView {
     private var previewLayer: AVCaptureVideoPreviewLayer?
+
+    func attach(session: AVCaptureSession) {
+        let layer = AVCaptureVideoPreviewLayer(session: session)
+        layer.videoGravity = .resizeAspectFill
+        layer.frame = bounds
+        self.layer.addSublayer(layer)
+        previewLayer = layer
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()

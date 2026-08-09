@@ -126,7 +126,19 @@ def report_queue_status(upload_id: str, status: str = None, stage: str = None,
         error: Error message (for failed status)
         video_url: Link to finished video (for complete status)
     """
-    if not upload_id or not UPLOAD_PASSWORD:
+    # Reliable path: write straight to the R2 marker (no shared password
+    # needed). This keeps the app/gallery status in sync even when the
+    # /api/status POST below is unavailable.
+    _write_status_to_r2_marker(upload_id, status=status, stage=stage,
+                               progress=progress, error=error, video_url=video_url)
+
+    if not upload_id:
+        return
+    if not UPLOAD_PASSWORD:
+        # Loud, not silent: the secondary /api/status POST can't run without a
+        # password, but the R2 marker above is already updated.
+        log("UPLOAD_PASSWORD not set — skipping /api/status POST "
+            "(R2 marker updated directly instead)", "WARN")
         return
 
     data = {"password": UPLOAD_PASSWORD}
@@ -566,6 +578,92 @@ def _get_r2_client():
     return client, bucket
 
 
+def _write_status_to_r2_marker(upload_id: str, status: str = None, stage: str = None,
+                               progress: int = None, error: str = None,
+                               video_url: str = None):
+    """Write processing status DIRECTLY to the R2 marker uploads/{id}.json.
+
+    The reliable status path: the worker already has R2 creds, so it updates
+    the marker the app/gallery read WITHOUT the password-gated /api/status
+    POST. That POST silently no-ops when UPLOAD_PASSWORD is unset (it was),
+    which left every processed video stuck showing "Queued". Bulletproof —
+    never raises, never blocks the pipeline.
+    """
+    if not upload_id:
+        return
+    try:
+        import json as _json
+        import datetime as _dt
+        client, bucket = _get_r2_client()
+        if not client:
+            return
+        key = f"uploads/{upload_id}.json"
+        try:
+            obj = client.get_object(Bucket=bucket, Key=key)
+            meta = _json.loads(obj["Body"].read())
+        except Exception:
+            return  # no marker (e.g. non-iphone upload) — nothing to sync
+        now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+        if status:
+            meta["status"] = status
+            # Clear a stale error from a prior failed run once we're no longer
+            # failed (e.g. a reprocess that now succeeds) — otherwise the
+            # dashboard shows a red error on a green/complete item.
+            if status != "failed":
+                meta["error"] = None
+        if stage:
+            meta["stage"] = stage
+        if progress is not None:
+            meta["progress"] = progress
+        if error:
+            meta["error"] = error
+        if video_url:
+            meta["video_url"] = video_url
+        meta["updated_at"] = now
+        if status == "complete":
+            meta["completed_at"] = meta.get("completed_at") or now
+        client.put_object(Bucket=bucket, Key=key,
+                          Body=_json.dumps(meta).encode(),
+                          ContentType="application/json")
+    except Exception as e:
+        log(f"R2 marker status write failed: {e}", "WARN")
+
+
+def _patch_meta_on_r2(video_name: str, patch: dict, user_hash: str = None):
+    """Merge `patch` into meta.json on R2 (fetch → update → re-upload).
+
+    Patches EVERY meta.json that exists for this video — the flat
+    highlights/{vid}/meta.json (where step 5b writes it, before the step-6b
+    per-user migration) AND the per-user highlights/{user}/{vid}/meta.json (the
+    path the gallery actually reads). Belt-and-suspenders: depending on whether
+    this runs before or after migration, one or both paths exist, and we must
+    not leave a stale per-user copy. Best-effort; never raises."""
+    try:
+        import json as _json
+        client, bucket = _get_r2_client()
+        if not client:
+            return
+        keys = [f"highlights/{video_name}/meta.json"]
+        if user_hash:
+            keys.append(f"highlights/{user_hash}/{video_name}/meta.json")
+        patched = 0
+        for key in keys:
+            try:
+                obj = client.get_object(Bucket=bucket, Key=key)
+                meta = _json.loads(obj["Body"].read())
+            except Exception:
+                continue  # that path doesn't exist — skip
+            meta.update(patch)
+            client.put_object(Bucket=bucket, Key=key,
+                              Body=_json.dumps(meta).encode(),
+                              ContentType="application/json")
+            patched += 1
+        if patched == 0:
+            log("meta.json patch: no meta.json found to patch", "WARN")
+    except Exception as e:
+        log(f"meta.json patch failed: {e}", "WARN")
+
+
 def _upload_file_to_r2(local_path: str, r2_key: str, content_type: str = "application/octet-stream") -> bool:
     """Upload a file to R2. Returns True on success."""
     client, bucket = _get_r2_client()
@@ -586,6 +684,102 @@ def upload_thumbnail_to_r2(thumb_path: Path, video_name: str) -> bool:
         log(f"Uploaded thumbnail to R2: {key}")
         return True
     return False
+
+
+def _read_user_hash_for_video(video_name: str):
+    """Look up `user_hash` on the R2 marker (uploads/<vid>.json). Returns
+    the hash string, or None if no marker / no hash and no default.
+
+    Lookup order:
+      1. marker.user_hash (set by iOS JWT-authed uploads)
+      2. marker.uploaded_by (older field name, same meaning)
+      3. env.DEFAULT_USER_HASH (fallback for Mac-uploader/iCloud flows
+         that auth with the legacy IPHONE_UPLOAD_TOKEN and so carry no
+         per-user identity — for a single-user installation this routes
+         them to the operator's prefix)
+
+    Pipeline scripts write outputs flat (highlights/<vid>/...); we read
+    the marker here to decide whether to migrate them to a per-user prefix.
+    """
+    client, bucket = _get_r2_client()
+    default = os.environ.get("DEFAULT_USER_HASH") or None
+    if default and not (default.startswith("u_") and len(default) == 10):
+        default = None  # don't let a typo poison everyone's outputs
+    if not client:
+        return default
+    try:
+        obj = client.get_object(Bucket=bucket, Key=f"uploads/{video_name}.json")
+        import json as _json
+        meta = _json.loads(obj["Body"].read())
+        h = meta.get("user_hash") or meta.get("uploaded_by")
+        if isinstance(h, str) and h.startswith("u_") and len(h) == 10:
+            return h
+    except Exception:
+        pass
+    return default
+
+
+def _move_pipeline_outputs_to_user_prefix(video_name: str, user_hash: str) -> int:
+    """After the pipeline finishes, move that video's flat-layout outputs
+    under highlights/<user_hash>/ so the per-user gallery URL can serve them.
+
+    Moves:
+      highlights/<vid>/*    →  highlights/<user_hash>/<vid>/*
+      thumbs/<vid>.jpg      →  highlights/<user_hash>/thumbs/<vid>.jpg
+      highlights/thumbs/<vid>.jpg → highlights/<user_hash>/thumbs/<vid>.jpg
+        (legacy GPU code uploaded to either path; cover both)
+
+    Idempotent: copy-then-delete; re-runs are no-ops because the source
+    keys are gone after success. Returns the count of keys moved.
+    """
+    client, bucket = _get_r2_client()
+    if not client:
+        log("R2 client unavailable; skipping user-prefix move", "WARN")
+        return 0
+
+    user_prefix = f"highlights/{user_hash}"
+    sources = []
+
+    # All gallery outputs under highlights/<vid>/
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=f"highlights/{video_name}/"):
+        for obj in page.get("Contents", []):
+            sources.append(obj["Key"])
+
+    # Two possible thumb locations (GPU writes thumbs/<vid>.jpg; older code
+    # wrote highlights/thumbs/<vid>.jpg). Probe both.
+    for thumb_key in [f"thumbs/{video_name}.jpg",
+                      f"highlights/thumbs/{video_name}.jpg"]:
+        try:
+            client.head_object(Bucket=bucket, Key=thumb_key)
+            sources.append(thumb_key)
+        except Exception:
+            pass
+
+    if not sources:
+        log(f"No outputs found to move for {video_name}", "WARN")
+        return 0
+
+    moved = 0
+    for src in sources:
+        # Compute destination: keep the relative path under highlights/<user>/
+        if src.startswith("highlights/"):
+            rest = src[len("highlights/"):]
+        else:  # thumbs/<vid>.jpg
+            rest = src
+        dst = f"{user_prefix}/{rest}"
+        try:
+            client.copy_object(
+                Bucket=bucket,
+                CopySource={"Bucket": bucket, "Key": src},
+                Key=dst,
+            )
+            client.delete_object(Bucket=bucket, Key=src)
+            moved += 1
+        except Exception as e:
+            log(f"Move failed {src} → {dst}: {e}", "WARN")
+    log(f"Migrated {moved}/{len(sources)} outputs to {user_prefix}/")
+    return moved
 
 
 def run_pipeline(video_path: Path) -> Path:
@@ -688,7 +882,14 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
             text=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"Shot detection failed: {result.stderr}")
+            # Capture stdout + exit code, not just stderr — the detector logs
+            # to stdout and an empty stderr (the old "Shot detection failed: "
+            # with no detail) usually means the process was killed
+            # (OOM/CUDA-OOM/timeout) with no Python traceback at all.
+            detail = (result.stderr or "").strip() or (result.stdout or "").strip()[-800:] \
+                or "(no output — process likely killed: OOM / CUDA OOM / timeout)"
+            raise RuntimeError(
+                f"Shot detection failed (exit {result.returncode}): {detail}")
     stage("detection", 100, "Shot detection complete")
 
     # Step 5b: Upload video metadata to R2 (so gallery index works from any machine)
@@ -770,8 +971,84 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
                 log(f"Biomech failed: {r.stderr[-300:]}", "WARN")
             else:
                 log(f"Biomech saved: {biomech_out.name}")
+                # Persist a compact biomech summary into meta.json so the
+                # gallery / analytics page can show form trends (#20 Phase 0).
+                # meta.json was uploaded in 5b BEFORE biomech ran, so we patch
+                # it here (fetch → merge → re-upload). Keeps the wrist-contact-
+                # offset etc. instead of discarding it after coaching reads it.
+                try:
+                    import json as _json2
+                    with open(biomech_out) as _bf:
+                        bio = _json2.load(_bf)
+                    per_type = {}
+                    for st, ts in (bio.get("type_summaries") or {}).items():
+                        per_type[st] = {
+                            "avg_wrist_contact_offset_cm": ts.get("avg_wrist_contact_offset_cm"),
+                            "avg_peak_swing_speed": ts.get("avg_peak_swing_speed"),
+                            "avg_arm_extension": ts.get("avg_arm_extension"),
+                            "avg_trunk_rotation": ts.get("avg_trunk_rotation"),
+                            "count": ts.get("count"),
+                        }
+                    biomech_summary = {
+                        "dominant_hand": bio.get("dominant_hand"),
+                        "speed_decline_pct": (bio.get("fatigue_indicator") or {}).get("speed_decline_pct"),
+                        "per_type": per_type,
+                    }
+                    _bio_uh = _read_user_hash_for_video(video_name)
+                    _patch_meta_on_r2(video_name, {"biomech": biomech_summary},
+                                      user_hash=_bio_uh)
+                    log("Patched meta.json with biomech summary (#20)")
+                except Exception as _pe:
+                    log(f"meta.json biomech patch failed (non-fatal): {_pe}", "WARN")
     except Exception as e:
         log(f"Biomech step failed (non-fatal): {e}", "WARN")
+
+    # Step 5c2: Contact accuracy (audio-strike truth). Measures how well the
+    # detected contact frame lines up with the ball-strike SOUND — the
+    # objective signal behind detection-timing / filmstrip / comparison-sync
+    # quality. Confidence-gated; persisted to meta.json for /inspect + /admin
+    # and the deploy gate. Non-fatal.
+    try:
+        log("Step 5c2: Contact accuracy (audio truth)")
+        # Ensure project root is importable — the worker's runtime sys.path
+        # doesn't always include it, so `from scripts...` can fail with
+        # "No module named 'scripts'" mid-pipeline.
+        import sys as _sys
+        if str(PROJECT_ROOT) not in _sys.path:
+            _sys.path.insert(0, str(PROJECT_ROOT))
+        from scripts.contact_accuracy import measure_video as _measure_contact
+        ca = _measure_contact(video_name, video_path=str(preprocessed))
+        if "error" not in ca:
+            ca_summary = {
+                "shots": ca.get("shots"),
+                "confident_matches": ca.get("confident_matches"),
+                "confident_coverage": ca.get("confident_coverage"),
+                "median_abs_error_ms": ca.get("median_abs_error_ms"),
+                "p90_abs_error_ms": ca.get("p90_abs_error_ms"),
+                "median_signed_error_ms": ca.get("median_signed_error_ms"),
+            }
+            _ca_uh = _read_user_hash_for_video(video_name)
+            _patch_meta_on_r2(video_name, {"contact_accuracy": ca_summary},
+                              user_hash=_ca_uh)
+            # Stash per-shot errors alongside shots.json so /inspect can badge
+            # individual shots. Small file; uploaded to both paths if present.
+            try:
+                import json as _cj
+                per = {"video": video_name,
+                       "per_shot": ca.get("per_shot", [])}
+                _tmp = PROJECT_ROOT / "analysis" / f"{video_name}_contact.json"
+                _tmp.parent.mkdir(parents=True, exist_ok=True)
+                _tmp.write_text(_cj.dumps(per))
+                _upload_file_to_r2(str(_tmp), f"highlights/{video_name}/contact.json",
+                                   "application/json")
+            except Exception as _ce:
+                log(f"contact.json upload skipped: {_ce}", "WARN")
+            log(f"Contact accuracy: {ca_summary['confident_matches']}/{ca_summary['shots']} "
+                f"confident, median|err|={ca_summary['median_abs_error_ms']}ms")
+        else:
+            log(f"Contact accuracy skipped: {ca['error']}", "WARN")
+    except Exception as e:
+        log(f"Contact accuracy step failed (non-fatal): {e}", "WARN")
 
     # Step 5d: Claude coaching summary
     try:
@@ -788,18 +1065,77 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
     except Exception as e:
         log(f"Coaching step failed (non-fatal): {e}", "WARN")
 
+    # Step 5e: Swing-sequence filmstrips (the gallery "Sequences" feature).
+    # Generates one composite per shot (+ skeleton variant) to the flat
+    # highlights/<vid>/sequences/ path; Step 6b migrates them to the
+    # per-user prefix along with everything else. Non-fatal — a missing
+    # filmstrip shouldn't fail the whole job. Was never wired in before,
+    # so iphone_* uploads had no sequences (issue #1).
+    try:
+        log("Step 5e: Generating swing-sequence filmstrips")
+        det_path3 = DETECTIONS_DIR / f"{video_name}_fused_detections.json"
+        if not det_path3.exists():
+            det_path3 = DETECTIONS_DIR / f"{video_name}_fused.json"
+        poses_path3 = POSES_DIR / f"{video_name}.json"
+        if det_path3.exists() and poses_path3.exists():
+            r = subprocess.run(
+                [python, str(PROJECT_ROOT / "scripts" / "swing_composite.py"),
+                 "--video", video_name, "--upload"],
+                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=900,
+            )
+            if r.returncode != 0:
+                log(f"Sequences failed: {r.stderr[-300:]}", "WARN")
+            else:
+                log("Swing-sequence filmstrips uploaded")
+        else:
+            log("Sequences skipped (missing detections or poses)", "WARN")
+    except Exception as e:
+        log(f"Sequences step failed (non-fatal): {e}", "WARN")
+
+    # Step 5f: Pro comparison clips (the gallery "Pro Compare" feature).
+    # Like sequences, this was never wired into the pipeline — only ran
+    # manually — so iphone_* uploads had no comparisons (issue #9). Matches
+    # each shot to a pro exemplar by type + camera angle, composites them
+    # side-by-side, and uploads a compiled {vid}_comparisons.mp4 to the flat
+    # path; Step 6b migrates it per-user. Capped at 8 clips so a long
+    # session doesn't generate 100+. Non-fatal; 20-min timeout (downloads
+    # pro clips on first run per machine).
+    try:
+        log("Step 5f: Generating pro comparison clips")
+        if preprocessed.exists():
+            r = subprocess.run(
+                [python, str(PROJECT_ROOT / "scripts" / "pro_comparison.py"),
+                 str(preprocessed), "--upload", "--max-clips", "8"],
+                cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=1200,
+            )
+            if r.returncode != 0:
+                log(f"Pro comparison failed: {r.stderr[-300:]}", "WARN")
+            else:
+                log("Pro comparison clips uploaded")
+        else:
+            log("Pro comparison skipped (no preprocessed video)", "WARN")
+    except Exception as e:
+        log(f"Pro comparison step failed (non-fatal): {e}", "WARN")
+
     # Step 6: Export videos and upload to R2
     log("Step 6: Exporting videos to R2")
     stage("clips", 0, "Exporting video formats + uploading to R2")
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Phase 4b: timeline.mp4 is now the only mp4 we emit. Everything the
+    # gallery used to need a separate file for — per-type, slo-mo, and
+    # now rally — is derived in-player from timeline + shots.json:
+    #   - Per-shot-type filter: chip row picks segments by shot.type
+    #   - Slo-mo: playbackRate = 0.5
+    #   - Rally:  chip groups shots within 8s into one segment
+    # Saves the rally encode pass (~2-3 min GPU + ~150 MB R2 per session)
+    # on top of Phase 2's bytype/slowmo cuts.
     result = subprocess.run(
         [
             python,
             str(PROJECT_ROOT / "scripts" / "export_videos.py"),
             str(preprocessed),
-            "--types", "timeline", "rally", "bytype",
-            "--slow-motion",
+            "--types", "timeline",
             "--upload",
         ],
         cwd=PROJECT_ROOT,
@@ -814,16 +1150,44 @@ def run_pipeline_with_stages(video_path: Path, video_id: str = None,
         log("Export and R2 upload complete")
     stage("clips", 100, "Export complete")
 
+    # Step 6a: Upload the high-fps source for deep slow-mo (#6). preprocess
+    # already produced a real-time-duration high-fps version of slo-mo
+    # captures (e.g. {vid}_240fps.mp4) but we never uploaded it. The player
+    # switches to this below 1/2 speed so 1/4 stays smooth (240fps @ 1/4 =
+    # effective 60fps) instead of the 60fps timeline's choppy 15fps.
+    # Uploaded as a canonical {vid}_highfps.mp4 (fps-agnostic name) to the
+    # flat path; Step 6b migrates it per-user. Non-fatal.
+    try:
+        hifps_local = None
+        for cand in sorted(PREPROCESSED_DIR.glob(f"{video_name}_*fps.mp4")):
+            hifps_local = cand  # prefer the last (e.g. _240fps over _120fps if both)
+        if hifps_local and hifps_local.exists():
+            key = f"highlights/{video_name}/{video_name}_highfps.mp4"
+            if _upload_file_to_r2(str(hifps_local), key, "video/mp4"):
+                log(f"Step 6a: Uploaded high-fps source ({hifps_local.name})")
+        else:
+            log("Step 6a: no high-fps source (not a slo-mo capture)")
+    except Exception as e:
+        log(f"High-fps upload failed (non-fatal): {e}", "WARN")
+
+    # Step 6b: Move outputs to per-user prefix (if marker has user_hash).
+    # Pipeline scripts upload flat (highlights/<vid>/...) to keep them
+    # decoupled from the auth/sharing model; we re-key here, where we
+    # know which iOS user uploaded the source video.
+    user_hash = _read_user_hash_for_video(video_name)
+    if user_hash:
+        log(f"Step 6b: Migrating outputs to per-user prefix {user_hash}")
+        _move_pipeline_outputs_to_user_prefix(video_name, user_hash)
+
     # Step 7: Update R2 gallery index
     log("Step 7: Updating gallery index")
     stage("uploading", 0, "Updating gallery index")
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    cmd = [python, str(PROJECT_ROOT / "scripts" / "update_r2_index.py")]
+    if user_hash:
+        cmd += ["--user", user_hash]
     result = subprocess.run(
-        [python, str(PROJECT_ROOT / "scripts" / "update_r2_index.py")],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        env=env,
+        cmd, cwd=PROJECT_ROOT, capture_output=True, text=True, env=env,
     )
     if result.returncode != 0:
         log(f"Index update failed: {result.stderr[-300:]}", "WARN")
@@ -979,6 +1343,32 @@ def process_job(job: dict, skip_youtube: bool = False, youtube_dry_run: bool = F
     return highlights_url
 
 
+def _script_signatures():
+    """Short content hashes of the key pipeline scripts, for drift detection
+    (#29). Compare these across machines / against the committed source to
+    catch a worker running stale code."""
+    import hashlib
+    files = [
+        "scripts/detect_shots_sequence.py",
+        "scripts/biomechanical_analysis.py",
+        "scripts/claude_coach.py",
+        "scripts/pro_comparison.py",
+        "scripts/swing_composite.py",
+        "scripts/export_videos.py",
+        "scripts/update_r2_index.py",
+        "gpu_worker/worker.py",
+    ]
+    sigs = {}
+    for f in files:
+        p = PROJECT_ROOT / f
+        name = f.split("/")[-1].replace(".py", "")
+        if p.exists():
+            sigs[name] = hashlib.sha256(p.read_bytes()).hexdigest()[:8]
+        else:
+            sigs[name] = "MISSING"
+    return sigs
+
+
 def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
                 once: bool = False, skip_youtube: bool = False, youtube_dry_run: bool = False):
     """Main worker loop.
@@ -1000,6 +1390,15 @@ def worker_loop(coordinator_url: str, worker_id: str, poll_interval: int,
     log(f"Starting GPU worker: {WORKER_ID}")
     log(f"Coordinator: {COORDINATOR_URL}")
     log(f"Poll interval: {POLL_INTERVAL}s")
+    # Log a hash of the key pipeline scripts so script drift (a worker running
+    # stale code — see issue #29) is VISIBLE at startup instead of silently
+    # producing wrong outputs (e.g. the null wrist-offset from a stale
+    # biomechanical_analysis.py).
+    try:
+        sigs = _script_signatures()
+        log("Script versions: " + " ".join(f"{n}={h}" for n, h in sigs.items()))
+    except Exception as e:
+        log(f"Script signature check failed: {e}", "WARN")
     if skip_youtube:
         log("YouTube upload: DISABLED")
     elif youtube_dry_run:

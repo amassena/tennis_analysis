@@ -95,7 +95,8 @@ class _TasksAPIWrapper:
         else:
             result = self._landmarker.detect(mp_image)
 
-        # Adapt: new API returns lists; wrap to match old API's single-person interface
+        # Keep ALL detected poses (multi-person) so the caller can select the
+        # hitter, not the distant opponent (#24).
         return _TasksResult(result)
 
     def close(self):
@@ -106,15 +107,26 @@ class _TasksResult:
     """Adapts PoseLandmarkerResult to look like old solutions.pose result."""
 
     def __init__(self, result):
-        if result.pose_landmarks and len(result.pose_landmarks) > 0:
-            self.pose_landmarks = _LandmarkListAdapter(result.pose_landmarks[0])
+        # All detected poses (image + world) — used for hitter-selection (#24).
+        self.all_pose_landmarks = list(result.pose_landmarks or [])
+        self.all_world_landmarks = list(result.pose_world_landmarks or [])
+        # Primary pose defaults to the first; the extraction loop overrides it
+        # with the selected hitter when >1 person is present.
+        if self.all_pose_landmarks:
+            self.pose_landmarks = _LandmarkListAdapter(self.all_pose_landmarks[0])
         else:
             self.pose_landmarks = None
-
-        if result.pose_world_landmarks and len(result.pose_world_landmarks) > 0:
-            self.pose_world_landmarks = _LandmarkListAdapter(result.pose_world_landmarks[0])
+        if self.all_world_landmarks:
+            self.pose_world_landmarks = _LandmarkListAdapter(self.all_world_landmarks[0])
         else:
             self.pose_world_landmarks = None
+
+    def select_primary(self, i):
+        """Set the primary pose to candidate index i (the chosen hitter)."""
+        if 0 <= i < len(self.all_pose_landmarks):
+            self.pose_landmarks = _LandmarkListAdapter(self.all_pose_landmarks[i])
+        if 0 <= i < len(self.all_world_landmarks):
+            self.pose_world_landmarks = _LandmarkListAdapter(self.all_world_landmarks[i])
 
 
 class _LandmarkListAdapter:
@@ -161,7 +173,12 @@ def init_pose_model(mp_config):
     options = vision.PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
-        num_poses=1,
+        num_poses=3,  # detect up to 3 people; select_hitter picks the player for
+                      # framing/biomech (#24). Detection reads the default [0]
+                      # pose (decoupled) and is UNAFFECTED — verified: clean
+                      # holdout F1 is 0.617 at both num_poses=1 and =3. (The
+                      # earlier 0.91→0.62 "regression" was a bogus baseline from
+                      # an incomplete holdout, not a real effect.)
         min_pose_detection_confidence=mp_config["min_detection_confidence"],
         min_pose_presence_confidence=mp_config.get("min_tracking_confidence", 0.5),
         min_tracking_confidence=mp_config["min_tracking_confidence"],
@@ -312,6 +329,48 @@ def prescan_dead_sections(video_path, sample_interval=10, min_dead_seconds=5.0,
     return merged_active, dead_regions, stats
 
 
+# ── Hitter selection (#24) ───────────────────────────────────
+
+
+def _pose_bbox(landmark_list):
+    """(cx, cy, area, n_visible) for a candidate pose's image landmarks.
+    Coords are normalized [0,1]; cy near 1.0 = lower in frame (foreground)."""
+    pts = [(lm.x, lm.y) for lm in landmark_list.landmark
+           if getattr(lm, "visibility", 1.0) > 0.3]
+    if len(pts) < 4:
+        return None
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+    w = max(xs) - min(xs); h = max(ys) - min(ys)
+    return (sum(xs) / len(xs), sum(ys) / len(ys), w * h, len(pts))
+
+
+def select_hitter(all_pose_landmarks, prev_centroid=None):
+    """Pick which detected person is the HITTER, not the distant opponent (#24).
+
+    The hitter is closest to camera (largest bbox), in the foreground (lower in
+    frame → higher cy), and temporally consistent with the previous frame's
+    hitter. Returns the index into all_pose_landmarks, or 0 if undecidable.
+    Single-person frames trivially return 0 → identical to old behavior.
+    """
+    if len(all_pose_landmarks) <= 1:
+        return 0
+    best_i, best_score = 0, -1e9
+    for i, lml in enumerate(all_pose_landmarks):
+        bb = _pose_bbox(lml)
+        if bb is None:
+            continue
+        cx, cy, area, n = bb
+        # area dominates (closer person is bigger); foreground (cy) helps;
+        # consistency keeps us locked on the same body across frames.
+        score = area * 6.0 + cy * 0.5
+        if prev_centroid is not None:
+            d = ((cx - prev_centroid[0]) ** 2 + (cy - prev_centroid[1]) ** 2) ** 0.5
+            score += max(0.0, 0.5 - d)  # bonus when near last hitter
+        if score > best_score:
+            best_score, best_i = score, i
+    return best_i
+
+
 # ── Extraction ───────────────────────────────────────────────
 
 
@@ -405,6 +464,7 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
     frames_detected = 0
     frames_processed = 0
     frames_skipped = 0
+    _prev_hitter_centroid = None   # tracks the hitter across frames (#24)
     start_time = time.time()
 
     # Seek to start frame if needed
@@ -437,33 +497,45 @@ def extract_poses(video_path, pose_model, visualize, poses_dir,
         rgb.flags.writeable = False
         result = pose_model.process(rgb)
 
+        # Decouple detection from framing (#24):
+        #   landmarks/world_landmarks       = MediaPipe's DEFAULT [0] pose. This
+        #     is exactly what the detection CNN was trained on — leaving it
+        #     untouched means detection does NOT regress.
+        #   hitter_landmarks/...            = the HITTER among multiple people,
+        #     for framing + biomech. Only differs from default when >1 person.
+        all_poses = getattr(result, "all_pose_landmarks", None)
+        all_world = getattr(result, "all_world_landmarks", None)
+        hitter_idx = None
+        if all_poses and len(all_poses) >= 1:
+            hitter_idx = select_hitter(all_poses, _prev_hitter_centroid) if len(all_poses) > 1 else 0
+            _bb = _pose_bbox(all_poses[hitter_idx])
+            if _bb:
+                _prev_hitter_centroid = (_bb[0], _bb[1])
+
+        def _to_rows(landmark_list):
+            return [[round(lm.x, 6), round(lm.y, 6), round(lm.z, 6),
+                     round(lm.visibility, 6)] for lm in landmark_list.landmark]
+
         if result.pose_landmarks:
             frames_detected += 1
-            landmarks = [
-                [
-                    round(lm.x, 6),
-                    round(lm.y, 6),
-                    round(lm.z, 6),
-                    round(lm.visibility, 6),
-                ]
-                for lm in result.pose_landmarks.landmark
-            ]
-            world_landmarks = [
-                [
-                    round(lm.x, 6),
-                    round(lm.y, 6),
-                    round(lm.z, 6),
-                    round(lm.visibility, 6),
-                ]
-                for lm in result.pose_world_landmarks.landmark
-            ]
-            frames.append({
+            landmarks = _to_rows(result.pose_landmarks)            # default [0]
+            world_landmarks = _to_rows(result.pose_world_landmarks)
+            frame_rec = {
                 "frame_idx": frame_idx,
                 "timestamp": round(timestamp, 6),
                 "detected": True,
                 "landmarks": landmarks,
                 "world_landmarks": world_landmarks,
-            })
+            }
+            # Add hitter pose when it differs from the default (multi-person).
+            if (hitter_idx is not None and hitter_idx != 0
+                    and all_poses and hitter_idx < len(all_poses)):
+                frame_rec["hitter_landmarks"] = _to_rows(
+                    _LandmarkListAdapter(all_poses[hitter_idx]))
+                if all_world and hitter_idx < len(all_world):
+                    frame_rec["hitter_world_landmarks"] = _to_rows(
+                        _LandmarkListAdapter(all_world[hitter_idx]))
+            frames.append(frame_rec)
 
             if skeleton_writer is not None and mp_drawing is not None:
                 rgb.flags.writeable = True

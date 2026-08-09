@@ -8,6 +8,21 @@ bucket_name = "tennis-videos"
 
 [vars]
 MAX_SIZE_GB = "5"
+# Sign in with Apple — the bundle ID that Apple tokens must be issued for.
+APPLE_BUNDLE_ID = "com.amassena.courtiq.CourtIQ"
+# Comma-separated list of user_hash values that bypass per-user auth gating
+# (i.e. can view /u/<other>/ pages). Andrew is the only admin.
+# Includes both the old (apple_sub-based) and new (email-based) hashes
+# during the migration window.
+ADMIN_USER_HASHES = "u_666f1a02,u_ae629639"
+# From-address used by the magic-link sender (Resend). Override via the
+# MAGIC_LINK_FROM env if you've verified a custom domain in Resend.
+MAGIC_LINK_FROM = "Tennis Uploader <onboarding@resend.dev>"
+
+# Secrets (set via `wrangler secret put <NAME>`, not stored here):
+#   JWT_SIGNING_SECRET    — HS256 signing key for our user JWTs (PR 1+)
+#   IPHONE_UPLOAD_TOKEN   — legacy shared bearer for Mac uploader (existing)
+#   STATUS_UPDATE_SECRET  — bearer for coordinator status POSTs (existing)
 
 # Primary: tennis subdomain
 [[routes]]

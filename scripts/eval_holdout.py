@@ -45,6 +45,11 @@ from scripts.sequence_model import load_model
 
 DEFAULT_MANIFEST = PROJECT_ROOT / "eval" / "holdout" / "manifest.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "eval_results"
+# Protected pose cache for the holdout — the pipeline never writes here, so
+# these poses don't get churned/cleared like POSES_DIR. Makes eval fast +
+# reproducible and is the cure for the bogus-baseline bug (an incomplete
+# holdout silently inflated F1). Populated by scripts/cache_holdout_poses.py.
+HOLDOUT_POSE_DIR = PROJECT_ROOT / "eval" / "holdout" / "poses"
 
 # Detection knobs — match production worker config
 DETECT_THRESHOLD = 0.90
@@ -199,30 +204,38 @@ def evaluate(model_path, manifest_path, output_path):
     per_video = []
 
     t0 = time.time()
+    expected_videos = len(manifest["videos"])
+    skipped = []   # videos that could NOT be scored — makes the run INVALID
     for v in manifest["videos"]:
         vid = v["video_id"]
         video_path = PROJECT_ROOT / v["video_path"]
         gt_path = PROJECT_ROOT / v["gt_path"]
         if not video_path.exists():
-            print(f"  [WARN] missing video file for {vid}: {video_path}")
-            continue
+            print(f"  [ERROR] missing video file for {vid}: {video_path}")
+            skipped.append((vid, "missing_video")); continue
         if not gt_path.exists():
-            print(f"  [WARN] missing GT file for {vid}: {gt_path}")
-            continue
+            print(f"  [ERROR] missing GT file for {vid}: {gt_path}")
+            skipped.append((vid, "missing_gt")); continue
 
         print(f"\n  -- {vid} ({v.get('camera_angle','?')}) --")
         gt_data = json.loads(gt_path.read_text())
         gt_shots = normalize_gt_shots(gt_data)
+
+        # Prefer the protected holdout pose cache (no churn, no re-extraction).
+        cached_pose = HOLDOUT_POSE_DIR / f"{vid}.json"
+        pose_path = str(cached_pose) if cached_pose.exists() else None
 
         det_data = detect_video(
             str(video_path), model, device,
             threshold=DETECT_THRESHOLD,
             nms_gap=DETECT_NMS_GAP,
             step_sec=DETECT_STEP_SEC,
+            pose_path=pose_path,
         )
         if det_data is None:
-            print(f"  [WARN] detection failed for {vid}")
-            continue
+            print(f"  [ERROR] detection failed for {vid} "
+                  f"(pose missing? cached={cached_pose.exists()})")
+            skipped.append((vid, "detect_failed")); continue
         det_shots = normalize_det_shots(det_data)
 
         tol_tight_sec, fps_used = event_tolerance_seconds(det_data)
@@ -237,6 +250,24 @@ def evaluate(model_path, manifest_path, output_path):
         tp_tight, fp_tight, fn_tight = match_detections(
             gt_shots, det_shots, tolerance=tol_tight_sec, require_class_match=True)
 
+        # Contact-time error vs GROUND TRUTH (holdout has labeled contact
+        # times — the most accurate truth available). For each matched
+        # (gt, det) pair, |det_t - gt_t| in ms. This is the metric a
+        # regression-head model should drive DOWN. Reported, not yet gated.
+        # match_detections returns tp_pairs as (gt_entry, det_entry, time_error_sec).
+        contact_errs_ms = []
+        for _pair in tp_strict:
+            gt_s, det_s = _pair[0], _pair[1]
+            gt_t = gt_s.get("timestamp", gt_s.get("t"))
+            det_t = det_s.get("timestamp", det_s.get("t"))
+            if gt_t is not None and det_t is not None:
+                contact_errs_ms.append(round((det_t - gt_t) * 1000, 1))
+        abs_ce = [abs(e) for e in contact_errs_ms]
+        median_contact_err = (round(sorted(abs_ce)[len(abs_ce) // 2], 1)
+                              if abs_ce else None)
+        signed_contact_bias = (round(sorted(contact_errs_ms)[len(contact_errs_ms) // 2], 1)
+                               if contact_errs_ms else None)
+
         per_video.append({
             "video_id": vid,
             "camera_angle": v.get("camera_angle"),
@@ -250,6 +281,10 @@ def evaluate(model_path, manifest_path, output_path):
             "event_strict_f1": compute_metrics(len(tp_tight), len(fp_tight), len(fn_tight))["f1"],
             "false_negatives": len(fn_strict),
             "false_positives": len(fp_strict),
+            # Contact-time precision vs GT (ms) — the regression-head target.
+            "median_contact_err_ms": median_contact_err,
+            "signed_contact_bias_ms": signed_contact_bias,
+            "contact_pairs": len(abs_ce),
         })
         if len(fn_strict) > 0 or len(fp_strict) > 0:
             videos_with_any_miss += 1
@@ -270,6 +305,25 @@ def evaluate(model_path, manifest_path, output_path):
     # Aggregate metrics. Headline at MATCH_TOLERANCE (1.5s legacy);
     # also compute a tight 0.1s event-level F1 for contact-time signal.
     overall = compute_metrics(len(all_tp_pairs), len(all_fp_dets), len(all_fn_gts))
+
+    # Global contact-time error vs GT (ms) across all matched pairs — the
+    # metric a contact-regression model should improve. Reported for now;
+    # gating on it requires explicit approval (deploy-gate rules are fixed).
+    _ce = []
+    for _pair in all_tp_pairs:
+        gt_s, det_s = _pair[0], _pair[1]
+        gt_t = gt_s.get("timestamp", gt_s.get("t"))
+        det_t = det_s.get("timestamp", det_s.get("t"))
+        if gt_t is not None and det_t is not None:
+            _ce.append((det_t - gt_t) * 1000)
+    _abs = sorted(abs(e) for e in _ce)
+    contact_time = {
+        "matched_pairs": len(_ce),
+        "median_abs_error_ms": round(_abs[len(_abs) // 2], 1) if _abs else None,
+        "p90_abs_error_ms": round(_abs[int(len(_abs) * 0.9)], 1) if len(_abs) >= 10 else None,
+        "median_signed_bias_ms": round(sorted(_ce)[len(_ce) // 2], 1) if _ce else None,
+    }
+
     pc = per_class_metrics(all_gt_shots, all_det_shots, tolerance=MATCH_TOLERANCE)
     confusion = compute_confusion(all_gt_shots, all_det_shots, tolerance=MATCH_TOLERANCE)
     calib_bins, ece = calibration_curve(all_gt_shots, all_det_shots, tolerance=MATCH_TOLERANCE)
@@ -278,8 +332,15 @@ def evaluate(model_path, manifest_path, output_path):
         all_gt_shots, all_det_shots, tolerance=0.1, require_class_match=True)
     event_tight = compute_metrics(len(tp_tight_all), len(fp_tight_all), len(fn_tight_all))
 
+    # A run that couldn't score every holdout video is NOT a valid baseline —
+    # comparing against a partial F1 is exactly what produced the bogus 0.91.
+    valid = (len(skipped) == 0)
     out = {
         "schema_version": 1,
+        "valid": valid,                            # False = do NOT trust as baseline
+        "videos_expected": expected_videos,
+        "videos_evaluated": len(per_video),
+        "skipped": skipped,
         "model_sha256": model_sha,
         "model_path": _path_for_sidecar(model_path),
         "manifest_sha256": manifest_sha,
@@ -302,6 +363,8 @@ def evaluate(model_path, manifest_path, output_path):
         "event_tight_f1": event_tight["f1"],       # 0.1s tolerance — contact-time precision
         "event_tight_precision": event_tight["precision"],
         "event_tight_recall": event_tight["recall"],
+        "contact_time_vs_gt": contact_time,         # ms error of detected contact vs GT
+
         "per_class": pc,
         "ece": ece,
         "confusion": confusion,
@@ -317,11 +380,19 @@ def evaluate(model_path, manifest_path, output_path):
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(out, indent=2))
+    if not valid:
+        print(f"\n[eval_holdout] *** INVALID RUN *** scored {len(per_video)}/"
+              f"{expected_videos} holdout videos — DO NOT use as a baseline. "
+              f"Skipped: {skipped}")
     print(f"\n[eval_holdout] event_level_F1={overall['f1']:.3f} (legacy 1.5s, headline) "
           f"event_tight_F1={event_tight['f1']:.3f} (0.1s) "
           f"FN={len(all_fn_gts)} FP={len(all_fp_dets)} "
           f"videos_with_miss={videos_with_any_miss}/{len(per_video)} "
           f"ECE={ece:.3f}")
+    if contact_time["median_abs_error_ms"] is not None:
+        print(f"[eval_holdout] contact-time vs GT: median|err|={contact_time['median_abs_error_ms']}ms "
+              f"p90={contact_time['p90_abs_error_ms']}ms bias={contact_time['median_signed_bias_ms']:+}ms "
+              f"({contact_time['matched_pairs']} pairs) — regression-head target")
     print(f"[eval_holdout] wrote {output_path}")
 
     # Update sidecar if it exists
@@ -336,6 +407,10 @@ def evaluate(model_path, manifest_path, output_path):
         except Exception as e:
             print(f"[eval_holdout] sidecar update failed: {e}")
 
+    # Non-zero exit on an invalid (incomplete) run so callers / compare_models
+    # can't silently treat a partial score as a real baseline.
+    if not valid:
+        sys.exit(3)
     return out
 
 

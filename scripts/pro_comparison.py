@@ -81,6 +81,24 @@ def load_detections(video_name):
     return None
 
 
+def _angle_family(angle):
+    """Normalize a clip's angle label to a coarse family aligned with
+    detect_camera_angle's output ('side' / 'behind' / 'front').
+
+    detected_angle vocabulary: side-deuce, side-ad → 'side'; front-broadcast →
+    'front'; behind-player → 'behind'. The legacy `angle` field is already
+    'side'/'behind'. unknown/ambiguous → None (won't match any request).
+    """
+    a = (angle or "").lower()
+    if a.startswith("side"):
+        return "side"
+    if a.startswith("behind"):
+        return "behind"
+    if a.startswith("front"):
+        return "front"
+    return None
+
+
 def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=None,
                    used_files=None, user_hand=None, user_gender=None,
                    user_backhand_style=None, cross_gender=False):
@@ -132,9 +150,22 @@ def match_pro_clip(shot_type, library, preferred_player=None, preferred_angle=No
         name = player_data.get("name", player_id)
         for clip in player_data.get("clips", []):
             if clip.get("type") == shot_type:
+                # HARD angle filter on the REAL angle. The coarse `angle` field
+                # collapses everything to side/behind and mislabels ~114 frontal
+                # (front-broadcast) clips as "side" (#18) — filtering on it let
+                # frontal clips through for "side" requests. Filter on the
+                # detected_angle family instead so a "side" request keeps only
+                # true side clips (side-deuce / side-ad) and excludes frontal &
+                # behind. Falls back to the coarse field when detected_angle is
+                # absent (legacy clips). A wrong-angle comparison is worse than
+                # none — you can't compare mechanics across camera angles.
+                if preferred_angle:
+                    fam = _angle_family(clip.get("detected_angle") or clip.get("angle"))
+                    if fam != preferred_angle:
+                        continue
                 score = 0.0
-                # Strong preference for matching angle
-                if preferred_angle and clip.get("angle") == preferred_angle:
+                # Matching angle confirmed by the filter above.
+                if preferred_angle:
                     score += 3.0
                 # Preference for preferred player
                 if preferred_player and player_id == preferred_player:
@@ -191,6 +222,28 @@ def get_pro_clip_path(player_name, clip_info, library):
         print(f"  [WARN] Could not download pro clip: {e}")
 
     return None
+
+
+def audio_snap_timestamp(timestamp, video_path, audio_peaks, fps,
+                         search_sec=0.3, min_rel_amp=1.5):
+    """Snap a detection timestamp to the nearest strong audio strike, so the
+    user clip aligns on ACOUSTIC contact — matching the quality of the pro
+    half's hand-labeled contact_frame. The filmstrip (swing_composite) already
+    does this; the comparison didn't, which left the two halves aligned to
+    contact points ~100ms apart (visible desync). Per-shot, not a constant
+    offset. Returns (snapped_timestamp, snapped: bool); falls back to the raw
+    timestamp when no confident peak is nearby.
+    """
+    if not audio_peaks or not audio_peaks.get("peaks"):
+        return timestamp, False
+    raw_frame = int(round(timestamp * fps))
+    from scripts.swing_composite import snap_to_audio_peak
+    snapped_frame, did = snap_to_audio_peak(raw_frame, fps, audio_peaks,
+                                            search_sec=search_sec,
+                                            min_rel_amp=min_rel_amp)
+    if not did:
+        return timestamp, False
+    return snapped_frame / fps, True
 
 
 def extract_user_clip(video_path, timestamp, output_path, speed=SLOWMO_SPEED):
@@ -398,7 +451,7 @@ def detect_camera_angle(det_data):
 
 def generate_comparisons(video_path, output_dir=None, player=None,
                           shot_type_filter=None, max_clips=None, upload=False,
-                          cross_gender=False):
+                          user_hash=None, cross_gender=False, feed_idxs=None):
     """Generate comparison clips for all eligible shots in a video.
 
     Args:
@@ -408,10 +461,15 @@ def generate_comparisons(video_path, output_dir=None, player=None,
         shot_type_filter: Only generate for this shot type
         max_clips: Maximum number of comparison clips to generate
         upload: Upload results to R2
+        feed_idxs: Global shot indices flagged as self-feeds (drop-and-hit
+            rally starters). These stay in the timeline but are NEVER compared
+            to a pro — comparing a feed to a pro groundstroke is meaningless
+            and muddles the gallery. Sourced from /inspect feed flags.
 
     Returns:
         List of generated comparison file paths
     """
+    feed_idxs = set(feed_idxs or [])
     video_name = Path(video_path).stem
 
     # Load detection data
@@ -419,6 +477,19 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     if not det_data:
         print(f"[ERROR] No detections found for {video_name}")
         return []
+    det_fps = det_data.get("fps", 60) or 60
+
+    # Audio strike peaks for per-shot contact snapping (sync fix). Computed
+    # once; reused for every shot. Best-effort — if audio is missing/noisy,
+    # snapping silently no-ops and we fall back to the raw detection timestamp.
+    audio_peaks = None
+    try:
+        from scripts.swing_composite import extract_audio_peaks
+        audio_peaks = extract_audio_peaks(str(video_path))
+        n_pk = len(audio_peaks.get("peaks", [])) if audio_peaks else 0
+        print(f"[contact-sync] audio peaks found: {n_pk}")
+    except Exception as e:
+        print(f"[contact-sync] audio peak extraction skipped: {e}")
 
     # Load pro library
     library = load_pro_library()
@@ -458,11 +529,18 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                            or "two-handed")
 
     detections = det_data.get("detections", [])
+    # Keep each shot's GLOBAL index (its position in detections == shots.json
+    # `idx`) so per-shot comparison clips are addressable by the gallery's
+    # shot strip, which keys on that same global idx.
     eligible = [
-        d for d in detections
+        (gi, d) for gi, d in enumerate(detections)
         if d.get("shot_type") in COMPARABLE_TYPES
         and (shot_type_filter is None or d.get("shot_type") == shot_type_filter)
+        and gi not in feed_idxs
     ]
+    if feed_idxs:
+        print(f"  excluding {len(feed_idxs)} feed-flagged shot(s) from comparison: "
+              f"{sorted(feed_idxs)}")
 
     if max_clips:
         eligible = eligible[:max_clips]
@@ -485,7 +563,8 @@ def generate_comparisons(video_path, output_dir=None, player=None,
     try:
         used_files = set()  # Track used pro clips to rotate through them
 
-        for i, det in enumerate(eligible):
+        comparison_shot_idxs = []  # global shot indices we produced a clip for
+        for i, (gidx, det) in enumerate(eligible):
             shot_type = det["shot_type"]
             timestamp = det["timestamp"]
             idx = i + 1
@@ -514,9 +593,17 @@ def generate_comparisons(video_path, output_dir=None, player=None,
             pro_angle = pro_clip.get("angle", "?")
             print(f"  [{idx}/{len(eligible)}] {shot_type} @ {timestamp:.1f}s vs {pro_name} ({pro_angle})")
 
-            # Extract user clip centered on contact
+            # Snap to the audio strike so the user clip aligns on acoustic
+            # contact (matching the pro half's labeled contact). Per-shot.
+            snap_t, snapped = audio_snap_timestamp(
+                timestamp, video_path, audio_peaks, det_fps)
+            if snapped:
+                print(f"      contact-sync: {timestamp:.2f}s -> {snap_t:.2f}s "
+                      f"({(snap_t-timestamp)*1000:+.0f}ms to audio strike)")
+
+            # Extract user clip centered on (snapped) contact
             user_clip = os.path.join(tmpdir, f"user_{i:03d}.mp4")
-            if not extract_user_clip(video_path, timestamp, user_clip):
+            if not extract_user_clip(video_path, snap_t, user_clip):
                 print(f"    [ERROR] Failed to extract user clip")
                 continue
 
@@ -527,8 +614,10 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                 print(f"    [ERROR] Failed to extract pro clip")
                 continue
 
-            # Combine side by side
-            output_name = f"{video_name}_comparison_{shot_type}_{idx:02d}.mp4"
+            # Combine side by side. Named by GLOBAL shot index so the
+            # gallery's per-shot "vs pro" pill can address it directly:
+            # {vid}_comparison_shot_{gidx}.mp4.
+            output_name = f"{video_name}_comparison_shot_{gidx:03d}.mp4"
             output_path = str(output_dir / output_name)
 
             # Format pro label
@@ -539,6 +628,7 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                 size_mb = os.path.getsize(output_path) / (1024 * 1024)
                 print(f"    Saved: {output_name} ({size_mb:.1f}MB)")
                 generated.append(output_path)
+                comparison_shot_idxs.append(gidx)
             else:
                 print(f"    [ERROR] Failed to create comparison")
 
@@ -566,6 +656,16 @@ def generate_comparisons(video_path, output_dir=None, player=None,
                 print(f"\n  Compiled: {os.path.basename(compiled_path)} ({size_mb:.1f}MB)")
                 generated.append(compiled_path)
 
+        # Manifest of global shot indices with a comparison clip (written
+        # AFTER the concat so it isn't fed into ffmpeg). The gallery loads
+        # this to show the per-shot "vs pro" pill only where a clip exists.
+        if comparison_shot_idxs:
+            manifest_path = str(output_dir / f"{video_name}_comparisons_index.json")
+            with open(manifest_path, "w") as mf:
+                json.dump({"video": video_name,
+                           "shots": sorted(comparison_shot_idxs)}, mf)
+            generated.append(manifest_path)
+
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
@@ -574,9 +674,11 @@ def generate_comparisons(video_path, output_dir=None, player=None,
         print(f"\nUploading {len(generated)} comparison files to R2...")
         try:
             from scripts.export_videos import upload_to_r2
+            prefix = (f"highlights/{user_hash}/{video_name}"
+                      if user_hash else f"highlights/{video_name}")
             for filepath in generated:
                 filename = os.path.basename(filepath)
-                remote_key = f"highlights/{video_name}/{filename}"
+                remote_key = f"{prefix}/{filename}"
                 upload_to_r2(filepath, remote_key)
         except Exception as e:
             print(f"  [ERROR] R2 upload failed: {e}")
@@ -599,10 +701,21 @@ def main():
                         help="Output directory (default: exports/{video}/)")
     parser.add_argument("--upload", action="store_true",
                         help="Upload to R2 after generating")
+    parser.add_argument("--user-hash", default=None,
+                        help="Per-user prefix (e.g. u_ae629639). When set, uploads to "
+                             "highlights/<hash>/<vid>/ so the per-user gallery finds them.")
     parser.add_argument("--cross-gender", action="store_true",
                         help="Allow cross-gender matches (e.g. study Henin's "
                         "1HBH as a male right-hander). Default: same gender only.")
+    parser.add_argument("--feed-shots", default=None,
+                        help="Comma list of GLOBAL shot indices flagged as self-feeds "
+                             "(drop-and-hit rally starters). Excluded from comparison; "
+                             "they stay in the timeline. Sourced from /inspect feed flags.")
     args = parser.parse_args()
+
+    feed_idxs = None
+    if args.feed_shots:
+        feed_idxs = {int(x) for x in args.feed_shots.split(",") if x.strip() != ""}
 
     if not os.path.exists(args.video):
         print(f"[ERROR] Video not found: {args.video}")
@@ -615,7 +728,9 @@ def main():
         shot_type_filter=args.shot_type,
         max_clips=args.max_clips,
         upload=args.upload,
+        user_hash=args.user_hash,
         cross_gender=args.cross_gender,
+        feed_idxs=feed_idxs,
     )
 
 

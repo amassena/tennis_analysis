@@ -18,8 +18,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def generate_thumbnail(vid):
-    """Generate a thumbnail for a video if it doesn't exist. Returns True if available."""
+def generate_thumbnail(vid, user_hash=None):
+    """Generate a thumbnail for a video if it doesn't exist. Returns True if available.
+
+    user_hash: when set, also probe the per-user R2 location
+    highlights/<user_hash>/thumbs/<vid>.jpg as a fallback — that's where
+    backfilled thumbs live post per-user refactor.
+    """
     thumb_dir = os.path.join(PROJECT_ROOT, 'exports', 'thumbs')
     os.makedirs(thumb_dir, exist_ok=True)
     thumb = os.path.join(thumb_dir, f'{vid}.jpg')
@@ -27,13 +32,20 @@ def generate_thumbnail(vid):
     if os.path.exists(thumb):
         return True
 
-    # Try downloading from R2 (try both locations — worker uploads to thumbs/,
-    # index uploads to highlights/thumbs/)
+    # Try downloading from R2. Probe the per-user location first because
+    # that's where the post-refactor backfill puts thumbs; legacy flat
+    # paths are kept as a second-pass fallback for any pre-refactor video.
     import urllib.request
-    for r2_url in [
+    candidate_urls = []
+    if user_hash:
+        candidate_urls.append(
+            f'https://tennis.playfullife.com/highlights/{user_hash}/thumbs/{vid}.jpg'
+        )
+    candidate_urls += [
         f'https://tennis.playfullife.com/thumbs/{vid}.jpg',
         f'https://tennis.playfullife.com/highlights/thumbs/{vid}.jpg',
-    ]:
+    ]
+    for r2_url in candidate_urls:
         try:
             req = urllib.request.Request(r2_url, headers={'User-Agent': 'tennis-index/1.0'})
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -66,15 +78,28 @@ def generate_thumbnail(vid):
     return False
 
 
-def upload_thumbnail(client, vid):
-    """Upload thumbnail to R2 if it exists locally."""
+def upload_thumbnail(client, vid, user_hash=None):
+    """Upload thumbnail to R2 if it exists locally.
+
+    user_hash: if set, upload under highlights/<user_hash>/thumbs/ so the
+    per-user gallery URL can resolve it. Otherwise (legacy) upload flat.
+    """
     thumb = os.path.join(PROJECT_ROOT, 'exports', 'thumbs', f'{vid}.jpg')
     if os.path.exists(thumb):
-        client.upload(thumb, f'highlights/thumbs/{vid}.jpg', content_type='image/jpeg')
+        key = (f'highlights/{user_hash}/thumbs/{vid}.jpg'
+               if user_hash else f'highlights/thumbs/{vid}.jpg')
+        client.upload(thumb, key, content_type='image/jpeg')
 
 
-def get_video_metadata(vid, r2_client=None):
-    """Gather metadata for a video from detection JSON, R2 meta.json, or raw MOV."""
+def get_video_metadata(vid, r2_client=None, user_hash=None):
+    """Gather metadata for a video from detection JSON, R2 meta.json, or raw MOV.
+
+    user_hash: when set, look up the meta.json at the per-user path
+    (highlights/<user_hash>/<vid>/meta.json) first, then fall back to
+    the legacy flat path for any video that predates the per-user refactor.
+    Without this, every backfilled video falls through to "Unknown Date"
+    because the legacy flat meta.json was moved during backfill.
+    """
     info = {}
 
     # 1. Local detection JSON
@@ -97,25 +122,30 @@ def get_video_metadata(vid, r2_client=None):
 
     # 2. R2 meta.json (uploaded by GPU worker — has metadata even when local files missing)
     if r2_client:
-        meta_key = f'highlights/{vid}/meta.json'
-        try:
-            obj = r2_client.client.get_object(
-                Bucket=r2_client.bucket_name, Key=meta_key)
-            meta = json.loads(obj['Body'].read())
-            # Fill in any fields not already set by local detection JSON
-            if not info.get('shots'):
-                info['duration'] = meta.get('duration', 0)
-                info['shots'] = meta.get('shots', 0)
-                info['breakdown'] = meta.get('breakdown', {})
-            if meta.get('created') and 'created' not in info:
-                info['created'] = meta['created']
-            # Always pull ball/speed/line-call stats (only live on R2 meta)
-            for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate',
-                        'avg_speed_mph', 'max_speed_mph', 'in_count', 'out_count'):
-                if meta.get(bk) is not None:
-                    info[bk] = meta[bk]
-        except Exception:
-            pass
+        meta_candidates = []
+        if user_hash:
+            meta_candidates.append(f'highlights/{user_hash}/{vid}/meta.json')
+        meta_candidates.append(f'highlights/{vid}/meta.json')  # legacy flat
+        for meta_key in meta_candidates:
+            try:
+                obj = r2_client.client.get_object(
+                    Bucket=r2_client.bucket_name, Key=meta_key)
+                meta = json.loads(obj['Body'].read())
+                if not info.get('shots'):
+                    info['duration'] = meta.get('duration', 0)
+                    info['shots'] = meta.get('shots', 0)
+                    info['breakdown'] = meta.get('breakdown', {})
+                if meta.get('created') and 'created' not in info:
+                    info['created'] = meta['created']
+                if meta.get('display_name'):
+                    info['display_name'] = meta['display_name']
+                for bk in ('ball_avg_speed', 'ball_max_speed', 'ball_detection_rate',
+                            'avg_speed_mph', 'max_speed_mph', 'in_count', 'out_count'):
+                    if meta.get(bk) is not None:
+                        info[bk] = meta[bk]
+                break  # found one — don't probe the legacy path
+            except Exception:
+                continue
 
     # 3. Creation date from raw MOV
     if 'created' not in info:
@@ -228,6 +258,13 @@ def build_index_html(videos_meta):
                 label, color = label_map.get(key, (key, '#5DADE2'))
                 links.append({'key': key, 'file': f, 'label': label, 'color': color})
 
+        # Hide non-tennis uploads: pipeline ran to export (has files) but the
+        # shot detector (F1=96.5%) found 0 swings. Files stay in R2 — admin
+        # can recover via direct API if a false negative ever shows up.
+        if m.get('shots', 0) == 0 and links:
+            print(f'  skip {vid}: 0 shots detected (probably not tennis)')
+            continue
+
         video_data.append({
             'id': vid,
             'created': m.get('created', ''),
@@ -255,7 +292,7 @@ def build_index_html(videos_meta):
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23dbf757' stroke='%23a8c93f' stroke-width='2'/%3E%3Cpath d='M 8 35 Q 50 50 8 65' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3Cpath d='M 92 35 Q 50 50 92 65' fill='none' stroke='%23ffffff' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#eee}}
+body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#eee;overflow-x:hidden}}
 
 /* ── Header ── */
 .header{{position:sticky;top:0;z-index:100;background:#0a0a0a;border-bottom:1px solid #1a1a1a;padding:12px 20px}}
@@ -366,16 +403,21 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .card-meta{{display:flex;gap:8px;margin-top:4px;font-size:0.78em;color:#777}}
 .card-breakdown{{font-size:0.75em;color:#999;margin-top:3px}}
 /* Compact coach summary on card (always visible when coaching exists) */
-.card-coach-summary{{margin-top:8px;padding:8px 10px;background:#161a17;
+/* Compact coach pill — just a label that opens the full sheet/modal.
+   Headline text is hidden by default; available via the modal only. */
+.card-coach-summary{{margin-top:8px;padding:6px 10px;background:#161a17;
   border-left:3px solid #5ed694;border-radius:3px;cursor:pointer;
   transition:background .15s;display:none}}
-.card-coach-summary.loaded{{display:block}}
+.card-coach-summary.loaded{{display:flex;align-items:center;
+  justify-content:space-between;gap:8px}}
 .card-coach-summary:hover{{background:#1c211d}}
-.coach-summary-label{{color:#5ed694;font-size:.65em;font-weight:700;
-  text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;display:flex;
-  justify-content:space-between;align-items:center}}
-.coach-summary-label .more{{color:#8ae6ae;font-size:.9em;opacity:.8}}
-.coach-summary-text{{color:#eaeaea;font-size:.82em;line-height:1.35;font-weight:500}}
+.coach-summary-label{{color:#5ed694;font-size:.66em;font-weight:700;
+  text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px}}
+.coach-summary-label .more{{color:#8ae6ae;font-size:.92em;opacity:.85;
+  font-weight:600;text-transform:none;letter-spacing:0}}
+/* Headline text is kept in the DOM (the click handler reads it) but
+   visually hidden so the card stays compact. */
+.coach-summary-text{{display:none}}
 
 /* Sequences button on card */
 .seq-btn{{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;
@@ -402,8 +444,15 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .seq-fullscreen{{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.95);
   display:flex;align-items:center;justify-content:center;cursor:zoom-out}}
 .seq-fullscreen img{{max-width:100vw;max-height:100vh;object-fit:contain}}
-@media(max-width:600px){{.seq-item .seq-img-wrap{{overflow-x:auto;-webkit-overflow-scrolling:touch}}
-  .seq-item .seq-img-wrap img{{width:auto;height:180px;min-width:100%}}}}
+@media(max-width:600px){{
+  /* Filmstrip used to overflow horizontally on mobile (180px tall, intrinsic
+     wide aspect), which detached it from its label below. Fit to width
+     instead so the label always sits directly under the image. */
+  .seq-item .seq-img-wrap{{overflow:visible}}
+  .seq-item .seq-img-wrap img{{width:100%;height:auto;min-width:0}}
+  .seq-item .seq-label{{padding:8px 12px;font-size:.78em;color:#ccc;
+    background:#1a1a1a;border-top:1px solid #222}}
+}}
 
 /* Coach modal filmstrip inline */
 .coach-filmstrip{{margin-top:8px;border-radius:4px;overflow:hidden;display:none}}
@@ -446,23 +495,41 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .coach-modal .close{{position:absolute;top:20px;right:24px;background:none;
   border:none;color:#999;font-size:1.8em;cursor:pointer;line-height:1}}
 .coach-modal .close:hover{{color:#fff}}
-.card-links{{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid #222}}
-.link-row{{display:flex;align-items:center;gap:6px}}
-.link-row a.play-btn{{flex:1;color:#fff;text-decoration:none;font-size:0.74em;font-weight:600;
-  padding:5px 10px;border-radius:5px;opacity:.9;transition:opacity .15s;
-  display:flex;justify-content:space-between;align-items:center;gap:8px}}
-.link-row a.play-btn:hover{{opacity:1}}
-.link-row a.play-btn .ct{{font-weight:500;opacity:.75;font-size:.9em}}
-.link-row a.slow-btn{{color:#aaa;text-decoration:none;font-size:.65em;font-weight:600;
-  padding:3px 8px;border-radius:4px;background:#2a2a2a;border:1px solid #333;
-  text-transform:uppercase;letter-spacing:.05em;transition:all .15s}}
-.link-row a.slow-btn:hover{{color:#fff;background:#3a3a3a;border-color:#555}}
-.dl-btn{{display:inline-block;padding:4px 6px;font-size:.68em;color:#888;cursor:pointer;
-  text-decoration:none;opacity:.6;transition:opacity .15s;vertical-align:middle}}
-.dl-btn:hover{{opacity:1;color:#fff}}
-.del-btn{{display:inline-block;padding:6px 10px;font-size:.78em;color:#666;cursor:pointer;
-  text-align:center;border-top:1px solid #222;margin-top:4px;opacity:.5;transition:all .15s}}
-.del-btn:hover{{opacity:1;color:#E74C3C}}
+@media(max-width:600px){{
+  .coach-modal-overlay{{padding:20px 12px}}
+  .coach-modal{{padding:20px 18px;font-size:.92em}}
+  .coach-modal .headline{{font-size:1.1em;margin-bottom:16px}}
+  .coach-modal .close{{top:14px;right:16px}}
+}}
+/* Redesigned card actions — compact horizontal strip + slim footer */
+.card-links{{margin-top:10px;padding-top:8px;border-top:1px solid #222;
+  display:flex;flex-direction:column;gap:8px}}
+.play-strip{{display:flex;flex-wrap:wrap;gap:4px}}
+.play-chip{{color:#fff;text-decoration:none;font-size:0.72em;font-weight:600;
+  padding:5px 10px;border-radius:999px;opacity:.92;transition:opacity .15s;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}}
+.play-chip:hover{{opacity:1}}
+.play-chip .ch-ct{{font-weight:500;opacity:.85;font-size:.85em;
+  padding:1px 6px;background:rgba(0,0,0,.22);border-radius:8px}}
+.play-chip-primary{{width:100%;justify-content:center;background:#FF8C00;
+  padding:9px 14px;font-size:.86em;letter-spacing:.02em;
+  box-shadow:0 1px 0 rgba(0,0,0,0.25) inset}}
+.play-chip-primary:hover{{background:#ff9b1f}}
+.play-chip-primary .ch-ct{{background:rgba(0,0,0,0.32)}}
+.play-chip-slow{{color:#bbb;text-decoration:none;font-size:.7em;font-weight:600;
+  padding:5px 9px;border-radius:999px;background:#222;border:1px solid #2f2f2f;
+  transition:all .15s}}
+.play-chip-slow:hover{{color:#fff;background:#2c2c2c;border-color:#444}}
+.card-footer{{display:flex;align-items:center;gap:0;border-top:1px solid #1c1c1c;
+  margin-top:4px;padding-top:6px}}
+.card-footer .foot-btn{{flex:1;text-align:center;padding:6px 4px;font-size:.78em;
+  color:#888;cursor:pointer;opacity:.7;transition:all .15s;background:none;border:0;
+  text-decoration:none}}
+.card-footer .foot-btn:hover{{opacity:1;color:#fff}}
+.card-footer .foot-btn.danger:hover{{color:#E74C3C}}
+.card-footer .foot-btn.share:hover{{color:#C7FF00}}
+/* Hide-but-keep for legacy CSS callers (so older referenced classes don't NPE) */
+.del-btn{{}}.dl-btn{{}}.link-row{{}}
 
 /* ── Upload Modal ── */
 .modal-overlay{{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
@@ -496,6 +563,23 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 .player-bar button{{padding:6px 14px;background:#333;color:#ddd;border:none;border-radius:6px;font-size:.85em;cursor:pointer}}
 .player-bar button:hover{{background:#444}}
 .player-bar button.active{{background:#FF8C00;color:#fff}}
+
+/* Shot-type filter row — Phase 1 of the playlist refactor.
+   One chip per detected shot type; tapping plays only those segments
+   back-to-back. Lives inside the player overlay; collapses the per-type
+   buttons that used to spread across each gallery card. */
+.type-filter-row{{display:none;gap:6px;flex-wrap:wrap;padding:8px 4px 4px;
+  border-top:1px solid #222;margin-top:4px}}
+.type-filter-row.show{{display:flex}}
+.type-filter-chip{{padding:5px 11px;background:#1a1a1a;border:1px solid #2a2a2a;
+  border-radius:14px;color:#aaa;font-size:.78em;font-weight:600;cursor:pointer;
+  transition:all .15s;display:inline-flex;align-items:center;gap:5px;letter-spacing:.02em}}
+.type-filter-chip:hover{{border-color:#555;color:#eee}}
+.type-filter-chip.active{{background:#FF8C00;border-color:#FF8C00;color:#fff}}
+.type-filter-chip .ct{{font-size:.85em;opacity:.7;font-variant-numeric:tabular-nums}}
+.type-filter-chip.active .ct{{opacity:.95}}
+.type-filter-chip.slo{{margin-left:auto;background:transparent;border-color:#444}}
+.type-filter-chip.slo.active{{background:#9B59B6;border-color:#9B59B6;color:#fff}}
 
 /* Shot strip */
 .shot-strip{{display:none;gap:6px;overflow-x:auto;padding:8px 4px;margin-top:4px;
@@ -537,12 +621,21 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 @media(max-width:700px){{
   .header-inner{{gap:10px}}
   .logo{{font-size:1.1em}}
-  .grid{{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}}
+  /* min-width:0 lets the search box shrink instead of forcing the header
+     wider than the viewport (caused page-level horizontal scroll + cut
+     right column on phones). */
+  .search-box{{min-width:0;flex-basis:100%}}
+  /* Exactly two equal columns on phones — auto-fill with a px min could
+     compute 3 cols at some widths and cut the right one. 1fr 1fr always
+     fits the viewport regardless of exact width. */
+  .grid{{grid-template-columns:1fr 1fr;gap:8px}}
   .card-body{{padding:8px 10px}}
   .filters{{padding:8px 12px}}
   .content{{padding:12px}}
   .player-bar{{justify-content:center}}
   .share-btn{{margin-left:0!important;width:100%}}
+  /* keep the sort dropdown from overflowing the filter row */
+  .sort-select{{max-width:100%}}
 }}
 </style>
 </head><body>
@@ -557,7 +650,6 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
     </div>
     <div class="header-actions">
       <span class="stat-badge" id="statBadge"></span>
-      <button class="btn-upload" onclick="document.getElementById('uploadModal').classList.add('open')">Upload</button>
     </div>
   </div>
 </div>
@@ -566,10 +658,10 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 <div class="filter-toggle" id="filterToggle" onclick="toggleFilters()">
   <span>Filter &amp; Sort</span>
   <span class="filter-badge" id="filterBadge"></span>
-  <span class="filter-arrow" id="filterArrow">&#9660;</span>
+  <span class="filter-arrow open" id="filterArrow">&#9660;</span>
 </div>
-<div class="filters collapsed" id="filters"></div>
-<div class="filters collapsed" style="padding-top:0" id="filtersRow2">
+<div class="filters" id="filters"></div>
+<div class="filters" style="padding-top:0" id="filtersRow2">
   <div class="active-filter" id="activeFilter"><span id="activeFilterText"></span><button class="clear" onclick="clearFilter()">&times;</button></div>
   <select class="sort-select" id="sortSelect" onchange="changeSort(this.value)">
     <option value="recorded-desc">Date Recorded (newest)</option>
@@ -618,9 +710,9 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
 <div class="compare-modal-overlay" id="compareModal" onclick="if(event.target===this)closeCompareModal()">
   <div class="compare-modal">
     <button class="close" onclick="closeCompareModal()">&times;</button>
-    <h2 id="compareTitle">Pro Comparison</h2>
-    <img id="compareImg" alt="Compare to pro" onload="document.getElementById('compareErr').style.display='none';this.style.display='block';" onerror="this.style.display='none';document.getElementById('compareErr').style.display='block';">
-    <div class="err" id="compareErr" style="display:none">No pro comparison available for this shot yet. Comparisons are pre-generated for some videos; coverage will expand.</div>
+    <h2 id="compareTitle">You vs Pro</h2>
+    <video id="compareVid" controls playsinline style="display:none;max-width:100%;max-height:78vh;border-radius:4px;background:#000"></video>
+    <div class="err" id="compareErr" style="display:none">No pro comparison available for this shot yet.</div>
   </div>
 </div>
 
@@ -659,6 +751,7 @@ body{{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e
       <button onclick="copyTimeLink()" class="share-btn" id="shareBtn">Copy link at time</button>
       <button onclick="downloadCurrent()" class="share-btn" style="background:#555!important">Download</button>
     </div>
+    <div class="type-filter-row" id="typeFilter"></div>
     <div class="shot-strip-hdr" id="shotStripHdr">Jump to shot</div>
     <div class="shot-strip" id="shotStrip"></div>
   </div>
@@ -686,6 +779,29 @@ var currentShots = null;   // {{video, shots[]}} loaded from shots.json
 var currentVariant = null; // e.g. "timeline" / "rally_slowmo" — derived from url
 
 function openPlayer(url, title) {{
+  // PR-J: if we're inside the iOS WebView wrapper, hand the URL off
+  // to native AVPlayerViewController. We forward `pendingTime` (set
+  // by jumpToExample / deep links) so the native player seeks to the
+  // same starting point the HTML5 player would.
+  try {{
+    if (window.webkit && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.openVideo) {{
+      var msg = {{url: url, title: title || ''}};
+      if (pendingTime !== null && pendingTime > 0) {{
+        msg.startTime = pendingTime;
+      }}
+      // Phase 3: extract <vid> + <variant> from the URL so the native
+      // side can fetch shots.json and surface the same chip filter
+      // that the web player has. Swift owns the fetch (no JS-to-Swift
+      // data payload needed) — keeps the bridge surface area small.
+      var nm = url.match(/\\/([A-Za-z0-9_]+)\\/\\1_(\\w+)\\.mp4$/);
+      if (nm) {{ msg.videoId = nm[1]; msg.variant = nm[2]; }}
+      pendingTime = null;
+      window.webkit.messageHandlers.openVideo.postMessage(msg);
+      return;
+    }}
+  }} catch (e) {{}}
+
   // Reset to a clean paused state before loading new source so native
   // controls don't flash the wrong play/pause icon.
   try {{ vid.pause(); }} catch (e) {{}}
@@ -711,12 +827,16 @@ function openPlayer(url, title) {{
   // Parse "<vid>/<vid>_<variant>.mp4" from the URL and load shots.json
   var m = url.match(/\\/([A-Za-z0-9_]+)\\/\\1_(\\w+)\\.mp4$/);
   if (m) loadShotsStrip(m[1], m[2]);
-  else {{ currentShots = null; currentVariant = null; document.getElementById('shotStrip').classList.remove('show'); document.getElementById('shotStripHdr').classList.remove('show'); }}
+  else {{ currentShots = null; currentVariant = null; document.getElementById('shotStrip').classList.remove('show'); document.getElementById('shotStripHdr').classList.remove('show'); document.getElementById('typeFilter').classList.remove('show'); }}
 }}
 
 function loadShotsStrip(vidId, variant) {{
   currentVariant = variant;
   var doRender = function() {{ renderShotStrip(); }};
+  // Load the per-shot pro-comparison manifest (best-effort): the set of
+  // global shot indices that have a {vid}_comparison_shot_NNN.mp4 clip.
+  // Drives whether the "vs pro" pill shows on each shot chip.
+  loadComparisonIndex(vidId);
   if (currentShots && currentShots.video === vidId) {{ doRender(); return; }}
   fetch('/' + vidId + '/shots.json', {{cache: 'no-store'}})
     .then(function(r) {{ if(!r.ok) throw new Error('404'); return r.json(); }})
@@ -725,8 +845,24 @@ function loadShotsStrip(vidId, variant) {{
       currentShots = null;
       document.getElementById('shotStrip').classList.remove('show');
       document.getElementById('shotStripHdr').classList.remove('show');
+      document.getElementById('typeFilter').classList.remove('show');
     }});
 }}
+
+var comparisonShots = null;   // {{video, Set of global shot idxs with a clip}}
+function loadComparisonIndex(vidId) {{
+  if (comparisonShots && comparisonShots.video === vidId) {{ return; }}
+  comparisonShots = null;
+  fetch('/' + vidId + '/' + vidId + '_comparisons_index.json', {{cache:'no-store'}})
+    .then(function(r) {{ if(!r.ok) throw new Error('404'); return r.json(); }})
+    .then(function(d) {{
+      comparisonShots = {{video: vidId, set: {{}}}};
+      (d.shots || []).forEach(function(ix) {{ comparisonShots.set[ix] = true; }});
+      renderShotStrip();  // re-render so pills appear once the manifest lands
+    }})
+    .catch(function() {{ comparisonShots = {{video: vidId, set: {{}}}}; }});
+}}
+function pad3(n) {{ n = String(n); while (n.length < 3) n = '0' + n; return n; }}
 
 function renderShotStrip() {{
   var strip = document.getElementById('shotStrip');
@@ -743,16 +879,22 @@ function renderShotStrip() {{
   var html = '';
   shots.forEach(function(s, i) {{
     var pos = s.positions[currentVariant];
+    var gidx = (s.idx !== undefined) ? s.idx : i;  // global shot index
     var label = ({{'serve':'S','forehand':'FH','backhand':'BH','forehand_volley':'FV','backhand_volley':'BV','overhead':'OH','unknown_shot':'?'}})[s.type] || '?';
-    html += '<div class="shot-chip ' + s.type + '" data-t="' + pos + '" data-idx="' + i + '">'
+    // Show the "vs pro" pill only for shots that actually have a comparison
+    // clip (per the manifest); tapping plays {vid}_comparison_shot_NNN.mp4.
+    var hasCompare = comparisonShots && comparisonShots.set && comparisonShots.set[gidx];
+    html += '<div class="shot-chip ' + s.type + '" data-t="' + pos + '" data-idx="' + i + '" data-gidx="' + gidx + '">'
       + '<span class="t">' + fmtShotTime(pos) + '</span>'
       + '<span class="ty">' + label + '</span>'
-      + '<span class="vs" title="Compare to pro">vs pro</span></div>';
+      + (hasCompare ? '<span class="vs" title="Compare to pro">vs pro</span>' : '')
+      + '</div>';
   }});
   strip.innerHTML = html;
   strip.classList.add('show');
   hdr.classList.add('show');
   updateActiveShotChip();
+  renderTypeFilter();
 }}
 
 function fmtShotTime(s) {{
@@ -783,12 +925,185 @@ function updateActiveShotChip() {{
 
 vid.addEventListener('timeupdate', updateActiveShotChip);
 
+// ── Phase 1 playlist filter ──
+// Replaces the per-type chip-explosion on each gallery card. The card
+// opens the full timeline; the player surfaces a chip row that filters
+// to a single shot type, then auto-seeks the playhead from segment to
+// segment so the user hears/sees only those shots back-to-back.
+//
+// SEGMENT_PRE/POST = 1.5s/2.5s window per detected swing. This matches
+// roughly what export_videos.py's bytype path produces (it uses
+// before=2.0, after=2.0), tightened slightly so the playlist feels
+// snappy rather than padded.
+//
+// Named playerFilter (not currentFilter) because the gallery's older
+// session-level filter chip code also uses `currentFilter` at top-scope
+// and `var` would merge them.
+var playerFilter = 'all';
+var SEGMENT_PRE = 1.5;
+var SEGMENT_POST = 2.5;
+var FILTER_TYPE_MAP = {{
+  'serve':    ['serve'],
+  'forehand': ['forehand'],
+  'backhand': ['backhand'],
+  'volley':   ['forehand_volley','backhand_volley'],
+  'overhead': ['overhead'],
+}};
+
+function buildRallySegments() {{
+  // Rally = group shots into "points" (consecutive within 8s of each
+  // other) and play each point as a single longer segment. Matches the
+  // logic that used to produce rally.mp4 server-side (point_gap=8.0,
+  // before=3.5, after=4.5).
+  if (!currentShots || !currentVariant) return [];
+  var ts = [];
+  currentShots.shots.forEach(function(s) {{
+    if (s.positions && s.positions[currentVariant] !== undefined) {{
+      ts.push(s.positions[currentVariant]);
+    }}
+  }});
+  ts.sort(function(a,b){{ return a-b; }});
+  if (ts.length === 0) return [];
+  var POINT_GAP = 8.0, BEFORE = 3.5, AFTER = 4.5;
+  var points = [[ts[0]]];
+  for (var i = 1; i < ts.length; i++) {{
+    var prev = points[points.length-1];
+    if (ts[i] - prev[prev.length-1] > POINT_GAP) points.push([ts[i]]);
+    else prev.push(ts[i]);
+  }}
+  return points.map(function(p) {{
+    return {{start: Math.max(0, p[0] - BEFORE), end: p[p.length-1] + AFTER}};
+  }});
+}}
+
+function buildSegmentList(filter) {{
+  if (filter === 'rally') return buildRallySegments();
+  if (!currentShots || !currentVariant) return [];
+  var types = FILTER_TYPE_MAP[filter];  // undefined → 'all' / no filter
+  var segs = [];
+  currentShots.shots.forEach(function(s) {{
+    if (!s.positions || s.positions[currentVariant] === undefined) return;
+    if (types && types.indexOf(s.type) < 0) return;
+    var t = s.positions[currentVariant];
+    segs.push({{start: Math.max(0, t - SEGMENT_PRE), end: t + SEGMENT_POST}});
+  }});
+  segs.sort(function(a,b){{ return a.start - b.start; }});
+  // Merge any adjacent segments so consecutive same-type shots play
+  // as one continuous run rather than micro-seeking between them.
+  var merged = [];
+  segs.forEach(function(s) {{
+    var last = merged[merged.length - 1];
+    if (last && s.start <= last.end + 0.3) {{
+      last.end = Math.max(last.end, s.end);
+    }} else {{
+      merged.push({{start: s.start, end: s.end}});
+    }}
+  }});
+  return merged;
+}}
+
+function renderTypeFilter() {{
+  var row = document.getElementById('typeFilter');
+  if (!currentShots || !currentVariant) {{ row.classList.remove('show'); return; }}
+  // Filter chips only matter on full-session variants. Per-type files
+  // (forehands.mp4 etc.) already filter their own content.
+  var variantOK = currentVariant === 'timeline' || currentVariant === 'rally'
+    || currentVariant === 'grouped' || currentVariant === 'highlights';
+  if (!variantOK) {{ row.classList.remove('show'); return; }}
+  var counts = {{}};
+  var total = 0;
+  currentShots.shots.forEach(function(s) {{
+    if (!s.positions || s.positions[currentVariant] === undefined) return;
+    total++;
+    Object.keys(FILTER_TYPE_MAP).forEach(function(k) {{
+      if (FILTER_TYPE_MAP[k].indexOf(s.type) >= 0) {{
+        counts[k] = (counts[k] || 0) + 1;
+      }}
+    }});
+  }});
+  var html = '<span class="type-filter-chip ' + (playerFilter==='all'?'active':'')
+    + '" data-f="all">All <span class="ct">'+total+'</span></span>';
+  // Rally chip — group-by-point segment view. Count = number of points.
+  var rallySegs = buildRallySegments();
+  if (rallySegs.length > 0) {{
+    html += '<span class="type-filter-chip ' + (playerFilter==='rally'?'active':'')
+      + '" data-f="rally">Rally <span class="ct">'+rallySegs.length+'</span></span>';
+  }}
+  [['serve','Serve'],['forehand','FH'],['backhand','BH'],['volley','Volley'],['overhead','OH']].forEach(function(p) {{
+    var key = p[0], label = p[1];
+    var c = counts[key] || 0;
+    if (c === 0) return;
+    html += '<span class="type-filter-chip ' + (playerFilter===key?'active':'')
+      + '" data-f="'+key+'">'+label+' <span class="ct">'+c+'</span></span>';
+  }});
+  var sloActive = vid.playbackRate <= 0.6;
+  html += '<span class="type-filter-chip slo ' + (sloActive?'active':'')
+    + '" data-f="slo">&#x1F422; Slo</span>';
+  row.innerHTML = html;
+  row.classList.add('show');
+}}
+
+function applyTypeFilter(f) {{
+  if (f === 'slo') {{
+    var newRate = vid.playbackRate <= 0.6 ? 1 : 0.5;
+    vid.playbackRate = newRate;
+    document.querySelectorAll('.speed-group button').forEach(function(b) {{
+      b.classList.toggle('active', parseFloat(b.textContent) === newRate);
+    }});
+    renderTypeFilter();
+    return;
+  }}
+  playerFilter = f;
+  renderTypeFilter();
+  var segs = buildSegmentList(f);
+  if (segs.length > 0) {{
+    // Wait for the seek to commit before play(), otherwise the browser
+    // can drop the play() call mid-seek and the player ends up paused.
+    // Reproduced on iphone_9ca0a615 Rally: needed 3 taps before
+    // anything started.
+    var onSeeked = function() {{
+      vid.removeEventListener('seeked', onSeeked);
+      vid.play().catch(function(){{}});
+    }};
+    vid.addEventListener('seeked', onSeeked);
+    vid.currentTime = segs[0].start;
+  }}
+}}
+
+document.getElementById('typeFilter').addEventListener('click', function(e) {{
+  var chip = e.target.closest('.type-filter-chip');
+  if (!chip) return;
+  applyTypeFilter(chip.dataset.f);
+}});
+
+// Auto-seek playhead from segment to segment when a non-'all' filter
+// is active. Cheap: runs on every timeupdate (~4Hz) and only mutates
+// currentTime when we're actually in a gap.
+function segmentAutoSeek() {{
+  if (playerFilter === 'all') return;
+  var segs = buildSegmentList(playerFilter);
+  if (segs.length === 0) return;
+  var now = vid.currentTime;
+  for (var i = 0; i < segs.length; i++) {{
+    if (now >= segs[i].start && now <= segs[i].end) return;  // inside
+  }}
+  for (var j = 0; j < segs.length; j++) {{
+    if (segs[j].start > now) {{ vid.currentTime = segs[j].start; return; }}
+  }}
+  // Past the last segment — loop back so filter playback feels continuous.
+  vid.currentTime = segs[0].start;
+}}
+vid.addEventListener('timeupdate', segmentAutoSeek);
+
 document.getElementById('shotStrip').addEventListener('click', function(e) {{
-  // Compare button — small "vs pro" pill inside the chip
+  // Compare button — small "vs pro" pill inside the chip. Opens the
+  // per-shot side-by-side comparison clip in an overlay ON TOP of the
+  // timeline player, so closing returns you to the timeline where you
+  // were (not out to the gallery).
   if (e.target.classList.contains('vs')) {{
     var chip = e.target.closest('.shot-chip');
     if (chip && currentShots) {{
-      openCompareModal(currentShots.video, parseInt(chip.dataset.idx));
+      openCompareModal(currentShots.video, parseInt(chip.dataset.gidx));
     }}
     e.stopPropagation();
     return;
@@ -803,23 +1118,35 @@ document.getElementById('shotStrip').addEventListener('click', function(e) {{
 }});
 
 function openCompareModal(videoId, shotIdx) {{
-  var img = document.getElementById('compareImg');
+  var cvid = document.getElementById('compareVid');
   var err = document.getElementById('compareErr');
   document.getElementById('compareTitle').textContent =
-    'Pro Comparison — ' + videoId + ' shot ' + shotIdx;
-  // Reset visibility before load attempt
-  img.style.display = 'none'; err.style.display = 'none';
-  img.src = '/compare/' + videoId + '/shot_' + shotIdx + '.png';
+    'You vs Pro \\u2014 shot ' + (shotIdx + 1);
+  // Pause the timeline underneath so two videos don't play at once; it
+  // keeps its position so closing resumes exactly where you were.
+  try {{ vid.pause(); }} catch(e) {{}}
+  err.style.display = 'none';
+  cvid.style.display = 'block';
+  cvid.src = 'https://tennis.playfullife.com/' + videoId
+    + '/' + videoId + '_comparison_shot_' + pad3(shotIdx) + '.mp4';
+  cvid.onerror = function(){{ cvid.style.display='none'; err.style.display='block'; }};
   document.getElementById('compareModal').classList.add('open');
+  cvid.play().catch(function(){{}});
 }}
 function closeCompareModal() {{
+  var cvid = document.getElementById('compareVid');
+  try {{ cvid.pause(); cvid.removeAttribute('src'); cvid.load(); }} catch(e) {{}}
   document.getElementById('compareModal').classList.remove('open');
+  // Return to the timeline player (still open underneath) — resume play.
+  vid.play().catch(function(){{}});
 }}
 
 function closePlayer() {{
   vid.pause(); vid.removeAttribute('src'); vid.load();
   overlay.style.display = 'none'; document.body.style.overflow = '';
   history.replaceState(null,'',location.pathname);
+  playerFilter = 'all';  // reset so the next-opened player starts unfiltered
+  document.getElementById('typeFilter').classList.remove('show');
 }}
 
 function setSpeed(s,btn) {{
@@ -839,21 +1166,84 @@ function dlFile(url) {{
   f.src = url + (url.includes('?')?'&':'?') + 'dl=1';
 }}
 
+// PR-D — rename a video. Owner JWT (or admin) only; persists to meta.json
+// `display_name`. Empty string clears the rename. Updates the local
+// VIDEOS array so the gallery re-renders without a full reload.
+function renameVideo(vid) {{
+  var current = '';
+  for (var i=0; i<VIDEOS.length; i++) {{
+    if(VIDEOS[i].id === vid) {{ current = VIDEOS[i].display_name || ''; break; }}
+  }}
+  var name = prompt('New name (blank to reset to '+vid+'):', current);
+  if (name === null) return;
+  name = name.trim().slice(0, 80);
+  fetch('/api/video/'+vid+'/rename', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    credentials:'include',
+    body: JSON.stringify({{display_name: name}}),
+  }}).then(function(r){{ return r.json().then(function(j){{ return {{status:r.status, json:j}}; }}); }})
+  .then(function(res){{
+    if(res.status !== 200) throw new Error(res.json.error || ('failed: '+res.status));
+    for (var i=0; i<VIDEOS.length; i++) {{
+      if(VIDEOS[i].id === vid) {{
+        if (res.json.display_name) VIDEOS[i].display_name = res.json.display_name;
+        else delete VIDEOS[i].display_name;
+        break;
+      }}
+    }}
+    renderGallery();
+  }})
+  .catch(function(e){{ alert('Rename failed: '+e.message); }});
+}}
+
+// PR-F — generate a public share link for one video. Worker stores
+// `shares/<token>.json`, returns the URL. We try the iOS native share
+// sheet first; otherwise we put the URL on the clipboard.
+function createShareLink(vid) {{
+  fetch('/api/video/'+vid+'/share', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}},
+    credentials:'include',
+    body:'{{}}',
+  }}).then(function(r){{
+    return r.json().then(function(j){{ return {{status:r.status, json:j}}; }});
+  }}).then(function(res){{
+    if(res.status !== 200) throw new Error(res.json.error || ('failed: '+res.status));
+    var url = res.json.url;
+    // Native iOS share sheet via Web Share API where available.
+    if (navigator.share) {{
+      navigator.share({{title: vid, url: url}}).catch(function(){{}});
+      return;
+    }}
+    if (navigator.clipboard) {{
+      navigator.clipboard.writeText(url).then(function(){{
+        alert('Share link copied:\\n' + url);
+      }}, function(){{ prompt('Share link:', url); }});
+      return;
+    }}
+    prompt('Share link:', url);
+  }}).catch(function(e){{ alert('Error: '+e.message); }});
+}}
+
 function deleteVideo(vid) {{
   if(!confirm('Permanently delete '+vid+' and all its files?')) return;
-  var pwd = prompt('Enter delete password:');
-  if(!pwd) return;
+  // Per-user gallery is cookie-authenticated. Worker validates the JWT
+  // and accepts the delete from the owner or an admin. No fallback —
+  // the legacy shared password is gone (every signed-in user has a JWT).
   fetch('/api/video/'+vid+'/delete', {{
     method:'POST', headers:{{'Content-Type':'application/json'}},
-    body:JSON.stringify({{password:pwd}})
-  }}).then(function(r){{return r.json()}}).then(function(d) {{
-    if(d.error) {{ alert('Delete failed: '+d.error); return; }}
+    credentials:'include',
+    body:'{{}}',
+  }}).then(function(r){{
+    return r.json().then(function(j){{ return {{status:r.status, json:j}}; }});
+  }}).then(function(res){{
+    if(res.status !== 200) throw new Error(res.json.error || ('delete failed: '+res.status));
+    return res.json;
+  }}).then(function(d){{
     alert('Deleted '+vid+' ('+d.deleted+' files removed)');
-    // Remove from local data and re-render
     VIDEOS = VIDEOS.filter(function(v){{ return v.id !== vid; }});
     buildFilters();
     renderGallery();
-  }}).catch(function(e){{ alert('Error: '+e); }});
+  }}).catch(function(e){{ alert('Error: '+e.message); }});
 }}
 
 function downloadCurrent() {{
@@ -915,6 +1305,18 @@ function applySummary(vid, d) {{
 function openCoachModal(vid) {{
   var d = coachCache[vid];
   if(!d) return;
+  // UX-3: if we're inside the iOS WebView wrapper, hand off to the
+  // native SwiftUI sheet. JS posts the cached coaching JSON over the
+  // openCoach message bridge instead of opening the inline HTML modal.
+  try {{
+    if (window.webkit && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.openCoach) {{
+      window.webkit.messageHandlers.openCoach.postMessage(
+        {{vid: vid, coaching: d}}
+      );
+      return;
+    }}
+  }} catch (e) {{}}
   document.getElementById('coachVid').textContent = vid;
   document.getElementById('coachHeadline').textContent = d.headline || '';
   var body = document.getElementById('coachBody');
@@ -1243,6 +1645,43 @@ function toggleFilters() {{
   }}
 }}
 
+// UX-4 — iOS native filter bridge. iOS posts the chosen {{filter, sort}}
+// from a SwiftUI sheet; we set state, hide the desktop UI artefacts,
+// and re-render. Called via webView.evaluateJavaScript from Swift.
+function applyNativeFilter(opts) {{
+  if(!opts || typeof opts !== 'object') return;
+  if(typeof opts.filter === 'string') currentFilter = opts.filter;
+  if(typeof opts.sort === 'string') currentSort = opts.sort;
+  // Sync the inline UI so re-toggling the WebView's own panel reflects
+  // what the native sheet set.
+  document.querySelectorAll('.chip').forEach(function(c){{ c.classList.remove('active'); }});
+  var matching = document.querySelector('.chip[data-filter="'+currentFilter+'"]');
+  if(matching) matching.classList.add('active');
+  var sortSel = document.getElementById('sortSelect');
+  if(sortSel) sortSel.value = currentSort;
+  updateActiveFilter();
+  updateFilterBadge();
+  renderGallery();
+}}
+
+// Hide the WebView's own Filter & Sort row when we detect we're
+// running inside the iOS native shell (where the user gets a native
+// sheet instead). The probe uses the openVideo message bridge as a
+// proxy for "this WebView is our iOS app".
+(function hideInlineFiltersOnIOS() {{
+  try {{
+    if (window.webkit && window.webkit.messageHandlers
+        && window.webkit.messageHandlers.openVideo) {{
+      var t = document.getElementById('filterToggle');
+      var f1 = document.getElementById('filters');
+      var f2 = document.getElementById('filtersRow2');
+      if (t) t.style.display = 'none';
+      if (f1) f1.style.display = 'none';
+      if (f2) f2.style.display = 'none';
+    }}
+  }} catch (e) {{}}
+}})();
+
 function updateFilterBadge() {{
   var badge = document.getElementById('filterBadge');
   if(currentFilter === 'all') {{
@@ -1424,7 +1863,14 @@ function renderGallery() {{
         var thumbUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primaryPlay.file;
         thumbAction = ' data-action="play" data-url="'+thumbUrl+'" data-title="'+primaryPlay.label+' \\u2014 '+v.id+'" style="cursor:pointer"';
       }}
-      var thumbHtml = '<div class="card-thumb-wrap"'+thumbAction+'>'+thumbInner+'<span class="card-id">'+v.id+'</span></div>';
+      // Card label = user-set display_name if present, else vid. The
+      // raw vid stays available via a small subtitle for context.
+      var titleLabel = v.display_name || v.id;
+      var thumbHtml = '<div class="card-thumb-wrap"'+thumbAction+'>'+thumbInner
+        + '<span class="card-id" title="Click to rename" data-action="rename" data-vid="'+v.id+'">'
+        + escapeHtml(titleLabel)
+        + (v.display_name ? ' <span style="opacity:0.6">&#9998;</span>' : '')
+        + '</span></div>';
 
       // Group links by base type (e.g. "rally" + "rally_slowmo" → one row)
       var groups = {{}};
@@ -1449,30 +1895,39 @@ function renderGallery() {{
         return v.shots || 0;
       }};
 
+      // Single Play action per card. The in-player chip row handles
+      // shot-type filtering and slo-mo, so the card stays clean even
+      // as we add more shot types (slice FH/BH, overhead, etc.). Falls
+      // back through timeline → rally → highlights → grouped → first
+      // available so older videos without a timeline still play.
+      var preferKeys = ['timeline','rally','highlights','grouped'];
+      var primary = null;
+      for (var pi = 0; pi < preferKeys.length && !primary; pi++) {{
+        var g = groups[preferKeys[pi]];
+        if (g && (g.normal || g.slow)) primary = g.normal || g.slow;
+      }}
+      if (!primary) {{
+        // Last resort: first available variant in groupOrder
+        for (var gi = 0; gi < groupOrder.length && !primary; gi++) {{
+          var g2 = groups[groupOrder[gi]];
+          primary = g2.normal || g2.slow;
+        }}
+      }}
       var linksHtml = '';
-      groupOrder.forEach(function(baseKey) {{
-        var g = groups[baseKey];
-        var primary = g.normal || g.slow;
+      if (primary) {{
         var primaryUrl = 'https://tennis.playfullife.com/'+v.id+'/'+primary.file;
-        var cnt = countFor(baseKey);
-        var countBadge = cnt > 0 ? ' <span class="ct">('+cnt+')</span>' : '';
-        linksHtml += '<div class="link-row">';
-        linksHtml += '<a href="'+primaryUrl+'" class="play-btn" data-title="'+g.label+' \\u2014 '+v.id+'" '
-          +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-          +'style="background:'+g.color+'">'+g.label+countBadge+'</a>';
-        if(g.normal) {{
-          var nUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.normal.file;
-          linksHtml += '<span class="dl-btn" data-action="download" data-url="'+nUrl+'" title="Download">&#8681;</span>';
-        }}
-        if(g.slow) {{
-          var sUrl = 'https://tennis.playfullife.com/'+v.id+'/'+g.slow.file;
-          linksHtml += '<a href="'+sUrl+'" class="slow-btn" data-title="'+g.label+' (Slow-Mo) \\u2014 '+v.id+'" '
-            +'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false" '
-            +'title="Slow Motion">slow</a>';
-          linksHtml += '<span class="dl-btn" data-action="download" data-url="'+sUrl+'" title="Download Slow-Mo">&#8681;</span>';
-        }}
-        linksHtml += '</div>';
-      }});
+        // Compose a human-friendly player title from the recorded
+        // date/time (falling back to the raw video id). Beats showing
+        // `iphone_9ca0a615` as the modal header.
+        var humanTitle = time ? (time + ' \\u2014 ' + v.id) : v.id;
+        linksHtml = '<div class="play-strip">'
+          + '<a href="'+primaryUrl+'" class="play-chip play-chip-primary" '
+          + 'data-title="'+humanTitle+'" '
+          + 'onclick="event.stopPropagation();openPlayer(this.href,this.dataset.title);return false">'
+          + '<span class="ch-lbl">&#9654; Watch</span>'
+          + (v.shots ? '<span class="ch-ct">'+v.shots+'</span>' : '')
+          + '</a></div>';
+      }}
 
       html += '<div class="card">';
       html += thumbHtml;
@@ -1492,11 +1947,15 @@ function renderGallery() {{
       html += '</div>';
       if(bdParts.length) html += '<div class="card-breakdown">'+bdParts.join(', ')+'</div>';
       html += '<div class="card-coach-summary" id="coachSum-'+v.id+'" data-action="coach" data-vid="'+v.id+'">'
-        +'<div class="coach-summary-label"><span>Coach</span><span class="more">Details &rsaquo;</span></div>'
-        +'<div class="coach-summary-text"></div></div>';
+        +'<span class="coach-summary-label">Coach summary</span>'
+        +'<span class="more">View &rsaquo;</span>'
+        +'<span class="coach-summary-text" hidden></span></div>';
       html += '<div class="card-links">'+linksHtml
-        +'<span class="seq-btn" data-action="sequences" data-vid="'+v.id+'">&#127910; Sequences</span>'
-        +'<span class="del-btn" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
+        +'<div class="card-footer">'
+        +'<span class="foot-btn" data-action="sequences" data-vid="'+v.id+'" title="Swing sequences">&#127910; Sequences</span>'
+        +'<span class="foot-btn share" data-action="share-link" data-vid="'+v.id+'" title="Get a share link">&#128279; Share</span>'
+        +'<span class="foot-btn danger" data-action="delete" data-vid="'+v.id+'" title="Delete this video">&#128465;</span>'
+        +'</div>'
         +'</div>';
       html += '</div></div>';
     }});
@@ -1641,10 +2100,14 @@ document.getElementById('searchInput').addEventListener('input', function(e) {{
       var inner = '';
       inflight.forEach(function(item) {{
         var name = stripName(item.filename);
-        var label = stageLabels[item.stage]||stageLabels[item.status]||item.status;
+        // Status may be missing on freshly-written markers (the worker
+        // writes the marker before the coordinator stamps a status).
+        // Show those as "Queued" instead of literal 'undefined'.
+        var label = stageLabels[item.stage]||stageLabels[item.status]||
+                    (item.status ? item.status : 'Queued');
         var pct = (item.progress!=null && item.progress!==0) ? ' '+item.progress+'%' : '';
         var cls = 'proc-item';
-        if(item.status==='pending'||item.status==='coordinator_registered'||item.status==='awaiting_coordinator') cls += ' proc-pending';
+        if(!item.status||item.status==='pending'||item.status==='coordinator_registered'||item.status==='awaiting_coordinator') cls += ' proc-pending';
         inner += '<span class="'+cls+'"><span class="proc-dot"></span>'+name+' <span class="stage">'+label+pct+'</span></span>';
       }});
       rows.push('<div class="proc-bar"><span class="proc-label">Processing now ('+inflight.length+')</span><div class="proc-items">'+inner+'</div></div>');
@@ -1743,6 +2206,8 @@ document.getElementById('content').addEventListener('click', function(e) {{
   else if(action === 'share') shareSession(dk);
   else if(action === 'download') dlFile(el.dataset.url);
   else if(action === 'delete') deleteVideo(el.dataset.vid);
+  else if(action === 'share-link') createShareLink(el.dataset.vid);
+  else if(action === 'rename') renameVideo(el.dataset.vid);
   else if(action === 'play') openPlayer(el.dataset.url, el.dataset.title);
   else if(action === 'coach') openCoachModal(el.dataset.vid);
   else if(action === 'sequences') openSeqModal(el.dataset.vid);
@@ -1781,13 +2246,19 @@ def get_branch_slug():
     return 'unknown'
 
 
-def update_index(mode='production'):
+def update_index(mode='production', user_hash=None):
     """Main: gather metadata, build HTML, deploy.
 
     mode:
       'production' — upload to highlights/index.html (live URL)
       'staging'    — upload to staging/<branch>/highlights/index.html
       'preview'    — write to ~/whiteboards/preview-<branch>/index.html (no upload)
+
+    user_hash: if set (e.g. 'u_666f1a02'), generate a PER-USER gallery:
+      - Source keys filtered to highlights/<user_hash>/...
+      - All in-HTML URLs rewritten with `/u/<user_hash>` prefix
+      - Index uploaded to highlights/<user_hash>/index.html
+      Otherwise behaves as the legacy flat root gallery.
     """
     from dotenv import load_dotenv
     load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
@@ -1796,21 +2267,31 @@ def update_index(mode='production'):
     from storage.r2_client import R2Client
 
     c = R2Client()
-    keys = c.list(prefix='highlights/', max_keys=10000)
+    if user_hash:
+        list_prefix = f'highlights/{user_hash}/'
+        strip_prefix = f'highlights/{user_hash}/'
+    else:
+        list_prefix = 'highlights/'
+        strip_prefix = 'highlights/'
+    keys = c.list(prefix=list_prefix, max_keys=10000)
 
-    # Group files by video
+    # Group files by video. The flat layout has parts = [highlights, vid, file]
+    # while the per-user layout has [highlights, user_hash, vid, file]. We
+    # normalize by stripping the highlights/<user_hash?>/ prefix and reparsing.
     videos = {}
     video_features = {}  # vid -> set of features detected from R2 keys
     for k in keys:
         if 'index.html' in k or 'thumbs/' in k:
             continue
-        parts = k.split('/')
-        if len(parts) >= 3:
-            vid = parts[1]
+        if not k.startswith(strip_prefix):
+            continue
+        rel = k[len(strip_prefix):]  # e.g. "IMG_1108/timeline.mp4"
+        parts = rel.split('/')
+        if len(parts) >= 2:
+            vid = parts[0]
             fname = parts[-1]
-            # Track feature presence from subfolder names
-            if len(parts) == 4:
-                subfolder = parts[2]
+            if len(parts) == 3:
+                subfolder = parts[1]
                 feats = video_features.setdefault(vid, set())
                 if subfolder == 'sequences':
                     feats.add('sequences')
@@ -1818,7 +2299,7 @@ def update_index(mode='production'):
                         feats.add('racket_removed')
                 elif subfolder == 'comparisons':
                     feats.add('comparisons')
-            if len(parts) == 3 and fname.endswith('.mp4'):
+            if len(parts) == 2 and fname.endswith('.mp4'):
                 videos.setdefault(vid, []).append(fname)
                 if '_tracked' in fname:
                     video_features.setdefault(vid, set()).add('tracked')
@@ -1826,17 +2307,25 @@ def update_index(mode='production'):
     # Gather metadata + ensure thumbnails
     all_meta = {}
     for vid in videos:
-        meta = get_video_metadata(vid, r2_client=c)
+        meta = get_video_metadata(vid, r2_client=c, user_hash=user_hash)
         meta['files'] = sorted(videos[vid])
         meta['features'] = sorted(video_features.get(vid, set()))
-        has_thumb = generate_thumbnail(vid)
+        has_thumb = generate_thumbnail(vid, user_hash=user_hash)
         if has_thumb:
-            upload_thumbnail(c, vid)
+            upload_thumbnail(c, vid, user_hash=user_hash)
         meta['has_thumb'] = has_thumb
         all_meta[vid] = meta
 
     # Build and upload index
     html = build_index_html(all_meta)
+    # Per-user mode: rewrite every absolute URL to live under /u/<user_hash>/.
+    # Every URL in the generated HTML/JS is built as `https://tennis.playfullife.com/<...>`
+    # so a single string-replace catches all of them, including the JS
+    # `?v=...` deep-link path which strips and re-prepends this exact prefix.
+    if user_hash:
+        old = 'https://tennis.playfullife.com/'
+        new = f'https://tennis.playfullife.com/u/{user_hash}/'
+        html = html.replace(old, new)
     tmp = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w', encoding='utf-8')
     tmp.write(html)
     tmp.close()
@@ -1891,11 +2380,18 @@ def update_index(mode='production'):
         return None
 
     # production
-    c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
-    c.upload(tmp.name, 'highlights/', content_type='text/html')
-    os.unlink(tmp.name)
-    print(f'Updated index: {len(all_meta)} videos')
-    print('https://tennis.playfullife.com/')
+    if user_hash:
+        key = f'highlights/{user_hash}/index.html'
+        c.upload(tmp.name, key, content_type='text/html')
+        os.unlink(tmp.name)
+        print(f'Updated per-user index: {len(all_meta)} videos → r2://{key}')
+        print(f'https://tennis.playfullife.com/u/{user_hash}')
+    else:
+        c.upload(tmp.name, 'highlights/index.html', content_type='text/html')
+        c.upload(tmp.name, 'highlights/', content_type='text/html')
+        os.unlink(tmp.name)
+        print(f'Updated index: {len(all_meta)} videos')
+        print('https://tennis.playfullife.com/')
 
 
 if __name__ == '__main__':
@@ -1906,6 +2402,10 @@ if __name__ == '__main__':
                    help='Write HTML locally to ~/whiteboards/preview-<branch>/, no upload. Fast iteration.')
     g.add_argument('--staging', action='store_true',
                    help='Upload to r2://staging/<branch>/ — shareable URL, does not affect production.')
+    p.add_argument('--user', dest='user_hash', default=None,
+                   help='Generate per-user index (e.g. --user u_666f1a02). Sources keys '
+                        'under highlights/<hash>/, rewrites URLs with /u/<hash> prefix, '
+                        'uploads to highlights/<hash>/index.html.')
     args = p.parse_args()
     mode = 'preview' if args.preview else ('staging' if args.staging else 'production')
-    update_index(mode)
+    update_index(mode, user_hash=args.user_hash)

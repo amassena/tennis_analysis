@@ -54,16 +54,28 @@ SERVE_ONLY_VIDEOS = {
 
 
 class PoseSequenceDataset(Dataset):
-    """Dataset of pose sequences with augmentation."""
+    """Dataset of pose sequences with augmentation.
 
-    def __init__(self, sequences, labels, videos=None,
-                 augment=False, jitter=5, dropout_rate=0.15):
+    When `deltas` is provided, returns (seq, label, delta) for the multi-task
+    regression head. delta is in frames; should be 0 for negatives.
+
+    Note: when augmentation `jitter` is non-zero AND deltas are provided, the
+    augmentation jitter is folded into the delta target — shifting the seq by
+    +k frames means the contact moves to position center-k inside the window,
+    so the regression label updates as `delta - k`. (NOT used for negatives.)
+    """
+
+    def __init__(self, sequences, labels, videos=None, deltas=None,
+                 augment=False, jitter=5, dropout_rate=0.15,
+                 not_shot_idx=None):
         self.sequences = sequences   # (N, 90, 99) array
         self.labels = labels         # (N,) array
         self.videos = videos         # (N,) array or None
+        self.deltas = deltas         # (N,) array or None — frames offset
         self.augment = augment
         self.jitter = jitter
         self.dropout_rate = dropout_rate
+        self.not_shot_idx = not_shot_idx
 
     def __len__(self):
         return len(self.labels)
@@ -71,36 +83,55 @@ class PoseSequenceDataset(Dataset):
     def __getitem__(self, idx):
         seq = self.sequences[idx].copy()
         label = int(self.labels[idx])
+        delta = float(self.deltas[idx]) if self.deltas is not None else 0.0
 
         if self.augment:
             mirror = np.random.random() < 0.5
             temporal_scale = np.random.uniform(0.85, 1.15) if np.random.random() < 0.5 else None
             noise_std = 0.01 if np.random.random() < 0.5 else 0.0
+            # Apply jitter ourselves (not via augment_sequence) so we know the
+            # shift and can update delta accordingly. augment_sequence keeps
+            # other ops (mirror, temporal_scale, dropout, noise).
+            shift = 0
+            if self.jitter > 0 and (self.not_shot_idx is None or label != self.not_shot_idx):
+                shift = int(np.random.randint(-self.jitter, self.jitter + 1))
+                if shift != 0:
+                    if shift > 0:
+                        seq = np.concatenate([np.zeros((shift, seq.shape[1]),
+                                                       dtype=seq.dtype), seq[:-shift]], axis=0)
+                    else:
+                        s = -shift
+                        seq = np.concatenate([seq[s:], np.zeros((s, seq.shape[1]),
+                                                                dtype=seq.dtype)], axis=0)
+                    delta = delta - shift  # contact moved -shift frames in window
             seq = augment_sequence(
                 seq,
                 mirror=mirror,
-                jitter_frames=self.jitter,
+                jitter_frames=0,  # we did jitter ourselves
                 dropout_rate=np.random.uniform(0.1, self.dropout_rate),
                 temporal_scale=temporal_scale,
                 noise_std=noise_std,
             )
 
+        if self.deltas is not None:
+            return (torch.from_numpy(seq).float(), label, torch.tensor(delta, dtype=torch.float32))
         return torch.from_numpy(seq).float(), label
 
 
 def load_from_npz(npz_path):
     """Load pre-extracted data from NPZ file.
 
-    Returns list of (sequence_array, label_idx, video_name) tuples for
-    compatibility with existing LOOCV code.
+    Returns (X, y, videos, deltas). deltas is None if absent (older NPZ).
     """
     data = np.load(npz_path, allow_pickle=True)
     X = data["X"]
     y = data["y"]
     videos = data["videos"]
+    deltas = data["delta"] if "delta" in data.files else None
     print(f"Loaded {len(X)} samples from {npz_path}")
-    print(f"  Shape: X={X.shape}, y={y.shape}")
-    return X, y, videos
+    print(f"  Shape: X={X.shape}, y={y.shape}, "
+          f"delta={'present' if deltas is not None else 'absent'}")
+    return X, y, videos, deltas
 
 
 def load_all_samples_live(poses_dir, det_dir):
@@ -187,20 +218,66 @@ def load_all_samples_live(poses_dir, det_dir):
     return np.array(all_X), np.array(all_y), np.array(all_videos)
 
 
-def train_epoch(model, loader, optimizer, criterion, device):
-    """Train for one epoch. Returns (avg_loss, accuracy)."""
+def _unpack(batch, device):
+    """Move batch to device. Returns (x, y, delta_or_None)."""
+    if len(batch) == 3:
+        x, y, d = batch
+        return x.to(device), y.to(device), d.to(device)
+    x, y = batch
+    return x.to(device), y.to(device), None
+
+
+def _gather_delta(delta_pred, labels):
+    """For class-conditional delta_pred (B, num_classes), gather the
+    per-class scalar according to labels (B,). For class-agnostic (B,),
+    return as-is."""
+    if delta_pred.dim() == 1:
+        return delta_pred
+    return delta_pred.gather(1, labels.long().unsqueeze(1)).squeeze(1)
+
+
+def train_epoch(model, loader, optimizer, criterion, device,
+                lambda_regr=0.0, not_shot_idx=None, regr_loss_fn=None):
+    """Train for one epoch. Returns (avg_loss, accuracy, regr_mae_frames or None).
+
+    For class-conditional regression, the per-class delta is gathered using
+    the TRUE label during training. At inference, the predicted class is used.
+    """
     model.train()
-    total_loss = 0
+    total_loss = 0.0
+    total_regr_loss = 0.0
+    n_regr_samples = 0
     correct = 0
     total = 0
+    use_regr = lambda_regr > 0 and getattr(model, "with_regression", False)
+    if use_regr and regr_loss_fn is None:
+        regr_loss_fn = nn.HuberLoss(delta=1.0, reduction="none")
 
-    for batch_x, batch_y in loader:
-        batch_x = batch_x.to(device)
-        batch_y = batch_y.to(device)
-
+    for batch in loader:
+        batch_x, batch_y, batch_delta = _unpack(batch, device)
         optimizer.zero_grad()
-        logits = model(batch_x)
-        loss = criterion(logits, batch_y)
+        out = model(batch_x)
+        if isinstance(out, tuple):
+            logits, delta_pred = out
+        else:
+            logits, delta_pred = out, None
+
+        cls_loss = criterion(logits, batch_y)
+        loss = cls_loss
+
+        if use_regr and delta_pred is not None and batch_delta is not None:
+            # Mask: only positives contribute to regression loss
+            if not_shot_idx is None:
+                mask = torch.ones_like(batch_y, dtype=torch.bool)
+            else:
+                mask = batch_y != not_shot_idx
+            if mask.any():
+                delta_scalar = _gather_delta(delta_pred, batch_y)
+                reg = regr_loss_fn(delta_scalar[mask], batch_delta[mask]).mean()
+                loss = loss + lambda_regr * reg
+                total_regr_loss += reg.item() * mask.sum().item()
+                n_regr_samples += int(mask.sum().item())
+
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -210,35 +287,56 @@ def train_epoch(model, loader, optimizer, criterion, device):
         correct += predicted.eq(batch_y).sum().item()
         total += batch_x.size(0)
 
-    return total_loss / total, correct / total
+    avg_loss = total_loss / total
+    acc = correct / total
+    regr_mae = (total_regr_loss / n_regr_samples) if n_regr_samples > 0 else None
+    return avg_loss, acc, regr_mae
 
 
-def evaluate(model, loader, device):
-    """Evaluate model. Returns (loss, accuracy, all_preds, all_labels)."""
+def evaluate(model, loader, device, not_shot_idx=None):
+    """Evaluate model. Returns (loss, accuracy, all_preds, all_labels, regr_mae_or_None)."""
     model.eval()
     criterion = nn.CrossEntropyLoss()
-    total_loss = 0
+    total_loss = 0.0
+    abs_regr_err_total = 0.0
+    n_regr_samples = 0
     all_preds = []
     all_labels = []
 
+    use_regr = getattr(model, "with_regression", False)
+
     with torch.no_grad():
-        for batch_x, batch_y in loader:
-            batch_x = batch_x.to(device)
-            batch_y = batch_y.to(device)
+        for batch in loader:
+            batch_x, batch_y, batch_delta = _unpack(batch, device)
+            out = model(batch_x)
+            if isinstance(out, tuple):
+                logits, delta_pred = out
+            else:
+                logits, delta_pred = out, None
 
-            logits = model(batch_x)
             loss = criterion(logits, batch_y)
-
             total_loss += loss.item() * batch_x.size(0)
             _, predicted = logits.max(1)
             all_preds.extend(predicted.cpu().numpy())
             all_labels.extend(batch_y.cpu().numpy())
 
+            if use_regr and delta_pred is not None and batch_delta is not None:
+                if not_shot_idx is None:
+                    mask = torch.ones_like(batch_y, dtype=torch.bool)
+                else:
+                    mask = batch_y != not_shot_idx
+                if mask.any():
+                    delta_scalar = _gather_delta(delta_pred, batch_y)
+                    abs_err = (delta_scalar[mask] - batch_delta[mask]).abs()
+                    abs_regr_err_total += abs_err.sum().item()
+                    n_regr_samples += int(mask.sum().item())
+
     total = len(all_labels)
     acc = sum(p == l for p, l in zip(all_preds, all_labels)) / total if total > 0 else 0
     avg_loss = total_loss / total if total > 0 else 0
+    regr_mae = (abs_regr_err_total / n_regr_samples) if n_regr_samples > 0 else None
 
-    return avg_loss, acc, np.array(all_preds), np.array(all_labels)
+    return avg_loss, acc, np.array(all_preds), np.array(all_labels), regr_mae
 
 
 def make_criterion(train_labels, device, label_smoothing=0.05):
@@ -255,7 +353,8 @@ def make_criterion(train_labels, device, label_smoothing=0.05):
 
 
 def train_with_early_stopping(model, train_loader, val_loader, optimizer, scheduler,
-                              criterion, device, epochs, patience=7):
+                              criterion, device, epochs, patience=7,
+                              lambda_regr=0.0, not_shot_idx=None):
     """Train with early stopping on validation loss.
 
     Returns best validation accuracy.
@@ -265,11 +364,13 @@ def train_with_early_stopping(model, train_loader, val_loader, optimizer, schedu
     patience_counter = 0
 
     for epoch in range(epochs):
-        train_loss, train_acc = train_epoch(model, train_loader, optimizer, criterion, device)
+        train_epoch(model, train_loader, optimizer, criterion, device,
+                    lambda_regr=lambda_regr, not_shot_idx=not_shot_idx)
         scheduler.step()
 
         if val_loader is not None:
-            val_loss, val_acc, _, _ = evaluate(model, val_loader, device)
+            val_loss, val_acc, _, _, _ = evaluate(model, val_loader, device,
+                                                   not_shot_idx=not_shot_idx)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -287,14 +388,19 @@ def train_with_early_stopping(model, train_loader, val_loader, optimizer, schedu
     return best_val_loss
 
 
-def leave_one_video_out_cv(X, y, videos, args, device):
+def leave_one_video_out_cv(X, y, videos, args, device, deltas=None):
     """Leave-one-video-out cross-validation."""
     unique_videos = sorted(set(videos))
     all_preds = []
     all_labels = []
     fold_results = []
+    fold_regr_maes = []
 
-    print(f"\nLeave-one-video-out CV ({len(unique_videos)} folds):")
+    not_shot_idx = CLASS_TO_IDX["not_shot"]
+    use_regr = args.lambda_regr > 0 and deltas is not None
+
+    print(f"\nLeave-one-video-out CV ({len(unique_videos)} folds, "
+          f"lambda_regr={args.lambda_regr}, regression={'on' if use_regr else 'off'}):")
     print(f"{'-'*70}")
 
     for fold_idx, held_out in enumerate(unique_videos):
@@ -303,19 +409,29 @@ def leave_one_video_out_cv(X, y, videos, args, device):
 
         train_X, train_y = X[train_mask], y[train_mask]
         val_X, val_y = X[val_mask], y[val_mask]
+        train_d = deltas[train_mask] if deltas is not None else None
+        val_d = deltas[val_mask] if deltas is not None else None
 
         if len(train_X) == 0 or len(val_X) == 0:
             continue
 
-        train_dataset = PoseSequenceDataset(train_X, train_y, augment=True)
-        val_dataset = PoseSequenceDataset(val_X, val_y, augment=False)
+        train_dataset = PoseSequenceDataset(
+            train_X, train_y, deltas=train_d, augment=True,
+            not_shot_idx=not_shot_idx)
+        val_dataset = PoseSequenceDataset(
+            val_X, val_y, deltas=val_d, augment=False,
+            not_shot_idx=not_shot_idx)
 
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
                                   shuffle=True, num_workers=0)
         val_loader = DataLoader(val_dataset, batch_size=args.batch_size,
                                 shuffle=False, num_workers=0)
 
-        model = ShotClassifierCNN(num_classes=len(CLASSES)).to(device)
+        model = ShotClassifierCNN(
+            num_classes=len(CLASSES),
+            with_regression=use_regr,
+            class_conditional_regression=args.class_conditional_regression,
+        ).to(device)
         optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
         criterion = make_criterion(train_y, device, label_smoothing=0.05)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
@@ -323,11 +439,13 @@ def leave_one_video_out_cv(X, y, videos, args, device):
         # Train with early stopping
         train_with_early_stopping(
             model, train_loader, val_loader, optimizer, scheduler,
-            criterion, device, args.epochs, patience=args.patience
+            criterion, device, args.epochs, patience=args.patience,
+            lambda_regr=args.lambda_regr, not_shot_idx=not_shot_idx,
         )
 
         # Final evaluation
-        val_loss, val_acc, preds, labels = evaluate(model, val_loader, device)
+        val_loss, val_acc, preds, labels, val_mae = evaluate(
+            model, val_loader, device, not_shot_idx=not_shot_idx)
 
         # Per-class breakdown
         val_counts = defaultdict(int)
@@ -341,17 +459,22 @@ def leave_one_video_out_cv(X, y, videos, args, device):
             f"{CLASSES[c]}={correct_counts.get(c, 0)}/{val_counts[c]}"
             for c in sorted(val_counts.keys())
         )
+        mae_str = f" mae={val_mae:.2f}f" if val_mae is not None else ""
 
         print(f"  Fold {fold_idx:2d}: {held_out:<12s} "
-              f"acc={val_acc:.2f} ({len(val_X):3d} samples) {detail}")
+              f"acc={val_acc:.2f} ({len(val_X):3d} samples){mae_str} {detail}")
 
         all_preds.extend(preds)
         all_labels.extend(labels)
-        fold_results.append({
+        fold_record = {
             "video": held_out,
             "n_samples": int(len(val_X)),
             "accuracy": round(float(val_acc), 4),
-        })
+        }
+        if val_mae is not None:
+            fold_record["regr_mae_frames"] = round(float(val_mae), 3)
+            fold_regr_maes.append(val_mae)
+        fold_results.append(fold_record)
 
     # Aggregate
     all_preds = np.array(all_preds)
@@ -360,6 +483,12 @@ def leave_one_video_out_cv(X, y, videos, args, device):
 
     print(f"\n{'='*50}")
     print(f"LOOCV AGGREGATE: accuracy={overall_acc:.3f} ({sum(all_preds == all_labels)}/{len(all_labels)})")
+    if fold_regr_maes:
+        mean_mae = float(np.mean(fold_regr_maes))
+        # ASCII-safe: Windows cp1252 console can't encode em-dash or >= signs
+        print(f"LOOCV REGR MAE:  {mean_mae:.2f} frames "
+              f"(~{mean_mae * 1000 / 60:.0f}ms @60fps) -- "
+              f"target: <2 frames (~33ms) for event F1 >= 0.95")
     print(f"{'='*50}")
 
     # Confusion matrix
@@ -407,6 +536,16 @@ def main():
                         default=os.path.join(PROJECT_ROOT, "eval", "holdout", "manifest.json"),
                         help="Path to holdout manifest. If any holdout video appears "
                              "in training data, training is refused. Pass empty string to skip.")
+    parser.add_argument("--lambda-regr", type=float, default=0.0,
+                        help="Weight on contact-time regression Huber loss "
+                             "(default: 0 = classification-only, original behavior). "
+                             "Requires NPZ with 'delta' field (jittered training "
+                             "samples). Try 0.2 (light) to 0.5 (balanced).")
+    parser.add_argument("--class-conditional-regression", action="store_true",
+                        help="Per-class regression head: predicts a separate delta "
+                             "for each class. Use when classes have asymmetric "
+                             "training support (e.g. backhand bias in single-head "
+                             "regression). Requires --lambda-regr > 0.")
     args = parser.parse_args()
 
     # Select device
@@ -422,15 +561,23 @@ def main():
 
     # Load samples
     t0 = time.time()
+    deltas = None
     if args.npz:
         npz_path = args.npz
         if not os.path.isabs(npz_path):
             npz_path = os.path.join(PROJECT_ROOT, npz_path)
-        X, y, videos = load_from_npz(npz_path)
+        X, y, videos, deltas = load_from_npz(npz_path)
     else:
         print(f"\nLoading samples from {args.poses_dir} (live extraction)...")
         X, y, videos = load_all_samples_live(args.poses_dir, args.det_dir)
+        # Live extraction predates the regression head; deltas remain None.
     print(f"Loaded in {time.time() - t0:.1f}s")
+
+    if args.lambda_regr > 0 and deltas is None:
+        print("WARNING: --lambda-regr > 0 but NPZ has no 'delta' field. "
+              "Re-run prepare_sequence_data.py with --jitter-positives N. "
+              "Disabling regression loss.")
+        args.lambda_regr = 0.0
 
     # Holdout-leak assertion. Refuses to train if any video in the
     # eval holdout appears in the training set. Without this gate the
@@ -456,6 +603,9 @@ def main():
             print(f"WARNING: holdout manifest not found at {args.holdout_manifest} — "
                   f"leak check skipped.")
 
+    use_regr = args.lambda_regr > 0 and deltas is not None
+    not_shot_idx = CLASS_TO_IDX["not_shot"]
+
     # Distribution
     label_counts = defaultdict(int)
     for label in y:
@@ -466,35 +616,47 @@ def main():
 
     # LOOCV
     if not args.skip_cv:
-        cv_acc, fold_results = leave_one_video_out_cv(X, y, videos, args, device)
+        cv_acc, fold_results = leave_one_video_out_cv(X, y, videos, args, device, deltas=deltas)
 
         # Save CV results
         cv_path = args.output.replace(".pt", "_cv.json")
         with open(cv_path, "w") as f:
             json.dump({
                 "overall_accuracy": round(float(cv_acc), 4),
+                "lambda_regr": args.lambda_regr,
+                "with_regression": use_regr,
                 "folds": fold_results,
             }, f, indent=2)
         print(f"CV results saved to {cv_path}")
 
     # Train final model on all data
     print(f"\n{'='*50}")
-    print(f"TRAINING FINAL MODEL on all {len(X)} samples")
+    print(f"TRAINING FINAL MODEL on all {len(X)} samples "
+          f"(with_regression={use_regr})")
     print(f"{'='*50}")
 
-    dataset = PoseSequenceDataset(X, y, augment=True)
+    dataset = PoseSequenceDataset(X, y, deltas=deltas, augment=True,
+                                  not_shot_idx=not_shot_idx)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
 
-    model = ShotClassifierCNN(num_classes=len(CLASSES)).to(device)
+    model = ShotClassifierCNN(
+        num_classes=len(CLASSES),
+        with_regression=use_regr,
+        class_conditional_regression=args.class_conditional_regression,
+    ).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-4)
     criterion = make_criterion(y, device, label_smoothing=args.label_smoothing)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
     for epoch in range(args.epochs):
-        train_loss, train_acc = train_epoch(model, loader, optimizer, criterion, device)
+        train_loss, train_acc, regr_mae = train_epoch(
+            model, loader, optimizer, criterion, device,
+            lambda_regr=args.lambda_regr, not_shot_idx=not_shot_idx,
+        )
         scheduler.step()
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"  Epoch {epoch+1:3d}/{args.epochs}: loss={train_loss:.4f} acc={train_acc:.3f}")
+            mae_str = f" mae={regr_mae:.2f}f" if regr_mae is not None else ""
+            print(f"  Epoch {epoch+1:3d}/{args.epochs}: loss={train_loss:.4f} acc={train_acc:.3f}{mae_str}")
 
     # Save model
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -514,6 +676,8 @@ def main():
         "sequence_length": SEQUENCE_LENGTH,
         "features_per_frame": FEATURES_PER_FRAME,
         "normalization": "hip_center + shoulder_width",
+        "lambda_regr": args.lambda_regr,
+        "with_regression": use_regr,
     }
     if not args.skip_cv:
         meta["loocv_accuracy"] = round(float(cv_acc), 4)
